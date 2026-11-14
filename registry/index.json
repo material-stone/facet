@@ -1,3 +1,24 @@
 {
-  "packages": []
+  "packages": [
+    {
+      "kind": "plugin",
+      "id": "facet.clock",
+      "name": "요일 시계",
+      "version": "1.0.0",
+      "author": "material-stone",
+      "description": "요일과 날짜를 함께 보여 주는 시계 위젯입니다.",
+      "url": "https://github.com/material-stone/facet/releases/download/plugin-facet.clock-1.0.0/facet.clock-1.0.0.zip",
+      "sha256": "0abe252b54169e85d38f61d547db5d0a4cdd3ce0bf3c0ff1fdaaa7f028413af3"
+    },
+    {
+      "kind": "plugin",
+      "id": "facet.weather",
+      "name": "날씨",
+      "version": "1.0.0",
+      "author": "material-stone",
+      "description": "현재 날씨와 습도를 보여 주는 위젯입니다. 지역은 플러그인 설정에서 고릅니다.",
+      "url": "https://github.com/material-stone/facet/releases/download/plugin-facet.weather-1.0.0/facet.weather-1.0.0.zip",
+      "sha256": "e01f159cb31fa0873348b3612864f9203a448486b6dec7a0e849529d1bd10de5"
+    }
+  ]
 }
