@@ -1,0 +1,13 @@
+{
+  "nebulaSpeed": 0.6,
+  "nebulaBrightness": 0.07,
+  "stars": 500,
+  "voyage": true,
+  "hudWidgets": true,
+  "options": [
+    { "id": "reticle", "name": "중앙 조준선", "description": "화면 가운데의 조준선을 표시합니다.", "default": true }
+  ],
+  "panelMarkLength": 12,
+  "panelCornerRadius": 0,
+  "tabCornerRadius": 0
+}

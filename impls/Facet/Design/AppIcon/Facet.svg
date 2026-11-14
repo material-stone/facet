@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <title>Facet — a cut gem</title>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#28433B"/>
+      <stop offset="1" stop-color="#142520"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="224" height="224" rx="56" fill="url(#tile)"/>
+  <path fill="#DFF5E9" d="M88 62 H128 L108 104 H52 Z"/>
+  <path fill="#F4FFF9" d="M128 62 L148 104 H108 Z"/>
+  <path fill="#B5E6CD" d="M128 62 H168 L204 104 H148 Z"/>
+  <path fill="#DFF5E9" d="M52 104 H108 L128 204 Z"/>
+  <path fill="#82CFAD" d="M108 104 H148 L128 204 Z"/>
+  <path fill="#5AA888" d="M148 104 H204 L128 204 Z"/>
+</svg>

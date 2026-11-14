@@ -1,0 +1,210 @@
+<UserControl x:Class="Facet.OverlayTabs"
+ xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+ xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+ xmlns:local="clr-namespace:Facet" xmlns:design="clr-namespace:Facet.Design" Cursor="Arrow">
+ <UserControl.Resources>
+  <DropShadowEffect x:Key="OverlayShadow" Color="Black" Opacity="0.42" BlurRadius="24" ShadowDepth="6" Direction="270"/>
+ </UserControl.Resources>
+ <AdornerDecorator>
+ <Grid>
+ <TabControl x:Name="Tabs" SelectedIndex="0" Background="Transparent" BorderThickness="0"
+             AutomationProperties.Name="오버레이 탭">
+  <TabControl.Template>
+   <ControlTemplate TargetType="TabControl">
+    <Grid KeyboardNavigation.TabNavigation="Local">
+     <ContentPresenter x:Name="PART_SelectedContentHost" ContentSource="SelectedContent"
+                       HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+     <!-- Keep effects on empty siblings so text never enters an effect bitmap. -->
+     <local:CachedShadow x:Name="TabShadow" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="24"
+             Width="{Binding ActualWidth, ElementName=TabStrip}" Height="{Binding ActualHeight, ElementName=TabStrip}"
+             Background="{StaticResource Panel}" CornerRadius="12" Shadow="{StaticResource OverlayShadow}" IsHitTestVisible="False"/>
+     <TabPanel x:Name="TabStrip" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="24"
+               IsItemsHost="True" KeyboardNavigation.TabIndex="0" SizeChanged="TabStrip_SizeChanged"/>
+     <!-- Above the headers, which would otherwise cover a theme's corner marks. -->
+     <Border x:Name="TabMarks" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="24" IsHitTestVisible="False" Focusable="False" UseLayoutRounding="True" SnapsToDevicePixels="True"
+             Width="{Binding ActualWidth, ElementName=TabStrip}" Height="{Binding ActualHeight, ElementName=TabStrip}"/>
+    </Grid>
+   </ControlTemplate>
+  </TabControl.Template>
+  <TabControl.ItemContainerStyle>
+   <Style TargetType="TabItem">
+    <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+    <Setter Property="Background" Value="{StaticResource Panel}"/>
+    <Setter Property="Margin" Value="0"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    <Setter Property="Padding" Value="20,12"/>
+    <Setter Property="Tag" Value="12,12,12,12"/>
+    <Setter Property="Template">
+     <Setter.Value>
+      <ControlTemplate TargetType="TabItem">
+       <Border x:Name="Frame" CornerRadius="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" Padding="{TemplateBinding Padding}" Background="{TemplateBinding Background}"
+               BorderThickness="0" Cursor="Hand">
+        <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+       </Border>
+       <ControlTemplate.Triggers>
+        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="Background" Value="{StaticResource Hover}"/></Trigger>
+        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="Background" Value="{StaticResource Hover}"/></Trigger>
+        <Trigger Property="IsSelected" Value="True">
+         <Setter TargetName="Frame" Property="Background" Value="{StaticResource Selected}"/>
+         <Setter Property="Foreground" Value="{StaticResource Mint}"/>
+        </Trigger>
+       </ControlTemplate.Triggers>
+      </ControlTemplate>
+     </Setter.Value>
+    </Setter>
+   </Style>
+  </TabControl.ItemContainerStyle>
+  <TabItem x:Name="DashboardTab" AutomationProperties.Name="대시보드">
+   <TabItem.Header>
+    <StackPanel Orientation="Horizontal">
+     <design:Icon Kind="Dashboard" Width="18" Height="18" Margin="0,0,8,0"
+                  Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
+     <TextBlock Text="대시보드" FontWeight="SemiBold" VerticalAlignment="Center"
+                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
+    </StackPanel>
+   </TabItem.Header>
+   <Grid x:Name="DashboardViewport"/>
+  </TabItem>
+  <TabItem x:Name="ManagementTab" AutomationProperties.Name="일정">
+   <TabItem.Header>
+    <StackPanel Orientation="Horizontal">
+     <design:Icon Kind="Calendar" Width="18" Height="18" Margin="0,0,8,0"
+                  Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
+     <TextBlock Text="일정" FontWeight="SemiBold" VerticalAlignment="Center"
+                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
+    </StackPanel>
+   </TabItem.Header>
+   <Grid x:Name="ManagementPage">
+   <!-- Hosted by the calendar widget's tile; the transition between its two screens stays inside it. -->
+   <Grid x:Name="CalendarWidgetView" ClipToBounds="True">
+   <local:OverlayCarousel x:Name="ManagementCarousel"
+                          HorizontalAlignment="Center" VerticalAlignment="Center" AutomationProperties.Name="일정 달력 화면">
+    <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
+     <Grid Width="{Binding ItemWidth, ElementName=ManagementCarousel}" Height="{Binding ItemHeight, ElementName=ManagementCarousel}">
+   <Grid x:Name="CalendarLayout" Margin="24" MaxWidth="1220">
+    <Viewbox x:Name="CalendarHost" Stretch="Uniform" StretchDirection="Both" HorizontalAlignment="Center" VerticalAlignment="Center">
+     <Grid>
+      <local:CachedShadow x:Name="CalendarShadow" Background="{StaticResource Panel}" CornerRadius="20"
+              Shadow="{StaticResource OverlayShadow}" IsHitTestVisible="False"/>
+      <local:OverlayCalendarView x:Name="Calendar"/>
+     </Grid>
+    </Viewbox>
+
+   </Grid>
+     </Grid>
+    </Viewbox>
+   </local:OverlayCarousel>
+   <Viewbox x:Name="DayViewport" Stretch="Uniform" StretchDirection="DownOnly"
+            HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding Visibility, ElementName=DayPage}">
+    <Grid Width="1560" Height="752">
+    <Grid x:Name="DayPage" Visibility="Collapsed" Focusable="True" KeyboardNavigation.IsTabStop="False" FocusVisualStyle="{x:Null}">
+     <Grid.ColumnDefinitions><ColumnDefinition Width="1140"/><ColumnDefinition Width="24"/><ColumnDefinition Width="396"/></Grid.ColumnDefinitions>
+     <Grid>
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+      <DockPanel Margin="12,8,0,16">
+       <Button x:Name="BackToCalendar" Width="40" Height="40" Padding="8" Margin="0,0,16,0"
+               Focusable="False" IsTabStop="False"
+               DockPanel.Dock="Left" VerticalAlignment="Center" ContentTemplate="{x:Null}"
+               HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+               AutomationProperties.Name="뒤로 가기" AutomationProperties.AcceleratorKey="Esc"
+               ToolTip="뒤로 가기 (Esc)" Click="BackToCalendar_Click">
+        <design:Icon Kind="Left" Width="20" Height="20"/>
+       </Button>
+       <TextBlock x:Name="DayHeading" FontSize="28" FontWeight="SemiBold" VerticalAlignment="Center"/>
+      </DockPanel>
+      <Grid Grid.Row="1">
+       <local:OverlayScheduleDial x:Name="ScheduleDial"/>
+        <ScrollViewer x:Name="ScheduleLegendScroll" Width="180" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="12,20,0,20"
+                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+         <StackPanel x:Name="ScheduleLegend"/>
+        </ScrollViewer>
+      </Grid>
+     </Grid>
+     <Grid Grid.Column="2">
+      <local:CachedShadow x:Name="EditorShadow" Background="{StaticResource Panel}" CornerRadius="20"
+              Shadow="{StaticResource OverlayShadow}" IsHitTestVisible="False"/>
+      <local:OverlayDayEditor x:Name="DayEditor"/>
+     </Grid>
+    </Grid>
+    </Grid>
+   </Viewbox>
+   </Grid>
+   </Grid>
+  </TabItem>
+  <TabItem x:Name="SleepTab" AutomationProperties.Name="수면">
+   <TabItem.Header>
+    <StackPanel Orientation="Horizontal">
+     <design:Icon Kind="Moon" Width="18" Height="18" Margin="0,0,8,0"
+                  Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
+     <TextBlock Text="수면" FontWeight="SemiBold" VerticalAlignment="Center"
+                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
+    </StackPanel>
+   </TabItem.Header>
+   <Grid x:Name="SleepPage"/>
+  </TabItem>
+  <TabItem x:Name="ChatTab" AutomationProperties.Name="채팅">
+   <TabItem.Header><StackPanel Orientation="Horizontal"><design:Icon Kind="Sparkles" Width="18" Height="18" Margin="0,0,8,0" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/><TextBlock Text="채팅" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/></StackPanel></TabItem.Header>
+   <Grid x:Name="ChatPage"/>
+  </TabItem>
+  <TabItem x:Name="SettingsTab" AutomationProperties.Name="설정">
+   <TabItem.Header>
+    <StackPanel Orientation="Horizontal">
+     <design:Icon Kind="Settings" Width="18" Height="18" Margin="0,0,8,0"
+                  Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
+     <TextBlock Text="설정" FontWeight="SemiBold" VerticalAlignment="Center"
+                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
+    </StackPanel>
+   </TabItem.Header>
+   <Grid x:Name="SettingsViewport" Margin="24,116,24,92">
+    <local:OverlaySettingsView x:Name="SettingsView"/>
+   </Grid>
+  </TabItem>
+ </TabControl>
+ <!-- Sections and music are hosted by widget tiles; these own their logic and stay out of layout. -->
+ <local:OverlayDashboardView x:Name="Dashboard" Visibility="Collapsed"/>
+ <StackPanel x:Name="WorkspaceBar" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,24,24,0" Panel.ZIndex="3" Visibility="Collapsed">
+  <Grid x:Name="WorkspaceRow" HorizontalAlignment="Right">
+  <Button x:Name="WorkspaceEdit" ContentTemplate="{x:Null}" Width="36" Height="36" Padding="0" ToolTip="위젯 편집" AutomationProperties.Name="위젯 편집" HorizontalAlignment="Right" VerticalAlignment="Center" Click="WorkspaceEdit_Click"><design:Icon Kind="Edit" Width="18" Height="18"/></Button>
+  <StackPanel x:Name="WorkspaceTools" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+   <Border Height="36" Background="{StaticResource Panel}" BorderBrush="{StaticResource Edge}" BorderThickness="1" CornerRadius="8" Padding="12,0" Margin="0,0,8,0">
+    <TextBlock x:Name="WorkspaceZoom" VerticalAlignment="Center" MinWidth="40" TextAlignment="Center" AutomationProperties.Name="보드 배율" Typography.NumeralAlignment="Tabular"/>
+   </Border>
+   <Button x:Name="WorkspaceAddWidget" ContentTemplate="{x:Null}" Width="36" Height="36" Padding="0" ToolTip="위젯 추가" AutomationProperties.Name="위젯 추가" Margin="0,0,8,0" Click="WorkspaceAddWidget_Click"><design:Icon Kind="Add" Width="18" Height="18"/></Button>
+   <Button x:Name="WorkspaceHome" ContentTemplate="{x:Null}" Width="36" Height="36" Padding="0" ToolTip="원점으로 돌아가기" AutomationProperties.Name="원점으로 돌아가기" Margin="0,0,8,0" Click="WorkspaceHome_Click"><design:Icon Kind="Target" Width="18" Height="18"/></Button>
+   <Button x:Name="WorkspaceDone" Content="완료" Height="36" Click="WorkspaceDone_Click"/>
+  </StackPanel>
+  </Grid>
+  <TextBlock x:Name="WorkspaceMessage" HorizontalAlignment="Right" Margin="0,6,0,0" FontSize="12" Visibility="Collapsed" TextWrapping="Wrap" MaxWidth="480" Foreground="{StaticResource Muted}"/>
+  <Popup x:Name="WidgetPicker" PlacementTarget="{Binding ElementName=WorkspaceAddWidget}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
+   <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Edge}" BorderThickness="1" CornerRadius="12" Padding="8" MinWidth="200">
+    <ScrollViewer MaxHeight="360" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"><StackPanel x:Name="WidgetPickerItems"/></ScrollViewer>
+   </Border>
+  </Popup>
+ </StackPanel>
+ <Grid x:Name="WidgetModal" Background="{StaticResource ModalBackdrop}" Visibility="Collapsed" Panel.ZIndex="25" MouseDown="WidgetModal_MouseDown">
+  <Border x:Name="WidgetModalFrame" Margin="24" Padding="16" HorizontalAlignment="Center" VerticalAlignment="Center" Background="{StaticResource Panel}" BorderBrush="{StaticResource Edge}" BorderThickness="1" CornerRadius="12" KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.ControlTabNavigation="Cycle"/>
+ </Grid>
+ <Grid x:Name="ScheduleModal" Background="{StaticResource ModalBackdrop}" Visibility="Collapsed" Panel.ZIndex="5">
+  <Viewbox Margin="56,116,56,116" Stretch="Uniform" StretchDirection="DownOnly"
+           HorizontalAlignment="Center" VerticalAlignment="Center">
+   <Grid Width="1560" Height="752">
+    <local:CachedShadow x:Name="ScheduleEditorShadow" Background="{StaticResource Panel}" CornerRadius="20"
+                        Width="{Binding ActualWidth, ElementName=ScheduleEditor}" Height="{Binding ActualHeight, ElementName=ScheduleEditor}"
+                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Shadow="{StaticResource OverlayShadow}" IsHitTestVisible="False"/>
+    <local:OverlayScheduleEditor x:Name="ScheduleEditor" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+   </Grid>
+  </Viewbox>
+  <Grid x:Name="ScheduleTimeModal" Background="Transparent" Visibility="Collapsed" Panel.ZIndex="10">
+   <Canvas x:Name="ScheduleTimeCanvas">
+    <Grid x:Name="ScheduleTimeHost">
+     <local:CachedShadow x:Name="ScheduleTimeShadow" Background="{StaticResource Panel}" CornerRadius="12"
+                         Shadow="{StaticResource OverlayShadow}" IsHitTestVisible="False"/>
+    </Grid>
+   </Canvas>
+  </Grid>
+ </Grid>
+ </Grid>
+ </AdornerDecorator>
+</UserControl>

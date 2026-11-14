@@ -1,0 +1,8 @@
+{
+  "world": { "scenes": ["market", "lakeside", "cave"] },
+  "hudWidgets": true,
+  "hudStyle": "soft",
+  "panelMarkLength": 0,
+  "panelCornerRadius": 14,
+  "tabCornerRadius": 12
+}

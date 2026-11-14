@@ -1,0 +1,21 @@
+<!-- bootstrap-development-environment:start -->
+# Rebuildable agent context and local secrets
+graphify-out/
+.graphify_*
+.graphify_python
+.env
+!.env.example
+<!-- bootstrap-development-environment:end -->
+# Native build output and private local data
+.dotnet/
+**/bin/
+**/obj/
+artifacts/
+.test-data/
+*.user
+impls/Facet.MusicPlugin/Tools/yt-dlp.exe
+impls/Facet.MusicPlugin/Tools/yt-dlp.exe.download
+__pycache__/
+*.pyc
+# Personal planning documents kept outside the public repository
+docs/game-process/

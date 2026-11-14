@@ -1,0 +1,63 @@
+# Builds the plain app, its installer and portable zip, tests the installer on a clean runner and publishes a release (ADR 0098).
+# Push a tag that matches impls/Facet/Facet.csproj's <Version>, for example v1.35.0.
+name: Release
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Read the version
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content impls/Facet/Facet.csproj
+          $version = [string]$project.Project.PropertyGroup.Version
+          if ($env:GITHUB_REF_TYPE -eq 'tag' -and $env:GITHUB_REF_NAME -ne "v$version") { throw "Tag $env:GITHUB_REF_NAME does not match version $version." }
+          "version=$version" >> $env:GITHUB_OUTPUT
+      - name: Core checks
+        run: dotnet run --project impls/Facet.Checks/Facet.Checks.csproj --no-launch-profile
+      - name: Portable package
+        shell: pwsh
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package.ps1 -SkipChecks
+      - name: Installer
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $zip = Resolve-Path "artifacts/portable/Facet-$version-win-x64.zip"
+          $unpacked = Join-Path $env:RUNNER_TEMP 'facet'
+          Expand-Archive $zip -DestinationPath $unpacked
+          $iscc = @("${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe", "$env:ProgramFiles\Inno Setup 6\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { choco install innosetup -y --no-progress; $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
+          & $iscc "/DAppVersion=$version" "/DSourceDir=$unpacked\Facet-$version-win-x64" "/DOutputDir=$PWD\artifacts\installer" installer\Facet.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Installer build failed.' }
+      - name: Test install and uninstall
+        shell: pwsh
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $target = "$env:LOCALAPPDATA\Programs\Facet"
+          Start-Process "artifacts\installer\Facet-$version-setup-x64.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CURRENTUSER' -Wait
+          foreach ($file in 'Facet.Launcher.exe', 'latest.json', 'releases\portable\Facet.exe', 'unins000.exe') { if (-not (Test-Path "$target\$file")) { throw "Not installed: $file" } }
+          if (Test-Path "$target\bundled-plugins") { throw 'The plain app must not carry plugins.' }
+          Start-Process "$target\unins000.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait
+          Start-Sleep -Seconds 3
+          if (Test-Path "$target\Facet.Launcher.exe") { throw 'Uninstall left the program behind.' }
+      - name: Publish
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = '${{ steps.version.outputs.version }}'
+          $files = @("artifacts\installer\Facet-$version-setup-x64.exe", "artifacts\portable\Facet-$version-win-x64.zip")
+          $sums = foreach ($file in $files) { '{0}  {1}' -f (Get-FileHash $file -Algorithm SHA256).Hash.ToLowerInvariant(), (Split-Path $file -Leaf) }
+          $sums | Set-Content artifacts\SHA256SUMS.txt -Encoding ascii
+          gh release create $env:GITHUB_REF_NAME @files artifacts\SHA256SUMS.txt --title "Facet $version" --notes-file installer\release-notes.md --latest

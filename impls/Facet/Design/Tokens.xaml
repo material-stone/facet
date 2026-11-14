@@ -1,0 +1,34 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+ <FontFamily x:Key="AppFontFamily">pack://application:,,,/Facet;component/Design/Fonts/#Pretendard</FontFamily>
+ <FontFamily x:Key="{x:Static SystemFonts.MessageFontFamilyKey}">pack://application:,,,/Facet;component/Design/Fonts/#Pretendard</FontFamily>
+ <FontFamily x:Key="{x:Static SystemFonts.MenuFontFamilyKey}">pack://application:,,,/Facet;component/Design/Fonts/#Pretendard</FontFamily>
+ <FontFamily x:Key="{x:Static SystemFonts.CaptionFontFamilyKey}">pack://application:,,,/Facet;component/Design/Fonts/#Pretendard</FontFamily>
+ <FontFamily x:Key="{x:Static SystemFonts.SmallCaptionFontFamilyKey}">pack://application:,,,/Facet;component/Design/Fonts/#Pretendard</FontFamily>
+ <FontFamily x:Key="{x:Static SystemFonts.StatusFontFamilyKey}">pack://application:,,,/Facet;component/Design/Fonts/#Pretendard</FontFamily>
+ <FontFamily x:Key="{x:Static SystemFonts.IconFontFamilyKey}">pack://application:,,,/Facet;component/Design/Fonts/#Pretendard</FontFamily>
+ <SolidColorBrush x:Key="Bg" Color="#141A1D"/>
+ <SolidColorBrush x:Key="OverlayBackdrop" Color="#99141A1D"/>
+ <SolidColorBrush x:Key="ModalBackdrop" Color="#B8141A1D"/>
+ <SolidColorBrush x:Key="DangerSoft" Color="#FFB3A8"/>
+ <SolidColorBrush x:Key="Panel" Color="#1E272B"/>
+ <SolidColorBrush x:Key="Edge" Color="#46565D"/>
+ <SolidColorBrush x:Key="Ink" Color="#E6EEEB"/>
+ <SolidColorBrush x:Key="Muted" Color="#A9BAB4"/>
+ <SolidColorBrush x:Key="ScheduleNow" Color="#FFF0A8"/>
+ <SolidColorBrush x:Key="Mint" Color="#82CFAD"/>
+ <SolidColorBrush x:Key="Danger" Color="#FF9D92"/>
+ <SolidColorBrush x:Key="CalendarSunday" Color="#FF9D92"/>
+ <SolidColorBrush x:Key="CalendarSaturday" Color="#91BFFF"/>
+ <Thickness x:Key="SpaceSmall">8</Thickness><Thickness x:Key="SpaceMedium">16</Thickness><Thickness x:Key="SpaceLarge">24</Thickness>
+ <sys:Double x:Key="TypeCaption">12</sys:Double><sys:Double x:Key="TypeBody">14</sys:Double><sys:Double x:Key="TypeHeading">20</sys:Double>
+ <SolidColorBrush x:Key="Input" Color="#172024"/>
+ <SolidColorBrush x:Key="Selected" Color="#304C42"/>
+ <SolidColorBrush x:Key="Hover" Color="#2B393E"/>
+ <SolidColorBrush x:Key="OnAccent" Color="#102C21"/>
+ <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#172024"/>
+ <SolidColorBrush x:Key="{x:Static SystemColors.WindowTextBrushKey}" Color="#E6EEEB"/>
+ <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#1E272B"/>
+ <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="#E6EEEB"/>
+ <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#304C42"/>
+ <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#E6EEEB"/>
+</ResourceDictionary>

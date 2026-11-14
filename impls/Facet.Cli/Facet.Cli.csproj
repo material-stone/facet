@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup>
+  <OutputType>Exe</OutputType><TargetFramework>net10.0-windows</TargetFramework>
+  <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+  <AssemblyName>Facet.Cli</AssemblyName>
+  <AssemblyTitle>Facet CLI</AssemblyTitle><Product>Facet</Product><Description>Facet reminder CLI</Description>
+  <ApplicationIcon>../Facet/Design/AppIcon/Facet.ico</ApplicationIcon>
+ </PropertyGroup>
+ <ItemGroup><ProjectReference Include="../Facet.Core/Facet.Core.csproj"/></ItemGroup>
+ <ItemGroup>
+  <Compile Include="../Facet/ReminderProtocol.cs" Link="ReminderProtocol.cs"/>
+  <Compile Include="../Facet.Launcher/LaunchProtocol.cs" Link="LaunchProtocol.cs"/>
+ </ItemGroup>
+</Project>
