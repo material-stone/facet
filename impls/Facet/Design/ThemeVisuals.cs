@@ -9,7 +9,7 @@ namespace Facet.Design;
 // A choice a theme offers in settings. The theme only names it; the code behind the slot acts on it.
 internal sealed record ThemeOption(string Id,string Name,string? Description=null,bool Default=true);
 
-internal sealed record ThemeManifest(string? Background,double BackgroundOpacity,int Stars,string? Frame,int FrameSlice,double FramePadding,double NebulaSpeed=0,double NebulaBrightness=1,double PanelMarkLength=0,double PanelCornerRadius=0,double TabCornerRadius=ThemeVisuals.DefaultTabCornerRadius,bool Voyage=false,bool HudWidgets=false,ThemeOption[]? ThemeOptions=null,string[]? WorldScenes=null,bool SoftHud=false)
+internal sealed record ThemeManifest(string? Background,double BackgroundOpacity,int Stars,string? Frame,int FrameSlice,double FramePadding,double NebulaSpeed=0,double NebulaBrightness=1,double PanelMarkLength=0,double PanelCornerRadius=0,double TabCornerRadius=ThemeVisuals.DefaultTabCornerRadius,bool Voyage=false,bool HudWidgets=false,ThemeOption[]? ThemeOptions=null,string[]? WorldScenes=null,bool SoftHud=false,string? WorldPage=null,ThemeFont? BodyFont=null,ThemeFont? HeadingFont=null)
 {
     private sealed class Raw
     {
@@ -29,9 +29,11 @@ internal sealed record ThemeManifest(string? Background,double BackgroundOpacity
         public ThemeOption[]? Options { get; set; }
         public RawWorld? World { get; set; }
         public string? HudStyle { get; set; }
+        public RawFonts? Fonts { get; set; }
     }
-    private sealed class RawWorld { public string[]? Scenes { get; set; } }
-    internal static readonly string[] KnownScenes=["market","lakeside","cave"];
+    private sealed class RawWorld { public string? Page { get; set; } public string[]? Scenes { get; set; } }
+    private sealed class RawFonts { public ThemeFont? Body { get; set; } public ThemeFont? Heading { get; set; } }
+    private static bool ValidFont(ThemeFont? font)=>font==null || (font.File!=null && Regex.IsMatch(font.File,"^[A-Za-z0-9_-]{1,64}\\.(ttf|otf)$") && !string.IsNullOrWhiteSpace(font.Family) && Regex.IsMatch(font.Family,"^[\\p{L}\\p{N} ]{1,64}$"));
     private static readonly JsonSerializerOptions Options=new() { PropertyNameCaseInsensitive=true };
     private static bool ValidAsset(string? name)=>name==null || Regex.IsMatch(name,"^[a-z0-9_-]{1,64}\\.png$");
 
@@ -52,11 +54,15 @@ internal sealed record ThemeManifest(string? Background,double BackgroundOpacity
         if(markLength is <0 or >32 || cornerRadius is <0 or >24 || tabRadius is <0 or >24) return null;
         var options=raw.Options ?? [];
         if(options.Any(option=>option==null || option.Id==null || !Regex.IsMatch(option.Id,"^[a-z0-9-]{1,32}$") || string.IsNullOrWhiteSpace(option.Name)) || options.Select(option=>option.Id).Distinct().Count()!=options.Length) return null;
-        if(raw.World is { } world && (world.Scenes is not { Length:>0 } scenes || scenes.Any(scene=>!KnownScenes.Contains(scene)) || scenes.Distinct().Count()!=scenes.Length)) return null;
+        if(raw.World is { } world && (world.Page==null || !Regex.IsMatch(world.Page,"^[a-z0-9_-]{1,64}\\.html$") || world.Scenes is not { Length:>0 } scenes || scenes.Any(scene=>scene==null || !Regex.IsMatch(scene,"^[a-z0-9-]{1,32}$")) || scenes.Distinct().Count()!=scenes.Length)) return null;
+        if(!ValidFont(raw.Fonts?.Body) || !ValidFont(raw.Fonts?.Heading)) return null;
         if(raw.HudStyle is not (null or "tactical" or "soft")) return null;
-        return new(raw.Background,opacity,stars,raw.Frame,slice,padding,nebulaSpeed,nebulaBrightness,markLength,cornerRadius,tabRadius,raw.Voyage ?? false,raw.HudWidgets ?? false,options,raw.World?.Scenes,raw.HudStyle=="soft");
+        return new(raw.Background,opacity,stars,raw.Frame,slice,padding,nebulaSpeed,nebulaBrightness,markLength,cornerRadius,tabRadius,raw.Voyage ?? false,raw.HudWidgets ?? false,options,raw.World?.Scenes,raw.HudStyle=="soft",raw.World?.Page,raw.Fonts?.Body,raw.Fonts?.Heading);
     }
 }
+
+// A font file inside the skin and the family name it declares.
+internal sealed record ThemeFont(string File,string Family);
 
 internal sealed record ThemeFrame(BitmapSource Image,int Slice,double Padding);
 
@@ -73,6 +79,9 @@ internal sealed class ThemeVisuals
     internal bool Voyage { get; private init; }
     internal bool HudWidgets { get; private init; }
     internal string[]? WorldScenes { get; private init; }
+    internal string? WorldPageHtml { get; private init; }
+    // NavigateToString refuses anything larger.
+    private const int MaxWorldPageBytes=1900000;
     internal bool SoftHud { get; private init; }
     internal ThemeOption[] Options { get; private init; }=[];
     internal const string ReticleOption="reticle";
@@ -106,6 +115,12 @@ internal sealed class ThemeVisuals
     internal static ThemeVisuals? From(ThemeManifest manifest,Func<string,Stream> open)
     {
         try {
+            string? worldPage=null;
+            if(manifest.WorldPage is { } page) {
+                using var pageReader=new StreamReader(open(page));
+                worldPage=pageReader.ReadToEnd();
+                if(System.Text.Encoding.UTF8.GetByteCount(worldPage)>MaxWorldPageBytes) return null;
+            }
             var frameImage=manifest.Frame is { } frame ? Image(open,frame) : null;
             // NineSliceFrame needs a center left between its corners.
             if(frameImage!=null && (frameImage.PixelWidth<=2*manifest.FrameSlice || frameImage.PixelHeight<=2*manifest.FrameSlice)) return null;
@@ -121,6 +136,7 @@ internal sealed class ThemeVisuals
                 Voyage=manifest.Voyage,
                 HudWidgets=manifest.HudWidgets,
                 WorldScenes=manifest.WorldScenes,
+                WorldPageHtml=worldPage,
                 SoftHud=manifest.SoftHud,
                 Options=manifest.ThemeOptions ?? [],
                 Frame=frameImage!=null ? new(frameImage,manifest.FrameSlice,manifest.FramePadding) : null

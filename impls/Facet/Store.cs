@@ -13,14 +13,12 @@ public sealed class Store
     public Store(string root) { Root = root; Directory.CreateDirectory(root); }
     public string CalendarPathName => Path.Combine(Root, "calendar.dat");
     public string BackupDirectory => Path.Combine(Root, "backups");
-    // What calendar.dat holds, so saves that touch nothing on the calendar keep its backups.
-    private string? savedCalendar;
 
     public AppData Load()
     {
         RenamePluginData();
         var data = LoadRecords();
-        AttachCalendar(data);
+        MoveCalendar(data);
         MoveConditions(data);
         MoveSleep(data);
         MoveChat(data);
@@ -40,32 +38,27 @@ public sealed class Store
         }
     }
 
-    // Days still in records.dat (first run, or written by an older build) are backed up, copied and verified before they leave it. ADR 0076.
-    private void AttachCalendar(AppData data)
+    // Schedules, todos and notes from calendar.dat (ADR 0076), and any still in records.dat, move once into the schedule
+    // plugin's store. The copy is verified before calendar.dat becomes calendar.dat.moved and the records forget the days (ADR 0101).
+    private void MoveCalendar(AppData data)
     {
         var stored = ReadCalendar();
-        if (data.CalendarDays.Count == 0 && data.SchedulePresets == null) {
-            data.CalendarDays = stored?.Days ?? [];
-            data.SchedulePresets = stored?.SchedulePresets;
-            savedCalendar = CalendarText(data);
-            return;
-        }
+        if (stored == null && data.CalendarDays.Count == 0 && data.SchedulePresets == null) return;
         try {
-            BackupRecords();
-            var merged = new AppData { CalendarDays = CalendarNotes.Merge(stored?.Days ?? [], data.CalendarDays), SchedulePresets = stored?.SchedulePresets ?? data.SchedulePresets };
-            string text = CalendarText(merged);
-            WriteProtected(CalendarPathName, Protect(System.Text.Encoding.UTF8.GetBytes(text), true));
-            if (JsonSerializer.Serialize(DecodeCalendar(File.ReadAllBytes(CalendarPathName)), Json) != text) throw new InvalidDataException("복사한 달력 저장소가 원본과 다릅니다.");
-            data.CalendarDays = merged.CalendarDays;
-            data.SchedulePresets = merged.SchedulePresets;
-            savedCalendar = text;
+            BackupRecords("records-before-schedule-store-");
+            var store = PluginFileStore.For(Root, LegacySchedule.Plugin);
+            string text = LegacySchedule.Merge(store.Read(), stored, data.CalendarDays, data.SchedulePresets);
+            if (!store.Write(text) || store.Read() != text) throw new IOException("복사한 일정 저장소가 원본과 다릅니다.");
+            // A never-edited layout showed the calendar; it keeps showing it as the plugin's widget.
+            data.Workspace ??= WorkspaceLayouts.LegacyDefault();
+            data.CalendarDays = []; data.SchedulePresets = null;
             WriteProtected(PathName, Protect(RecordsBytes(data), true));
+            if (File.Exists(CalendarPathName)) File.Move(CalendarPathName, CalendarPathName + ".moved", true);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Win32Exception or JsonException or ArgumentException) {
-            throw new InvalidDataException("기록을 달력 저장소로 옮기지 못했습니다. 기존 기록은 보존되어 있습니다. " + ex.Message, ex);
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Win32Exception or JsonException or ArgumentException or InvalidDataException) {
+            throw new InvalidDataException("기록을 일정 저장소로 옮기지 못했습니다. 기존 기록은 보존되어 있습니다. " + ex.Message, ex);
         }
     }
-
     // Records still in records.dat (first run, or written by an older build) are backed up, copied and verified before they leave it. ADR 0081.
     private void MoveConditions(AppData data)
     {
@@ -162,10 +155,7 @@ public sealed class Store
     private static List<SchedulePreset>? CleanPresets(List<SchedulePreset>? presets) =>
         presets?.Where(p => p != null && SchedulePreset.IsValid(p)).DistinctBy(p => p.Key).Take(SchedulePreset.MaxCount).ToList();
 
-    private static string CalendarText(AppData data) =>
-        JsonSerializer.Serialize(new CalendarStoreFile { Days = data.CalendarDays.OrderBy(day => day.Date).ToList(), SchedulePresets = data.SchedulePresets }, Json);
-
-    // Keeps the other records as they are; the days live in calendar.dat.
+    // Keeps the other records as they are; the days live in the schedule plugin's store.
     private static byte[] RecordsBytes(AppData data)
     {
         var node = JsonSerializer.SerializeToNode(data, Json)!;
@@ -219,10 +209,6 @@ public sealed class Store
     public void Save(AppData data)
     {
         WriteProtected(PathName, Protect(RecordsBytes(data), true));
-        string calendar = CalendarText(data);
-        if (calendar == savedCalendar) return;
-        WriteProtected(CalendarPathName, Protect(System.Text.Encoding.UTF8.GetBytes(calendar), true));
-        savedCalendar = calendar;
     }
 
     // The whole AppData as records.dat holds it before the days move out.

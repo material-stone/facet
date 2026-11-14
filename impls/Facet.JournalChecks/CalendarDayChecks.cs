@@ -6,35 +6,35 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Facet;
+using Facet.SchedulePlugin;
 using Facet.Core;
 
 internal static partial class Program
 {
     private static void CheckCalendarDayEditor(Controller controller, string qa)
     {
-        var hud=(OverlayTabs)((Grid)controller.Overlay.Content).Children[2];
-        hud.AnimateDayTransitions=false;
-        var tabs=(TabControl)hud.FindName("Tabs");tabs.SelectedItem=hud.FindName("ManagementTab");
-        var calendar=(OverlayCalendarView)hud.FindName("Calendar");
-        var editor=(OverlayDayEditor)hud.FindName("DayEditor");
-        var dial=(OverlayScheduleDial)hud.FindName("ScheduleDial");
-        var modal=(Grid)hud.FindName("ScheduleModal");
-        var form=(OverlayScheduleEditor)hud.FindName("ScheduleEditor");
-        var page=(Grid)hud.FindName("DayPage");var calendarHost=(Viewbox)hud.FindName("CalendarHost");
-        var carousel=(OverlayCarousel)hud.FindName("ManagementCarousel");carousel.Select(0,false);
+        var hud=(OverlayTabs)((Grid)controller.Overlay.Content).Children[2];var board=ScheduleBoardFor(hud,controller.Store.Root);
+        board.AnimateDayTransitions=false;
+        var tabs=(TabControl)hud.FindName("Tabs");tabs.SelectedItem=hud.FindName("DashboardTab");
+        var calendar=(OverlayCalendarView)board.FindName("Calendar");
+        var editor=(OverlayDayEditor)board.FindName("DayEditor");
+        var dial=(OverlayScheduleDial)board.FindName("ScheduleDial");
+        var modal=(Grid)board.FindName("ScheduleModal");
+        var form=(OverlayScheduleEditor)board.FindName("ScheduleEditor");
+        var page=(Grid)board.FindName("DayPage");var calendarHost=(Viewbox)board.FindName("CalendarHost");
         var flags=BindingFlags.Instance|BindingFlags.NonPublic;
         T Field<T>(string name)=>(T)typeof(OverlayDayEditor).GetField(name,flags)!.GetValue(editor)!;
         var input=Field<TextBox>("newTodo");var note=Field<TextBox>("note");var tasks=Field<StackPanel>("tasks");
         var today=DateOnly.FromDateTime(DateTime.Now);var other=today.AddDays(today==DateOnly.MaxValue?-1:1);
-        Assert(!hud.IsEditingDay && page.Visibility==Visibility.Collapsed && calendarHost.Visibility==Visibility.Visible,"management starts with calendar alone and no day panel");
-        Assert(hud.MoveCalendarMonth(1) && hud.GoToCalendarToday(),"calendar retains month and today shortcuts");
+        Assert(!board.IsEditingDay && page.Visibility==Visibility.Collapsed && calendarHost.Visibility==Visibility.Visible,"management starts with calendar alone and no day panel");
+        Assert(board.MoveCalendarMonth(1) && board.GoToCalendarToday(),"calendar retains month and today shortcuts");
         hud.Measure(new Size(1440,900));hud.Arrange(new Rect(0,0,1440,900));hud.UpdateLayout();
         var dateCell=calendar.SelectedDateFocusTarget();
         dateCell.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left){RoutedEvent=UIElement.MouseLeftButtonUpEvent});
         hud.UpdateLayout();
-        Assert(hud.IsEditingDay && page.Visibility==Visibility.Visible && calendarHost.Visibility==Visibility.Collapsed,"date activation replaces calendar with day planner");
-        Assert(((TextBlock)hud.FindName("DayHeading")).Text.Contains($"{today.Day}일") && carousel.NavigationLocked && !carousel.Select(1,false) && !carousel.BeginDrag(new Point(400,200),dial),"day heading and carousel lock keep pie gestures isolated");
-        Assert(!hud.MoveCalendarMonth(1) && !hud.GoToCalendarToday(),"hidden calendar does not consume day-screen navigation keys");
+        Assert(board.IsEditingDay && page.Visibility==Visibility.Visible && calendarHost.Visibility==Visibility.Collapsed,"date activation replaces calendar with day planner");
+        Assert(((TextBlock)board.FindName("DayHeading")).Text.Contains($"{today.Day}일"),"day heading keeps pie gestures isolated");
+        Assert(!board.MoveCalendarMonth(1) && !board.GoToCalendarToday(),"hidden calendar does not consume day-screen navigation keys");
 
         input.Text="하루 화면의 할 일";
         Assert(editor.TrySave(),"day todo pending input saves");
@@ -43,26 +43,27 @@ internal static partial class Program
         Assert(!editor.IsNoteEditing && VisualElements(Field<Border>("notePreview")).OfType<TextBlock>().Any(t=>t.FontSize==24),"existing Markdown preview remains rendered in records panel");
         var row=(Border)tasks.Children[0];row.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left){RoutedEvent=UIElement.MouseLeftButtonUpEvent});
         editor.TrySave();
-        Assert(CalendarNotes.Get(new Store(controller.Store.Root).Load(),today).Todos.Single().Done && VisualElements(row).OfType<TextBlock>().Single(t=>t.Text=="하루 화면의 할 일").TextDecorations==TextDecorations.Strikethrough,"todo completion survives encrypted reload");
+        Assert(CalendarNotes.Get(ScheduleData(controller.Store.Root),today).Todos.Single().Done && VisualElements(row).OfType<TextBlock>().Single(t=>t.Text=="하루 화면의 할 일").TextDecorations==TextDecorations.Strikethrough,"todo completion survives encrypted reload");
         input.Text="삭제할 할 일";Assert(editor.TrySave(),"second todo saves before delete-button check");
         var deleteRow=(Border)tasks.Children[1];var deleteTodo=VisualElements(deleteRow).OfType<Button>().Single();
         deleteTodo.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
-        Assert(editor.TrySave() && CalendarNotes.Get(new Store(controller.Store.Root).Load(),today).Todos is {Count:1} remaining && remaining[0].Title=="하루 화면의 할 일" && remaining[0].Done,"todo delete button removes only its own item and preserves another item's completion after encrypted reload");
+        Assert(editor.TrySave() && CalendarNotes.Get(ScheduleData(controller.Store.Root),today).Todos is {Count:1} remaining && remaining[0].Title=="하루 화면의 할 일" && remaining[0].Done,"todo delete button removes only its own item and preserves another item's completion after encrypted reload");
         Assert(note.Tag==null,"record editor has no placeholder prompt");
 
         var item=new DaySchedule {Name="집중 제작",StartMinute=540,DurationMinutes=120,Color="#91BFFF",Label="작업",Content="첫 상세 내용"};
         string savedBackground=controller.Data.Settings.OverlayBackgroundColor;
         controller.Data.Settings.OverlayBackgroundColor="#3265A8";
-        hud.ShowSchedule(item,false);
+        board.ShowSchedule(item,false);
         Assert(modal.Visibility==Visibility.Visible && form.NameInput.Text==item.Name,"range opens in-content schedule modal");
-        Assert(modal.Background is SolidColorBrush {Color:{A:184,R:50,G:101,B:168}},"schedule scrim uses the latest settings background RGB with translucent alpha");
+        var skinBg=((SolidColorBrush)Application.Current.FindResource("Bg")).Color;
+        Assert(modal.Background is SolidColorBrush {Color:{A:184} scrimColor} && scrimColor.R==skinBg.R && scrimColor.G==skinBg.G && scrimColor.B==skinBg.B,"schedule scrim uses the skin background RGB with translucent alpha (a plugin does not read app settings)");
         controller.Data.Settings.OverlayBackgroundColor=savedBackground;
         form.ColorInput.Text="#wrong!";Assert(!form.Submit() && modal.Visibility==Visibility.Visible,"invalid category color retains modal draft");
         form.ColorInput.Text=item.Color;Assert(form.Submit() && modal.Visibility==Visibility.Collapsed,"valid modal save closes after commit");
-        var stored=CalendarNotes.Get(new Store(controller.Store.Root).Load(),today);
+        var stored=CalendarNotes.Get(ScheduleData(controller.Store.Root),today);
         Assert(stored.Schedules.Single().Name==item.Name && stored.Schedules[0].Content==item.Content && stored.Todos.Count==1 && stored.Note==note.Text,"schedules todos and records share one encrypted day without overwriting");
-        note.Text+="\n\n일정 저장 후 기록";editor.TrySave();Assert(CalendarNotes.Get(controller.Data,today).Schedules.Count==1,"record autosave preserves schedule changes");
-        hud.OpenDay(other);Assert(editor.Schedules.Count==0 && note.Text=="","other date starts independently");hud.OpenDay(today);
+        note.Text+="\n\n일정 저장 후 기록";editor.TrySave();Assert(CalendarNotes.Get(ScheduleData(controller.Store.Root),today).Schedules.Count==1,"record autosave preserves schedule changes");
+        board.OpenDay(other);Assert(editor.Schedules.Count==0 && note.Text=="","other date starts independently");board.OpenDay(today);
         Assert(editor.Schedules.Count==1 && note.Text.Contains("일정 저장 후 기록"),"returning to date reloads schedule and original note");
         var nameBadge=dial.LayoutCallouts().Single(label=>label.Item.Id==editor.Schedules[0].Id).Bounds;
         var namePoint=new Point(nameBadge.X+nameBadge.Width/2,nameBadge.Y+nameBadge.Height/2);
@@ -74,44 +75,44 @@ internal static partial class Program
         Assert(modal.Visibility==Visibility.Visible && form.NameInput.Text==item.Name,"clicking a scheduled sector opens that schedule in the edit modal");
         form.TimePicker.SetRange(new(today,1410,today.AddDays(1),60));form.ContentInput.Text="자정을 넘는 내용";
         Assert(form.Submit(),"overnight schedule edit saves");
-        stored=CalendarNotes.Get(new Store(controller.Store.Root).Load(),today);
+        stored=CalendarNotes.Get(ScheduleData(controller.Store.Root),today);
         Assert(stored.Schedules[0].StartMinute==1410 && stored.Schedules[0].DurationMinutes==90 && stored.Schedules[0].Content=="자정을 넘는 내용","modal start and end convert to overnight duration");
-        hud.ShowSchedule(stored.Schedules[0],true);form.NameInput.Text="Esc로 저장한 일정";form.ContentInput.Text="Esc 자동 저장 내용";
-        Assert(hud.HandleEscape() && modal.Visibility==Visibility.Collapsed && hud.IsEditingDay,"first Escape saves and closes only the schedule editor");
-        var escapeSaved=CalendarNotes.Get(new Store(controller.Store.Root).Load(),today).Schedules.Single();
+        board.ShowSchedule(stored.Schedules[0],true);form.NameInput.Text="Esc로 저장한 일정";form.ContentInput.Text="Esc 자동 저장 내용";
+        Assert(hud.HandleEscape() && modal.Visibility==Visibility.Collapsed && board.IsEditingDay,"first Escape saves and closes only the schedule editor");
+        var escapeSaved=CalendarNotes.Get(ScheduleData(controller.Store.Root),today).Schedules.Single();
         Assert(escapeSaved.Name=="Esc로 저장한 일정" && escapeSaved.Content=="Esc 자동 저장 내용","Escape autosave persists edited fields through encrypted reload");
-        hud.ShowSchedule(stored.Schedules[0],true);form.NameInput.Text="바깥 클릭으로 저장한 일정";form.ContentInput.Text="자동 저장한 변경 내용";
+        board.ShowSchedule(stored.Schedules[0],true);form.NameInput.Text="바깥 클릭으로 저장한 일정";form.ContentInput.Text="자동 저장한 변경 내용";
         form.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left){RoutedEvent=UIElement.MouseDownEvent});
         Assert(modal.Visibility==Visibility.Visible,"clicking inside the schedule form does not dismiss it");
         var outside=new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left){RoutedEvent=UIElement.MouseDownEvent};modal.RaiseEvent(outside);
-        var autoSaved=CalendarNotes.Get(new Store(controller.Store.Root).Load(),today).Schedules.Single();
-        Assert(outside.Handled && modal.Visibility==Visibility.Collapsed && hud.IsEditingDay && autoSaved.Name=="바깥 클릭으로 저장한 일정" && autoSaved.Content=="자동 저장한 변경 내용","outside click saves schedule changes to encrypted storage before closing and consumes the click");
-        hud.ShowSchedule(autoSaved,true);form.NameInput.Text=" ";form.ContentInput.Text="";
-        Assert(!form.Submit() && modal.Visibility==Visibility.Visible && CalendarNotes.Get(controller.Data,today).Schedules.Single().Name==autoSaved.Name,"clearing an existing schedule name and content retains validation and never discards its stored record");form.Close();
-        hud.ShowSchedule(stored.Schedules[0],true);Assert(form.Submit(true) && editor.Schedules.Count==0,"schedule deletion leaves todo and record intact");
+        var autoSaved=CalendarNotes.Get(ScheduleData(controller.Store.Root),today).Schedules.Single();
+        Assert(outside.Handled && modal.Visibility==Visibility.Collapsed && board.IsEditingDay && autoSaved.Name=="바깥 클릭으로 저장한 일정" && autoSaved.Content=="자동 저장한 변경 내용","outside click saves schedule changes to encrypted storage before closing and consumes the click");
+        board.ShowSchedule(autoSaved,true);form.NameInput.Text=" ";form.ContentInput.Text="";
+        Assert(!form.Submit() && modal.Visibility==Visibility.Visible && CalendarNotes.Get(ScheduleData(controller.Store.Root),today).Schedules.Single().Name==autoSaved.Name,"clearing an existing schedule name and content retains validation and never discards its stored record");form.Close();
+        board.ShowSchedule(stored.Schedules[0],true);Assert(form.Submit(true) && editor.Schedules.Count==0,"schedule deletion leaves todo and record intact");
 
         // Real dial-to-modal wiring, including radial motion inside one 30-minute wedge.
         var start=dial.PointAt(18.25,dial.Radius*.55);var finish=dial.PointAt(18.3,dial.Radius*.75);
         Assert(dial.BeginSelection(start),"pointer begins inside the circle");dial.MovePointer(finish);dial.EndSelection(finish);
         Assert(modal.Visibility==Visibility.Visible && form.StartInput.SelectedIndex==18 && form.EndInput.SelectedIndex==19,"same-wedge drag above threshold selects a full half hour and opens modal");
-        string emptyBefore=System.Text.Json.JsonSerializer.Serialize(controller.Data);
-        Assert(hud.HandleEscape() && modal.Visibility==Visibility.Collapsed && hud.IsEditingDay && System.Text.Json.JsonSerializer.Serialize(controller.Data)==emptyBefore,"Escape closes an untouched new schedule without creating or updating any data");
-        hud.ShowSchedule(new(){StartMinute=600,DurationMinutes=60},false);
+        string emptyBefore=ScheduleRecords.Serialize(board.Records.Data);
+        Assert(hud.HandleEscape() && modal.Visibility==Visibility.Collapsed && board.IsEditingDay && ScheduleRecords.Serialize(board.Records.Data)==emptyBefore,"Escape closes an untouched new schedule without creating or updating any data");
+        board.ShowSchedule(new(){StartMinute=600,DurationMinutes=60},false);
         var emptyOutside=new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left){RoutedEvent=UIElement.MouseDownEvent};modal.RaiseEvent(emptyOutside);
-        Assert(emptyOutside.Handled && modal.Visibility==Visibility.Collapsed && System.Text.Json.JsonSerializer.Serialize(controller.Data)==emptyBefore,"outside click closes an untouched new schedule without saving and consumes the click");
+        Assert(emptyOutside.Handled && modal.Visibility==Visibility.Collapsed && ScheduleRecords.Serialize(board.Records.Data)==emptyBefore,"outside click closes an untouched new schedule without saving and consumes the click");
         foreach(bool escape in new[]{true,false}) {
-            hud.ShowSchedule(new(){StartMinute=600,DurationMinutes=60},false);form.NameInput.Text=" \t";form.ContentInput.Text="\n ";
+            board.ShowSchedule(new(){StartMinute=600,DurationMinutes=60},false);form.NameInput.Text=" \t";form.ContentInput.Text="\n ";
             form.LabelInput.Text="작성한 레이블";form.ColorInput.Text="#91BFFF";form.TimePicker.SetRange(new(today.AddDays(1),660,today.AddDays(2),720));
             if(escape)hud.HandleEscape();else modal.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left){RoutedEvent=UIElement.MouseDownEvent});
-            Assert(modal.Visibility==Visibility.Collapsed && hud.IsEditingDay && System.Text.Json.JsonSerializer.Serialize(controller.Data)==emptyBefore,(escape?"Escape":"outside click")+" discards a new schedule with blank name and content despite changed color label and dates");
+            Assert(modal.Visibility==Visibility.Collapsed && board.IsEditingDay && ScheduleRecords.Serialize(board.Records.Data)==emptyBefore,(escape?"Escape":"outside click")+" discards a new schedule with blank name and content despite changed color label and dates");
         }
         foreach(bool escape in new[]{true,false}) {
             string firstLine=escape?"Esc로 저장한 이름 없는 메모":"바깥 클릭으로 저장한 이름 없는 메모";
             string content=firstLine+(escape?"\r\n":"\n")+"레이블에 표시하지 않을 두 번째 줄";
-            hud.ShowSchedule(new(){StartMinute=600,DurationMinutes=60},false);form.NameInput.Text=" \t";form.ContentInput.Text=content;
+            board.ShowSchedule(new(){StartMinute=600,DurationMinutes=60},false);form.NameInput.Text=" \t";form.ContentInput.Text=content;
             if(escape)hud.HandleEscape();else modal.RaiseEvent(new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left){RoutedEvent=UIElement.MouseDownEvent});
-            var contentOnly=CalendarNotes.Get(new Store(controller.Store.Root).Load(),today).Schedules.Single();
-            Assert(modal.Visibility==Visibility.Collapsed && hud.IsEditingDay && contentOnly.Name=="" && contentOnly.Content==content,(escape?"Escape":"outside click")+" autosaves a content-only new schedule with an empty stored name");
+            var contentOnly=CalendarNotes.Get(ScheduleData(controller.Store.Root),today).Schedules.Single();
+            Assert(modal.Visibility==Visibility.Collapsed && board.IsEditingDay && contentOnly.Name=="" && contentOnly.Content==content,(escape?"Escape":"outside click")+" autosaves a content-only new schedule with an empty stored name");
             hud.UpdateLayout();var label=dial.LayoutCallouts().Single(callout=>callout.Item.Id==contentOnly.Id);
             Assert(label.NameText.Text==firstLine && label.Bounds.Width>0,"unnamed schedule labels show only the first content line for CRLF and LF notes");
             var point=new Point(label.Bounds.X+label.Bounds.Width/2,label.Bounds.Y+label.Bounds.Height/2);dial.BeginSelection(point);dial.EndSelection(point);
@@ -121,15 +122,15 @@ internal static partial class Program
         CheckDayDialGeometry(qa);CheckScheduleCurrentTime(qa);CheckDayEditorFill();CheckScheduleCallouts(qa);
 
         // Failed writes leave modal inputs and the existing day unchanged.
-        editor.Configure(d=>CalendarNotes.Get(controller.Data,d),_=>false);
-        hud.ShowSchedule(new(){Name="실패 보존",StartMinute=600,DurationMinutes=60},false);
+        editor.Configure(d=>CalendarNotes.Get(ScheduleData(controller.Store.Root),d),_=>false);
+        board.ShowSchedule(new(){Name="실패 보존",StartMinute=600,DurationMinutes=60},false);
         Assert(!form.Submit() && modal.Visibility==Visibility.Visible && form.NameInput.Text=="실패 보존" && editor.Schedules.Count==0,"failed schedule save retains editable modal without mutating day schedule");
         var failedOutside=new MouseButtonEventArgs(Mouse.PrimaryDevice,0,MouseButton.Left){RoutedEvent=UIElement.MouseDownEvent};modal.RaiseEvent(failedOutside);
         Assert(failedOutside.Handled && modal.Visibility==Visibility.Visible && form.NameInput.Text=="실패 보존" && editor.Schedules.Count==0,"failed outside-click autosave retains the modal draft and consumes the click");
         Assert(hud.HandleEscape() && modal.Visibility==Visibility.Visible && form.NameInput.Text=="실패 보존" && editor.Schedules.Count==0,"failed Escape autosave keeps the schedule modal draft open");
         form.Close();note.Text="저장 실패 시 남겨야 하는 기록";
-        Assert(hud.HandleEscape() && hud.IsEditingDay && editor.HasPendingChanges,"failed record save consumes Escape and blocks calendar return");
-        editor.Configure(d=>CalendarNotes.Get(controller.Data,d),entry=>controller.Commit(data=>CalendarNotes.Save(data,entry,DateTime.Now)));
+        Assert(hud.HandleEscape() && board.IsEditingDay && editor.HasPendingChanges,"failed record save consumes Escape and blocks calendar return");
+        board.ConnectEditor();
         Assert(editor.TrySave(),"retry saves preserved record draft");
 
         editor.SaveSchedule(new(){Name="집중 작업",StartMinute=540,DurationMinutes=240,Color="#91BFFF",Label="작업"});
@@ -138,34 +139,35 @@ internal static partial class Program
         double previousOpacity=hud.Opacity;hud.Opacity=1;
         foreach(var size in new[]{new Size(1440,900),new Size(800,600),new Size(480,360)}) {
             // The screen fits whatever the tile gives it; a tile this small is the widget resized on a small display.
-            var dayViewport=(Viewbox)hud.FindName("DayViewport");dayViewport.Width=size.Width-112;dayViewport.Height=size.Height-232;
+            var dayViewport=(Viewbox)board.FindName("DayViewport");dayViewport.Width=size.Width-112;dayViewport.Height=size.Height-232;
             hud.Measure(size);hud.Arrange(new Rect(size));hud.UpdateLayout();
             var dialRight=dial.TranslatePoint(new Point(dial.ActualWidth,0),hud);var editorLeft=editor.TranslatePoint(new Point(),hud);
             var bottom=editor.TranslatePoint(new Point(editor.ActualWidth,editor.ActualHeight),hud);
             Assert(dialRight.X<editorLeft.X && bottom.X<size.Width && bottom.Y<size.Height && ((ScrollViewer)Field<Border>("notePreview").Child).ViewportHeight>0,"pie on left and scrollable todo-record panel on right fit at "+size);
             var layout=dial.LayoutSchedules();Assert(layout.Single(s=>s.Item.Name=="잠깐 휴식").Radius<layout.Single(s=>s.Item.Name=="집중 작업").Radius && layout.Single(s=>s.Item.Name=="저녁 산책").Radius==dial.Radius*.9,"only overlapping shorter schedule shrinks inside the longer sector at "+size);
             Assert(editorLeft.X>size.Width*.6 && editor.ActualWidth>350,"day panel moves right while preserving editing width at "+size);
-            var back=(Button)hud.FindName("BackToCalendar");var heading=(TextBlock)hud.FindName("DayHeading");
+            var back=(Button)board.FindName("BackToCalendar");var heading=(TextBlock)board.FindName("DayHeading");
             var backCenter=back.TranslatePoint(new Point(0,back.ActualHeight/2),hud);var headingCenter=heading.TranslatePoint(new Point(0,heading.ActualHeight/2),hud);
-            Assert(System.Math.Abs(backCenter.Y-headingCenter.Y)<1 && back.Content is Facet.Design.Icon {Kind:Facet.Design.IconKind.Left},"back chevron and date share one vertically centered row at "+size);
+            Assert(System.Math.Abs(backCenter.Y-headingCenter.Y)<1 && back.Content is Facet.SchedulePlugin.Icon {Kind:Facet.SchedulePlugin.IconKind.Left},"back chevron and date share one vertically centered row at "+size);
             Assert(VisualElements(hud).OfType<TextBlock>().Count(text=>text.Text==heading.Text)==1 && hud.FindName("AddSchedule")==null && hud.FindName("ScheduleList")==null,"day date appears once and redundant schedule controls are absent");
             dial.MovePointer(dial.PointAt(0,dial.Radius+40));hud.UpdateLayout();
             SavePlannerImage(hud,size,Path.Combine(qa,$"day-pie-planner-{size.Width}.png"));
             dial.MovePointer(dial.PointAt(14.5,dial.Radius*.95));hud.UpdateLayout();
             SavePlannerImage(hud,size,Path.Combine(qa,$"day-pie-hover-{size.Width}.png"));
             dial.MovePointer(dial.PointAt(0,dial.Radius+40));hud.UpdateLayout();
-            hud.ShowSchedule(editor.Schedules[0],true);hud.UpdateLayout();
+            board.ShowSchedule(editor.Schedules[0],true);hud.UpdateLayout();
             var scrim=modal.TransformToAncestor(hud).TransformBounds(new Rect(modal.RenderSize));
             Assert(scrim==new Rect(hud.RenderSize),"schedule scrim covers the whole overlay including margins and tabs at "+size+" ("+scrim+" / "+hud.RenderSize+")");
-            Assert(((Grid)hud.FindName("ScheduleTimeModal")).Visibility==Visibility.Collapsed,"nested picker layer is hidden before opening the schedule modal at "+size);
+            Assert(((Grid)board.FindName("ScheduleTimeModal")).Visibility==Visibility.Collapsed,"nested picker layer is hidden before opening the schedule modal at "+size);
             // Offscreen visual tests must skip retained drawings of collapsed flyouts.
             HitTestResult? scrimHit=null;
             VisualTreeHelper.HitTest(modal,node=>node is UIElement element && (element.Visibility!=Visibility.Visible || !element.IsHitTestVisible)?HitTestFilterBehavior.ContinueSkipSelfAndChildren:HitTestFilterBehavior.Continue,
                 hit=>{scrimHit=hit;return HitTestResultBehavior.Stop;},new PointHitTestParameters(new Point(2,2)));
-            Assert(ReferenceEquals(scrimHit?.VisualHit,modal) && ReferenceEquals(VisualTreeHelper.GetParent(modal),VisualTreeHelper.GetParent(tabs)) && Panel.GetZIndex(modal)>Panel.GetZIndex(tabs),"schedule scrim intercepts outer-margin clicks above tabs at "+size);
+            var layers=(Grid)hud.FindName("WidgetLayers");
+            Assert(ReferenceEquals(scrimHit?.VisualHit,modal) && ReferenceEquals(VisualTreeHelper.GetParent(modal),layers) && ReferenceEquals(VisualTreeHelper.GetParent(layers),VisualTreeHelper.GetParent(tabs)) && Panel.GetZIndex(layers)>Panel.GetZIndex(tabs),"schedule scrim on the widget layer intercepts outer-margin clicks above tabs at "+size);
             var background=((SolidColorBrush)modal.Background).Color;
-            var expected=OverlayAppearance.BackgroundColor(controller.Data.Settings);
-            Assert(background.A==184 && background.R==expected.R && background.G==expected.G && background.B==expected.B,"reopening schedule modal refreshes its saved background color");
+            var expected=((SolidColorBrush)Application.Current.FindResource("Bg")).Color;
+            Assert(background.A==184 && background.R==expected.R && background.G==expected.G && background.B==expected.B,"reopening schedule modal refreshes its skin background color");
             var box=form.TransformToAncestor(hud).TransformBounds(new Rect(form.RenderSize));
             Assert(box.Left>=0 && box.Top>=0 && box.Right<=size.Width && box.Bottom<=size.Height,"schedule modal stays inside scaled planner at "+size);
             var deleteButton=VisualElements(form).OfType<Button>().Single(button=>System.Windows.Automation.AutomationProperties.GetName(button)=="일정 삭제");
@@ -195,7 +197,7 @@ internal static partial class Program
             string label="프리셋 "+size.Width;
             form.OpenPresetDialog();form.PresetDialog.ColorInput.Text="#3A7BD5";form.PresetDialog.LabelInput.Text=label;
             Assert(form.PresetDialog.Submit() && !form.IsPresetOpen && form.ColorInput.Text=="#3A7BD5" && form.LabelInput.Text==label,"confirming a new preset applies it to the schedule and closes the preset layers");
-            Assert(CalendarNotes.SchedulePresets(controller.Data).First().Key==new SchedulePreset{Color="#3A7BD5",Label=label}.Key,"new preset is saved at the front of the stored presets");
+            Assert(CalendarNotes.SchedulePresets(ScheduleData(controller.Store.Root)).First().Key==new SchedulePreset{Color="#3A7BD5",Label=label}.Key,"new preset is saved at the front of the stored presets");
             form.OpenPresetPicker();hud.UpdateLayout();SavePlannerImage(hud,size,Path.Combine(qa,$"day-preset-list-{size.Width}.png"));
             var rows=form.PresetPicker.Presets.ToArray();
             Assert(form.PresetPicker.SelectedPreset is SchedulePreset current && current.Label==label,"preset list opens expanded and highlights the schedule's current preset");
@@ -207,24 +209,24 @@ internal static partial class Program
             }
             Assert(form.PresetPicker.PresetInput.Visibility==Visibility.Visible && form.PresetPicker.PresetInput.MaxHeight<=264 && ScrollViewer.GetVerticalScrollBarVisibility(form.PresetPicker.PresetInput)==ScrollBarVisibility.Auto,"preset rows show immediately in a height-limited scroll list above the add button");
             var trash=form.PresetPicker.RemoveButton(form.PresetPicker.Presets.First(p=>p.Label==label));
-            Assert(trash is {Content:Facet.Design.Icon {Kind:Facet.Design.IconKind.Trash}} && trash.ContentTemplate==null && trash.Visibility==Visibility.Visible && trash.ActualWidth>0 && ((FrameworkElement)trash.Content).ActualWidth>0,"each preset row ends with a rendered trash icon button");
+            Assert(trash is {Content:Facet.SchedulePlugin.Icon {Kind:Facet.SchedulePlugin.IconKind.Trash}} && trash.ContentTemplate==null && trash.Visibility==Visibility.Visible && trash.ActualWidth>0 && ((FrameworkElement)trash.Content).ActualWidth>0,"each preset row ends with a rendered trash icon button");
             Assert(trash!=null,"each preset dropdown row ends with a visible remove button");
             trash!.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
-            Assert(form.PresetPicker.Presets.All(p=>p.Label!=label) && CalendarNotes.SchedulePresets(controller.Data).All(p=>p.Label!=label) && form.IsPresetPickerOpen,"remove button deletes the preset from the list and storage immediately");
+            Assert(form.PresetPicker.Presets.All(p=>p.Label!=label) && CalendarNotes.SchedulePresets(ScheduleData(controller.Store.Root)).All(p=>p.Label!=label) && form.IsPresetPickerOpen,"remove button deletes the preset from the list and storage immediately");
             hud.HandleEscape();Assert(!form.IsPresetOpen && modal.Visibility==Visibility.Visible,"Escape closes only the preset picker while retaining the schedule draft");
             form.ColorInput.Text=originalColor;form.LabelInput.Text=originalLabel;
             hud.HandleEscape();
         }
         hud.Opacity=previousOpacity;
-        Assert(hud.HandleEscape() && !hud.IsEditingDay && calendarHost.Visibility==Visibility.Visible && !carousel.NavigationLocked,"Escape saves day and restores calendar with carousel navigation");
+        Assert(hud.HandleEscape() && !board.IsEditingDay && calendarHost.Visibility==Visibility.Visible,"Escape saves day and restores calendar");
         Assert(!hud.HandleEscape(),"calendar Escape falls through to existing overlay dismissal");
         bool ObserveTransition(Func<bool> predicate){for(int frame=0;frame<12;frame++){Pump(10);if(predicate())return true;}return false;}
-        hud.AnimateDayTransitions=true;hud.OpenDay(today);
-        Assert(ObserveTransition(()=>hud.IsEditingDay && calendarHost.Opacity<1 && page.Opacity>0 && ((TranslateTransform)calendarHost.RenderTransform).X<0 && ((TranslateTransform)page.RenderTransform).X>0),"calendar exits left while planner fades in from right");
+        board.AnimateDayTransitions=true;board.OpenDay(today);
+        Assert(ObserveTransition(()=>board.IsEditingDay && calendarHost.Opacity<1 && page.Opacity>0 && ((TranslateTransform)calendarHost.RenderTransform).X<0 && ((TranslateTransform)page.RenderTransform).X>0),"calendar exits left while planner fades in from right");
         hud.HandleEscape();
-        Assert(ObserveTransition(()=>!hud.IsEditingDay && ((TranslateTransform)calendarHost.RenderTransform).X<0 && ((TranslateTransform)page.RenderTransform).X>0),"reverse transition brings calendar back from left and sends day to right");
+        Assert(ObserveTransition(()=>!board.IsEditingDay && ((TranslateTransform)calendarHost.RenderTransform).X<0 && ((TranslateTransform)page.RenderTransform).X>0),"reverse transition brings calendar back from left and sends day to right");
         Pump(300);Assert(page.Visibility==Visibility.Collapsed && calendarHost.Visibility==Visibility.Visible,"reversing in-progress animation completes with only calendar visible");
-        hud.AnimateDayTransitions=false;CheckCrossDatePlanner(controller,qa);CheckPlannerEditModes(controller,qa);CheckScheduleDragging(controller,qa);
+        board.AnimateDayTransitions=false;CheckCrossDatePlanner(controller,qa);CheckPlannerEditModes(controller,qa);CheckScheduleDragging(controller,qa);
     }
 
     private static void CheckDayDialGeometry(string qa)
@@ -418,16 +420,16 @@ internal static partial class Program
     {
         using var host=new KeyboardHost();host.Window.Show();Pump(150);
         var original=System.Windows.Forms.Cursor.Position;
-        var overlay=controller.Overlay;var hud=(OverlayTabs)((Grid)overlay.Content).Children[2];
-        var dial=(OverlayScheduleDial)hud.FindName("ScheduleDial");var editor=(OverlayDayEditor)hud.FindName("DayEditor");
-        var modal=(Grid)hud.FindName("ScheduleModal");var form=(OverlayScheduleEditor)hud.FindName("ScheduleEditor");
+        var overlay=controller.Overlay;var hud=(OverlayTabs)((Grid)overlay.Content).Children[2];var board=ScheduleBoardFor(hud,controller.Store.Root);
+        var dial=(OverlayScheduleDial)board.FindName("ScheduleDial");var editor=(OverlayDayEditor)board.FindName("DayEditor");
+        var modal=(Grid)board.FindName("ScheduleModal");var form=(OverlayScheduleEditor)board.FindName("ScheduleEditor");
         dial.TimeProvider=()=>new(2026,10,24,18,0,0);
         var schedule=new DaySchedule {Name="실제 클릭과 말줄임표 레이블의 전체 텍스트 툴팁을 검증하기 위한 긴 일정 이름",StartMinute=540,DurationMinutes=120};
-        controller.Commit(data=> {data.Settings.OverlayShowMilliseconds=0;data.Settings.OverlayHideMilliseconds=0;
+        board.Records.Commit(data=> {data.Settings.OverlayShowMilliseconds=0;data.Settings.OverlayHideMilliseconds=0;
             CalendarNotes.Save(data,new(){Date=DateOnly.FromDateTime(DateTime.Now),Schedules=[schedule],Todos=[new(){Title="바깥 클릭 전달 보호"}]},DateTime.Now);});
-        hud.Connect(controller);((TabControl)hud.FindName("Tabs")).SelectedItem=hud.FindName("ManagementTab");hud.AnimateDayTransitions=false;
+        hud.Connect(controller);((TabControl)hud.FindName("Tabs")).SelectedItem=hud.FindName("DashboardTab");board.AnimateDayTransitions=false;
         try {
-            controller.ToggleOverlay();AwaitBackdrop(()=>overlay.IsVisible);Pump(500);hud.OpenDay(DateOnly.FromDateTime(DateTime.Now));overlay.UpdateLayout();Pump(100);
+            controller.ToggleOverlay();AwaitBackdrop(()=>overlay.IsVisible);Pump(500);board.OpenDay(DateOnly.FromDateTime(DateTime.Now));overlay.UpdateLayout();Pump(100);
             Assert(overlay.IsActive,"native schedule click test owns the foreground overlay");
             var tooltipBadge=dial.LayoutCallouts().Single().Bounds;
             var tooltipPoint=dial.PointToScreen(new(tooltipBadge.X+tooltipBadge.Width/2,tooltipBadge.Y+tooltipBadge.Height/2));
@@ -479,7 +481,7 @@ internal static partial class Program
             var box=dial.LayoutCallouts().Single(label=>label.Item.Id==schedule.Id).Bounds;
             Click(new Point(box.X+box.Width/2,box.Y+box.Height/2),"name label");
             Click(dial.PointAt(20,dial.Radius*.6),"saved sector");
-            hud.ShowSchedule(editor.Schedules.Single(),true);overlay.UpdateLayout();
+            board.ShowSchedule(editor.Schedules.Single(),true);overlay.UpdateLayout();
             var originalForm=form.TransformToAncestor(hud).TransformBounds(new Rect(form.RenderSize));
             void ClickElement(FrameworkElement target) {
                 var screen=target.PointToScreen(new Point(target.ActualWidth/2,target.ActualHeight/2));
@@ -526,51 +528,51 @@ internal static partial class Program
             System.Windows.Forms.Cursor.Position=new((int)Math.Round(outsideForm.X),(int)Math.Round(outsideForm.Y));Pump(100);
             Assert(ReferenceEquals(overlay.InputHitTest(overlay.PointFromScreen(outsideForm)),modal),"native outside click reaches the scrim inside the planner viewport");
             mouse_event(0x0002,0,0,0,0);Pump(30);mouse_event(0x0004,0,0,0,0);Pump(120);
-            var saved=CalendarNotes.Get(new Store(controller.Store.Root).Load(),today).Schedules.Single();
-            Assert(modal.Visibility==Visibility.Collapsed && hud.IsEditingDay && overlay.IsVisible && saved.Name=="바깥 클릭 자동 저장" && saved.Content=="실제 클릭으로 저장된 내용" && saved.Color=="#D2ACF0","native outside click persists the schedule draft and chosen color before dismissing the modal");
-            Assert(!CalendarNotes.Get(controller.Data,DateOnly.FromDateTime(DateTime.Now)).Todos.Single().Done && !hud.IsMouseCaptured,"dismissal consumes mouse release instead of toggling a todo behind the modal and releases capture");
-            hud.ShowSchedule(editor.Schedules.Single(),true);form.NameInput.Text="실제 Esc 자동 저장";form.ContentInput.Text="키보드로 저장한 내용";Pump(80);Chord(0x1B);
-            var escapeSaved=CalendarNotes.Get(new Store(controller.Store.Root).Load(),today).Schedules.Single();
-            Assert(modal.Visibility==Visibility.Collapsed && hud.IsEditingDay && overlay.IsVisible && escapeSaved.Name=="실제 Esc 자동 저장" && escapeSaved.Content=="키보드로 저장한 내용","native Escape saves schedule changes and pops only the schedule modal");
-            hud.ShowSchedule(editor.Schedules.Single(),true);form.ColorInput.Text="#bad";Pump(80);Chord(0x1B);
-            Assert(modal.Visibility==Visibility.Visible && hud.IsEditingDay && form.ColorInput.Text=="#bad" && overlay.IsVisible,"native Escape with invalid input retains the schedule modal and draft");
+            var saved=CalendarNotes.Get(ScheduleData(controller.Store.Root),today).Schedules.Single();
+            Assert(modal.Visibility==Visibility.Collapsed && board.IsEditingDay && overlay.IsVisible && saved.Name=="바깥 클릭 자동 저장" && saved.Content=="실제 클릭으로 저장된 내용" && saved.Color=="#D2ACF0","native outside click persists the schedule draft and chosen color before dismissing the modal");
+            Assert(!CalendarNotes.Get(ScheduleData(controller.Store.Root),DateOnly.FromDateTime(DateTime.Now)).Todos.Single().Done && !hud.IsMouseCaptured,"dismissal consumes mouse release instead of toggling a todo behind the modal and releases capture");
+            board.ShowSchedule(editor.Schedules.Single(),true);form.NameInput.Text="실제 Esc 자동 저장";form.ContentInput.Text="키보드로 저장한 내용";Pump(80);Chord(0x1B);
+            var escapeSaved=CalendarNotes.Get(ScheduleData(controller.Store.Root),today).Schedules.Single();
+            Assert(modal.Visibility==Visibility.Collapsed && board.IsEditingDay && overlay.IsVisible && escapeSaved.Name=="실제 Esc 자동 저장" && escapeSaved.Content=="키보드로 저장한 내용","native Escape saves schedule changes and pops only the schedule modal");
+            board.ShowSchedule(editor.Schedules.Single(),true);form.ColorInput.Text="#bad";Pump(80);Chord(0x1B);
+            Assert(modal.Visibility==Visibility.Visible && board.IsEditingDay && form.ColorInput.Text=="#bad" && overlay.IsVisible,"native Escape with invalid input retains the schedule modal and draft");
             form.ColorInput.Text=escapeSaved.Color;Chord(0x1B);
-            Assert(modal.Visibility==Visibility.Collapsed && hud.IsEditingDay,"correcting invalid input allows the next Escape to save and close");
-            string beforeEmpty=System.Text.Json.JsonSerializer.Serialize(controller.Data);
+            Assert(modal.Visibility==Visibility.Collapsed && board.IsEditingDay,"correcting invalid input allows the next Escape to save and close");
+            string beforeEmpty=ScheduleRecords.Serialize(board.Records.Data);
             foreach(bool escape in new[]{true,false}) {
-                hud.ShowSchedule(new(){StartMinute=60,DurationMinutes=30},false);
+                board.ShowSchedule(new(){StartMinute=60,DurationMinutes=30},false);
                 form.ColorInput.Text="#91BFFF";form.LabelInput.Text="바뀐 레이블";form.TimePicker.SetRange(new(today.AddDays(1),600,today.AddDays(2),660));Pump(80);
                 if(escape)Chord(0x1B);
                 else {
                     System.Windows.Forms.Cursor.Position=new((int)Math.Round(outsideForm.X),(int)Math.Round(outsideForm.Y));Pump(100);
                     mouse_event(0x0002,0,0,0,0);Pump(30);mouse_event(0x0004,0,0,0,0);Pump(120);
                 }
-                Assert(modal.Visibility==Visibility.Collapsed && hud.IsEditingDay && overlay.IsVisible && !hud.IsMouseCaptured && System.Text.Json.JsonSerializer.Serialize(controller.Data)==beforeEmpty,"native "+(escape?"Escape":"outside click")+" dismisses a text-empty new schedule after color label and date changes without saving or clicking through");
+                Assert(modal.Visibility==Visibility.Collapsed && board.IsEditingDay && overlay.IsVisible && !hud.IsMouseCaptured && ScheduleRecords.Serialize(board.Records.Data)==beforeEmpty,"native "+(escape?"Escape":"outside click")+" dismisses a text-empty new schedule after color label and date changes without saving or clicking through");
             }
             foreach(bool escape in new[]{true,false}) {
                 string content="내용만 작성한 실제 "+(escape?"Esc":"바깥 클릭");
-                hud.ShowSchedule(new(){StartMinute=600,DurationMinutes=30},false);form.ContentInput.Text=content;Pump(80);
+                board.ShowSchedule(new(){StartMinute=600,DurationMinutes=30},false);form.ContentInput.Text=content;Pump(80);
                 if(escape)Chord(0x1B);
                 else {
                     System.Windows.Forms.Cursor.Position=new((int)Math.Round(outsideForm.X),(int)Math.Round(outsideForm.Y));Pump(100);
                     mouse_event(0x0002,0,0,0,0);Pump(30);mouse_event(0x0004,0,0,0,0);Pump(120);
                 }
-                var contentOnly=CalendarNotes.Get(new Store(controller.Store.Root).Load(),today).Schedules.Single(item=>item.Content==content);
-                Assert(modal.Visibility==Visibility.Collapsed && hud.IsEditingDay && overlay.IsVisible && contentOnly.Name=="","native "+(escape?"Escape":"outside click")+" persists a content-only new schedule without a name");
-                hud.ShowSchedule(contentOnly,true);Assert(form.NameInput.Text=="" && form.ContentInput.Text==content && form.Submit(true),"native content-only schedule reopens and deletes through the original identity");
+                var contentOnly=CalendarNotes.Get(ScheduleData(controller.Store.Root),today).Schedules.Single(item=>item.Content==content);
+                Assert(modal.Visibility==Visibility.Collapsed && board.IsEditingDay && overlay.IsVisible && contentOnly.Name=="","native "+(escape?"Escape":"outside click")+" persists a content-only new schedule without a name");
+                board.ShowSchedule(contentOnly,true);Assert(form.NameInput.Text=="" && form.ContentInput.Text==content && form.Submit(true),"native content-only schedule reopens and deletes through the original identity");
             }
-            var back=(Button)hud.FindName("BackToCalendar");
+            var back=(Button)board.FindName("BackToCalendar");
             Assert(!back.Focusable && !back.IsTabStop && !back.Focus() && !back.IsKeyboardFocused,"native back button cannot receive focus after modal dismissal");
-            ((TabItem)hud.FindName("ManagementTab")).Focus();Chord(0x09);
+            ((TabItem)hud.FindName("DashboardTab")).Focus();Chord(0x09);
             Assert(editor.TodoInput.IsKeyboardFocused,"native Tab moves directly from management tab to todo input");
             ClickElement(back);
-            Assert(!hud.IsEditingDay && overlay.IsVisible && !back.IsKeyboardFocused,"unfocusable back button still returns to the calendar on native click");
-            hud.OpenDay(DateOnly.FromDateTime(DateTime.Now));Pump(80);
+            Assert(!board.IsEditingDay && overlay.IsVisible && !back.IsKeyboardFocused,"unfocusable back button still returns to the calendar on native click");
+            board.OpenDay(DateOnly.FromDateTime(DateTime.Now));Pump(80);
             Assert(!dial.Focusable && !dial.Focus(),"native dial cannot receive keyboard focus");
             var note=(TextBox)typeof(OverlayDayEditor).GetField("note",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(editor)!;
             editor.BeginNoteEdit();note.Text="실제 Esc 모드 확인";Pump(50);Chord(0x1B);
-            Assert(overlay.IsVisible && hud.IsEditingDay && !editor.IsNoteEditing,"first native Escape pops record input only and keeps the day screen");
-            Chord(0x1B);Assert(overlay.IsVisible && !hud.IsEditingDay,"second native Escape pops day mode back to the calendar");
+            Assert(overlay.IsVisible && board.IsEditingDay && !editor.IsNoteEditing,"first native Escape pops record input only and keeps the day screen");
+            Chord(0x1B);Assert(overlay.IsVisible && !board.IsEditingDay,"second native Escape pops day mode back to the calendar");
 
         }
         finally {

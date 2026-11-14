@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Facet;
+using Facet.Widgets;
 using Facet.Core;
 using Facet.Design;
 
@@ -46,9 +47,17 @@ internal static partial class Program
         Assert(!field.IsFlowing && field.FramesShown==shownAfter,"the nebula stops rendering when stopped");
         Assert(Skins.LoadVisuals(Skins.DefaultId)==null,"the default skin has no theme visuals");
         Assert(Skins.LoadVisuals("voxel") is { HudWidgets:true,WorldScenes:["market","lakeside","cave"] } && Skins.LoadVisuals("space") is { WorldScenes:null },"only the voxel skin opens the world, in the listed order");
-        Assert(ThemeManifest.Parse("{\"world\":{\"scenes\":[\"cave\"]}}") is { WorldScenes:["cave"] } && ThemeManifest.Parse("{\"world\":{\"scenes\":[]}}")==null && ThemeManifest.Parse("{\"world\":{\"scenes\":[\"x\"]}}")==null && ThemeManifest.Parse("{\"world\":{\"scenes\":[\"cave\",\"cave\"]}}")==null,"a world names known scenes once each");
+        Assert(ThemeManifest.Parse("{\"world\":{\"page\":\"w.html\",\"scenes\":[\"cave\"]}}") is { WorldScenes:["cave"],WorldPage:"w.html" } && ThemeManifest.Parse("{\"world\":{\"scenes\":[\"cave\"]}}")==null && ThemeManifest.Parse("{\"world\":{\"page\":\"../w.html\",\"scenes\":[\"cave\"]}}")==null && ThemeManifest.Parse("{\"world\":{\"page\":\"w.html\",\"scenes\":[]}}")==null && ThemeManifest.Parse("{\"world\":{\"page\":\"w.html\",\"scenes\":[\"a\",\"a\"]}}")==null,"a world names a page in the skin and its scenes once each");
+        Assert(ThemeManifest.Parse("{\"fonts\":{\"body\":{\"file\":\"a.ttf\",\"family\":\"A\"}}}") is { BodyFont:{ File:"a.ttf" } } && ThemeManifest.Parse("{\"fonts\":{\"body\":{\"file\":\"../a.ttf\",\"family\":\"A\"}}}")==null && ThemeManifest.Parse("{\"fonts\":{\"body\":{\"file\":\"a.exe\",\"family\":\"A\"}}}")==null,"skin fonts stay in the skin folder");
+        Assert(Skins.LoadVisuals("voxel") is { WorldPageHtml:{ Length:>1000 } },"the voxel skin carries its own world page");
         Assert(Skins.LoadVisuals("voxel") is { SoftHud:true } && Skins.LoadVisuals("space") is { SoftHud:false } && ThemeManifest.Parse("{\"hudStyle\":\"nope\"}")==null,"only the voxel skin asks for the soft widget form and unknown styles are refused");
         Assert(typeof(Facet.Widgets.Hud).GetField("Mono") is { IsStatic:true },"Hud.Mono stays a field, or installed plugins fail with MissingFieldException");
+        string worldFolder=Path.Combine(qa,"world-skin");Directory.CreateDirectory(worldFolder);
+        File.WriteAllText(Path.Combine(worldFolder,"w.html"),"<canvas></canvas>");File.WriteAllBytes(Path.Combine(worldFolder,"h.ttf"),[0]);
+        var worldSkin=ExternalSkins.Parse("{\"id\":\"w\",\"name\":\"W\",\"theme\":{\"world\":{\"page\":\"w.html\",\"scenes\":[\"cave\"]},\"fonts\":{\"heading\":{\"file\":\"h.ttf\",\"family\":\"H\"}}}}",worldFolder);
+        Assert(worldSkin!=null && ExternalSkins.Dictionary(worldSkin).Contains("HudHeadingFont") && ExternalSkins.Visuals(worldSkin) is { WorldPageHtml:"<canvas></canvas>" },"an installed skin brings its own world page and fonts");
+        File.WriteAllText(Path.Combine(worldFolder,"w.html"),new string('x',2000000));
+        Assert(ExternalSkins.Visuals(worldSkin!)==null,"a world page too large to navigate to leaves tokens only");
         Assert(WorldWeather.Key(0)=="clear" && WorldWeather.Key(2)=="partly" && WorldWeather.Key(3)=="cloud" && WorldWeather.Key(48)=="fog" && WorldWeather.Key(63)=="rain" && WorldWeather.Key(96)=="rain" && WorldWeather.Key(75)=="snow" && WorldWeather.Key(null)=="partly","weather codes pick the sky and an unknown code stays calm");
         Assert(Skins.LoadVisuals("space") is { Voyage:true,HudWidgets:true } && ThemeManifest.Parse("{}") is { Voyage:false,HudWidgets:false },"the voyage and HUD slots are on only where a theme asks");
         Assert(Skins.LoadVisuals("space")!.Options.Single().Id==ThemeVisuals.ReticleOption && ThemeManifest.Parse("{\"options\":[{\"id\":\"../x\",\"name\":\"a\"}]}")==null && ThemeManifest.Parse("{\"options\":[{\"id\":\"a\"}]}")==null,"a theme declares valid options and bad ones are rejected");
@@ -60,6 +69,9 @@ internal static partial class Program
         Assert(!new Encounter(PlanetKind.Rock,1,5,10,0,-300,1,0,0).ClearOf(new(PlanetKind.Ice,1,5,18,0,-300,1,0,0)) && new Encounter(PlanetKind.Rock,1,5,10,0,-300,1,0,0).ClearOf(new(PlanetKind.Ice,1,5,-10,0,-300,1,0,0)),"two planets flying at once cannot share a path");
         var voyagePlan=new VoyagePlan(4);var passes=Enumerable.Range(0,2000).Select(_=>voyagePlan.NextClear()).ToArray();
         Assert(passes.All(pass=>pass.AxisDistance>=pass.Extent*VoyagePlan.MinClearance-1e-9),"no planet's path can reach the camera, however close it passes");
+        var corner=new VoyageSpot(-1,1,12);
+        Assert(passes.All(pass=>{var placed=pass.PlacedAt(corner,16d/9);double range=pass.Extent*corner.Reach,half=Math.Tan(27.5*Math.PI/180);return Math.Abs(placed.X/range+half)<1e-9 && Math.Abs(placed.Y/range-half*9/16)<1e-9;}),"a debug planet appears at the chosen spot");
+        Assert(passes.All(pass=>pass.PlacedAt(new(0,0,VoyageSpot.MinReach),16d/9).AxisDistance>=pass.Extent*VoyagePlan.MinClearance-1e-9 && pass.PlacedAt(new(.01,0,VoyageSpot.MinReach),16d/9).AxisDistance>=pass.Extent*VoyagePlan.MinClearance-1e-9),"a debug planet aimed at the middle still misses the camera");
         Assert(passes.All(pass=>pass.StartZ<0 && pass.Speed>0) && passes.Select(pass=>pass.Kind).Distinct().Count()==Enum.GetValues<PlanetKind>().Length,"planets approach from ahead and every world type appears");
         Assert(passes.Zip(passes.Skip(1)).All(pair=>pair.First.Kind!=pair.Second.Kind),"the same world type never comes twice in a row");
         Assert(passes.Any(pass=>pass.AxisDistance<pass.Extent*2) && passes.Any(pass=>pass.AxisDistance>pass.Extent*4),"some planets skim close and others stay distant");
@@ -86,6 +98,54 @@ internal static partial class Program
     }
     // Renders the real overlay layers in a window far off screen, so a run never covers the desktop but elements still load.
     // Manual look at the real backdrop and panels: writes one screen per world to the given folder.
+    // Loads an unpacked skin folder as the app would: its fonts must resolve and its page must start under the lock.
+    private static int RunWorldSkinCheck(string folder)
+    {
+        var ui=new Application { ShutdownMode=ShutdownMode.OnExplicitShutdown };
+        var skin=ExternalSkins.Read(folder);
+        if(skin==null) { Console.WriteLine("skin.json refused");return 1; }
+        var tokens=ExternalSkins.Dictionary(skin);
+        foreach(string key in new[]{"AppFontFamily","HudHeadingFont"}) {
+            bool resolved=tokens[key] is FontFamily family && family.GetTypefaces().Any(face => face.TryGetGlyphTypeface(out var glyphs) && glyphs.CharacterToGlyphMap.ContainsKey('가'));
+            Console.WriteLine(key+" hangul: "+resolved);
+            if(!resolved) return 1;
+        }
+        if(ExternalSkins.Visuals(skin) is not { WorldScenes:{ } scenes,WorldPageHtml:{ } page }) { Console.WriteLine("no world");return 1; }
+        var overlay=new Window { Left=-20000,Top=-20000,Width=800,Height=500,WindowStyle=WindowStyle.None,ShowInTaskbar=false,ShowActivated=false };overlay.Show();
+        var world=new WorldBackdrop(page,scenes,_=>Task.FromException<WeatherSnapshot>(new OperationCanceledException()));
+        world.DataFolderForCheck=Path.Combine(Path.GetTempPath(),"facet-world-check");
+        int code=1;
+        world.ProbeForCheck=result => { Console.WriteLine("page: "+result);code=0; };
+        world.Failed+=() => { Console.WriteLine("page failed: "+world.FailureForCheck);code=1;ui.Shutdown(); };
+        var limit=new System.Windows.Threading.DispatcherTimer { Interval=TimeSpan.FromSeconds(12) };limit.Tick+=(_,_) => { limit.Stop();ui.Shutdown(); };limit.Start();
+        ui.Dispatcher.BeginInvoke(() => world.SetVisible(true,overlay));
+        ui.Run();
+        world.Dispose();
+        return code;
+    }
+    // Runs a hostile page in the real locked WebView2 and prints what it could reach.
+    private static int RunWorldNetCheck()
+    {
+        var ui=new Application { ShutdownMode=ShutdownMode.OnExplicitShutdown };
+        const string probe="<script>(async()=>{const r={};const send=()=>chrome.webview.postMessage({type:'probe',message:JSON.stringify(r)});window.onerror=m=>{r.error=m;send()};chrome.webview.postMessage({type:'probe-start',message:''});const t=async(n,f)=>{try{await Promise.race([f(),new Promise((a,b)=>setTimeout(()=>b(0),4000))]);r[n]='OPEN'}catch(e){r[n]='blocked'}};"
+            +"await t('fetch',()=>fetch('https://example.com/',{mode:'no-cors'}));await t('fetchIp',()=>fetch('http://1.1.1.1/',{mode:'no-cors'}));await t('local',()=>fetch('http://127.0.0.1:9/',{mode:'no-cors'}));"
+            +"await t('image',()=>new Promise((a,b)=>{const i=new Image();i.onload=a;i.onerror=b;i.src='https://example.com/favicon.ico'}));"
+            +"await t('socket',()=>new Promise((a,b)=>{const s=new WebSocket('wss://echo.websocket.org');s.onopen=a;s.onerror=()=>b();}));"
+            +"const m=document.createElement('meta');m.httpEquiv='Content-Security-Policy';m.content=\"default-src *\";document.head.appendChild(m);await t('afterMeta',()=>fetch('https://example.com/',{mode:'no-cors'}));"
+            +"try{r.rtc=await new Promise(a=>{const p=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});let c='none';p.createDataChannel('x');p.onicecandidate=e=>{if(e.candidate&&e.candidate.type==='srflx')c='OPEN'};p.createOffer().then(o=>p.setLocalDescription(o));setTimeout(()=>a(c),5000)})}catch(e){r.rtc='unavailable'}"
+            +"send()})().catch(e=>chrome.webview.postMessage({type:'probe',message:'error '+e}))</script>";
+        var overlay=new Window { Left=-20000,Top=-20000,Width=200,Height=200,WindowStyle=WindowStyle.None,ShowInTaskbar=false,ShowActivated=false };overlay.Show();
+        var world=new WorldBackdrop(probe,["x"],_=>Task.FromException<WeatherSnapshot>(new OperationCanceledException()));
+        world.DataFolderForCheck=Path.Combine(Path.GetTempPath(),"facet-world-check");
+        int code=1;
+        world.Failed+=() => { Console.WriteLine("failed: "+world.FailureForCheck);ui.Shutdown(); };
+        world.ProbeForCheck=result => { Console.WriteLine(result);code=result.Contains("OPEN") ? 1 : 0;ui.Shutdown(); };
+        var limit=new System.Windows.Threading.DispatcherTimer { Interval=TimeSpan.FromSeconds(60) };limit.Tick+=(_,_) => { Console.WriteLine("no probe result");ui.Shutdown(); };limit.Start();
+        ui.Dispatcher.BeginInvoke(() => world.SetVisible(true,overlay));
+        ui.Run();
+        world.Dispose();
+        return code;
+    }
     private static int RunVoyagePreview(string[] args)
     {
         try {
@@ -114,6 +174,12 @@ internal static partial class Program
                 var encoder=new System.Windows.Media.Imaging.PngBitmapEncoder();encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
                 using var file=File.Create(Path.Combine(output,name+".png"));encoder.Save(file);
             }
+            var spawned=voyage.SpawnNear();
+            if(voyage.SpawnNear().Result)throw new Exception("a second debug planet started while one was baking");
+            while(!spawned.IsCompleted)Settle();
+            if(!spawned.Result || voyage.PlanetCount!=1)throw new Exception("the debug planet did not replace the sky");
+            Shot("debug-near");
+            voyage.TimeScale=99;if(voyage.TimeScale!=SpaceVoyage.MaxTimeScale)throw new Exception("the time scale was not limited");voyage.TimeScale=1;
             voyage.ShowForCheck(new(PlanetKind.Ocean,8,5,7.5,0,-300,1,.5,.25),-6);Shot("close-ocean");
             voyage.ShowForCheck(new(PlanetKind.Ice,9,5,-8,3,-300,1,.5,.25),-3);Shot("close-ice");
             voyage.ShowForCheck(new(PlanetKind.Desert,3,5,16,-5,-300,1,.5,.25),-40);
@@ -147,7 +213,7 @@ internal static partial class Program
         try {
             var ui=new Application { ShutdownMode=ShutdownMode.OnExplicitShutdown };
             foreach(string resource in new[]{"Tokens","Components","Scrolling"})ui.Resources.MergedDictionaries.Add(new ResourceDictionary { Source=new Uri($"pack://application:,,,/Facet;component/Design/{resource}.xaml") });
-            var store=new Store(args[1]);var data=store.Load();data.Settings.Skin="space";store.Save(data);
+            var store=new Store(args[1]);var data=store.Load();data.Settings.Skin="space";data.Workspace??=WorkspaceLayouts.LegacyDefault();store.Save(data);
             using var controller=new Controller(args[1],Controller.ExitHotkey);
             var layers=(Grid)controller.Overlay.Content;
             if(layers.Children.Count!=5 || layers.Children[4] is not Grid)throw new Exception("the theme backdrop was not added");
@@ -229,6 +295,10 @@ internal static partial class Program
             if(overlay.ThemeBackdropForCheck.Visibility!=Visibility.Collapsed)throw new Exception("a fully transparent overlay kept drawing the theme backdrop");
             overlay.Present(false,1,0,0,0);overlay.ApplyProgressForCheck(1);
             if(overlay.ThemeBackdropForCheck.Opacity!=1)throw new Exception("an opaque overlay did not draw the full theme backdrop");
+            if(overlay.TintOpacityForCheck!=1)throw new Exception("the space skin did not draw its tint");
+            Save("voxel");
+            if(!overlay.HasWorldForCheck)throw new Exception("the voxel skin did not create its world");
+            if(overlay.TintOpacityForCheck!=0)throw new Exception("switching to a world skin kept the previous tint over the world");
             Save(Skins.DefaultId);
             var standard=((SolidColorBrush)new ResourceDictionary { Source=new Uri("pack://application:,,,/Facet;component/Design/Tokens.xaml") }["Panel"]).Color;
             if(Panel()!=standard || Shared()!=standard)throw new Exception("returning to the default skin kept the previous colors");

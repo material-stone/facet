@@ -1,5 +1,7 @@
 # Architecture Contract
 
+- [0092 — 캡처 도구가 전경일 때만 오버레이가 양보](../decisions/0092-capture-tool-foreground-yield.md)
+- [0091 — 3D 월드 페이지와 글꼴을 스킨에 포함](../decisions/0091-world-page-in-skin.md)
 - [0090 — 복셀 월드 스킨과 WebView2 배경](../decisions/0090-voxel-world-webview.md)
 - [0089 — 앱 이름을 Facet으로 변경](../decisions/0089-rename-to-facet.md)
 - [0088 — 패키지 설치와 GitHub 레지스트리](../decisions/0088-packages-and-registry.md)

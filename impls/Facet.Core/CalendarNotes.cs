@@ -169,6 +169,22 @@ public static class CalendarNotes
     }
 }
 
+// One-time move into the schedule plugin's store (ADR 0101). What the store already holds wins per date and for presets.
+public static class LegacySchedule
+{
+    public const string Plugin = "facet.schedule";
+
+    public static string Merge(string? stored, CalendarStoreFile? calendar, IEnumerable<CalendarDayEntry> records, List<SchedulePreset>? recordPresets)
+    {
+        var current = string.IsNullOrWhiteSpace(stored) ? new CalendarStoreFile() : System.Text.Json.JsonSerializer.Deserialize<CalendarStoreFile>(stored);
+        CalendarNotes.ValidateStore(current);
+        var days = CalendarNotes.Merge(current!.Days, CalendarNotes.Merge(calendar?.Days ?? [], records));
+        var file = new CalendarStoreFile { Days = days, SchedulePresets = current.SchedulePresets ?? calendar?.SchedulePresets ?? recordPresets };
+        CalendarNotes.ValidateStore(file);
+        return System.Text.Json.JsonSerializer.Serialize(file, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+    }
+}
+
 public sealed class SchedulePreset
 {
     public const int MaxCount=50;

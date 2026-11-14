@@ -17,6 +17,7 @@ public partial class App : Application
     {
         TaskbarIdentity.Initialize();
         base.OnStartup(e);
+        if (!e.Args.Contains("--storage-check")) LaunchProtocol.MoveRenamedRoot(e.Args);
         string root = LaunchProtocol.DataRoot(e.Args);
         if (e.Args.Contains("--storage-check"))
         {
@@ -31,6 +32,8 @@ public partial class App : Application
         ownsMutex = created;
         activate = new EventWaitHandle(false, EventResetMode.AutoReset, LaunchProtocol.Open(root));
         if (!created) { if (!LaunchProtocol.IsBackgroundStart(e.Args)) activate.Set(); Shutdown(); return; }
+        try { DataBackup.Apply(root); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { startupError = "백업을 복원하지 못해 기존 기록으로 시작합니다. " + ex.Message; }
         try
         {
             Controller = new Controller(root);

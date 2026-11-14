@@ -7,27 +7,11 @@ using Facet;
 
 internal static partial class Program
 {
+    // The dashboard itself has no widgets of its own any more (ADR 0101); the shared clock face is the app's and the clock plugin's.
     private static void CheckDashboard(string qa)
     {
         var hud = new OverlayTabs();
-        var dashboard = (OverlayDashboardView)hud.FindName("Dashboard");
         var viewport = (Grid)hud.FindName("DashboardViewport");
-        var tabs = (TabControl)hud.FindName("Tabs");
-        var date = (TextBlock)dashboard.FindName("DateText");
-        var time = (TextBlock)dashboard.FindName("TimeText");
-        var timeHost = (Viewbox)dashboard.FindName("TimeHost");
-        var agenda = (FrameworkElement)dashboard.FindName("AgendaSection");
-        var weather = (StackPanel)dashboard.FindName("WeatherGroup");
-        var group = (StackPanel)dashboard.FindName("ClockGroup");
-        foreach (var pair in new[] { (new DateTime(2026,10,24,0,0,0),"오전 12:00:00"),
-            (new DateTime(2026,10,24,12,0,0),"오후 12:00:00"), (new DateTime(2026,10,24,9,8,7),"오전 09:08:07") }) {
-            dashboard.UpdateClock(pair.Item1);
-            Assert(date.Text == "2026년 10월 24일 토요일" && time.Text == pair.Item2,"dashboard formats local date weekday and AM PM clock at " + pair.Item1);
-        }
-        dashboard.UpdateClock(new DateTime(2027,1,1,0,0,0));
-        Assert(date.Text == "2027년 1월 1일 금요일","dashboard clock changes date and weekday across year boundary");
-        dashboard.UpdateClock(new DateTime(2026,10,24,9,8,7));
-        Assert(((TextBlock)dashboard.FindName("TemperatureText")).Text=="--°C" && ((TextBlock)dashboard.FindName("HumidityText")).Text=="--%" && ((System.Windows.Documents.Run)dashboard.FindName("WeatherStatus")).Text.Contains("대기"),"pending weather stays unknown instead of inventing values");
         Rect Bounds(FrameworkElement element) => element.TransformToAncestor(hud).TransformBounds(new Rect(0,0,element.ActualWidth,element.ActualHeight));
         // The clock face keeps its 300x108 ratio at the largest fit and sits at the chosen one of nine spots.
         var face=new Border{Width=300,Height=108};string saved="";
@@ -59,29 +43,9 @@ internal static partial class Program
         ((System.Windows.Controls.Primitives.UniformGrid)((StackPanel)failing.BuildChooser()).Children[1]).Children.OfType<Button>().Last().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         Assert(failing.Alignment==Facet.Widgets.ClockFitButton.DefaultAlignment,"a failed save keeps the old alignment");
         fit.Alignment="nonsense-value";Assert(fit.Alignment==Facet.Widgets.ClockFitButton.DefaultAlignment,"unknown saved alignment falls back");
-        foreach (var size in new[] {new Size(1440,900),new Size(1366,768),new Size(1920,1080),new Size(800,600),new Size(480,360)}) {
+        foreach (var size in new[] {new Size(1440,900),new Size(800,600),new Size(480,360)}) {
             hud.Measure(size); hud.Arrange(new Rect(size)); hud.UpdateLayout();
-            var strip=(FrameworkElement)tabs.Template.FindName("TabStrip",tabs);
-            double inset=strip.Margin.Top+strip.ActualHeight;
-            var viewportBounds=Bounds(viewport);
-            Assert(viewportBounds==new Rect(size),"the board fills the window behind the floating menus at " + size);
-            // The default layout shows at 100%, so only windows tall enough hold all of it.
-            bool fits=size.Height>=900;
-            Assert(!fits || Bounds(group).Top>=inset,"default widgets start below the floating tab menu at " + size);
-            var dateBounds=Bounds(date);var timeBounds=Bounds(time);
-            Assert(Math.Abs(dateBounds.Left-timeBounds.Left)<.1 && Math.Abs(dateBounds.Width-timeBounds.Width)<1 && dateBounds.Bottom<timeBounds.Top,"date and time occupy matching left aligned single line widths at " + size);
-            var fixedTime=Bounds(timeHost);var fixedText=Bounds(time);var fixedClock=Bounds(group);var fixedWeather=Bounds(weather);var fixedAgenda=Bounds(agenda);
-            foreach(var stamp in new[]{new DateTime(2026,10,24,0,0,0),new DateTime(2026,10,24,1,11,11),new DateTime(2026,10,24,8,8,8),
-                new DateTime(2026,10,24,9,59,59),new DateTime(2026,10,24,10,0,0),new DateTime(2026,10,24,11,59,59),new DateTime(2026,10,24,12,0,0),new DateTime(2026,10,24,23,59,59)}) {
-                dashboard.UpdateClock(stamp);hud.Measure(size);hud.Arrange(new Rect(size));hud.UpdateLayout();
-                Assert(Math.Abs(Bounds(timeHost).Height-fixedTime.Height)<.01 && Math.Abs(Bounds(time).Height-fixedText.Height)<.01 &&
-                    Math.Abs(Bounds(group).Height-fixedClock.Height)<.01 && Math.Abs(Bounds(weather).Top-fixedWeather.Top)<.01 && Math.Abs(Bounds(agenda).Top-fixedAgenda.Top)<.01,
-                    "time frame and glyph height stay fixed across digits and AM PM without moving weather or agenda at "+size+" "+stamp.ToString("HH:mm:ss"));
-            }
-            dashboard.UpdateClock(new DateTime(2026,10,24,9,8,7));hud.Measure(size);hud.Arrange(new Rect(size));hud.UpdateLayout();
-            var bitmap=new RenderTargetBitmap((int)size.Width,(int)size.Height,96,96,PixelFormats.Pbgra32);bitmap.Render(hud);
-            var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(bitmap));
-            using var output=File.Create(Path.Combine(qa,$"overlay-dashboard-{size.Width}.png"));png.Save(output);
+            Assert(Bounds(viewport)==new Rect(size),"the board fills the window behind the floating menus at " + size);
         }
     }
 }

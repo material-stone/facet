@@ -13,31 +13,18 @@ internal static partial class Program
         var tabs=(TabControl)hud.FindName("Tabs");
         void Layout() { hud.Measure(new Size(1440,900));hud.Arrange(new Rect(0,0,1440,900));hud.UpdateLayout(); }
         Layout();
+#if PLUGIN_CHECKS
         CheckCalendarStore(controller);
-        Assert(runtime.Data.Workspace==null && tabs.Items.Count==5,"default layout is not written until the user edits it");
-
-        var unmeasured=new OverlayCarousel();unmeasured.Children.Add(new Grid());
-        unmeasured.RaiseEvent(new RoutedEventArgs(FrameworkElement.UnloadedEvent));
-        Assert(unmeasured.Children[0].RenderTransform is System.Windows.Media.TransformGroup,"a carousel unloaded before its first measure does not crash");
-
-        // Default tiles stay inside the viewport and do not overlap.
-        var viewport=(FrameworkElement)hud.FindName("DashboardViewport");
-        Rect Bounds(FrameworkElement element)=>element.TransformToAncestor(hud).TransformBounds(new Rect(element.RenderSize));
-        var view=(OverlayDashboardView)hud.FindName("Dashboard");
-        foreach(string name in new[]{"ClockGroup","WeatherHoverArea","AgendaSection"}) {
-            var bounds=Bounds((FrameworkElement)view.FindName(name));
-            Assert(bounds.Top>=Bounds(viewport).Top-.5 && bounds.Bottom<=Bounds(viewport).Bottom+.5,"default widget stays in the viewport: "+name+" "+bounds);
-        }
-
-        // A section moved into a tile still resolves the storyboard names declared in its XAML.
-        var weatherArea=(FrameworkElement)view.FindName("WeatherHoverArea");
-        weatherArea.RaiseEvent(new System.Windows.Input.MouseEventArgs(System.Windows.Input.Mouse.PrimaryDevice,0){RoutedEvent=System.Windows.Input.Mouse.MouseEnterEvent});
-        weatherArea.RaiseEvent(new System.Windows.Input.MouseEventArgs(System.Windows.Input.Mouse.PrimaryDevice,0){RoutedEvent=System.Windows.Input.Mouse.MouseLeaveEvent});
+#endif
+        Assert(runtime.Data.Workspace==null && tabs.Items.Count==2 && WorkspaceLayouts.Default().Tabs.Select(t=>t.Id).SequenceEqual([WorkspaceLayouts.DashboardTab,WorkspaceLayouts.SettingsTab]),"a fresh install shows the dashboard and settings, and the layout is not written until edited");
+        Assert(WorkspaceLayouts.Default().Tabs.All(t=>t.Widgets.Count==0) && !typeof(Controller).Assembly.GetTypes().Any(t=>t.Name.StartsWith("OverlayCalendar") || t.Name.StartsWith("OverlaySchedule") || t.Name=="OverlayDashboardView"),"the plain app has no widgets of its own (ADR 0101)");
+        // The rules below run on the five-tab layout a never-edited install had, with the plugins' widget ids as placeholders.
+        Assert(runtime.Commit(d=>d.Workspace=WorkspaceLayouts.LegacyDefault()),"the legacy layout is seeded");hud.ApplyWorkspace();Layout();
 
         // Edit mode: moves commit through the store, invalid drops and Escape keep the old place.
         hud.SetWorkspaceEditing(true);Layout();
         Assert(hud.IsEditingWorkspace,"edit mode opens");
-        Assert(hud.AddWidget(WorkspaceLayouts.ClockWidget)==false && hud.WorkspaceError.Length>0 && WorkspaceLayouts.Current(runtime.Data).Tabs[0].Widgets.Count(w=>w.WidgetId==WorkspaceLayouts.ClockWidget)==1,"a single built-in widget cannot be placed twice");
+        Assert(!hud.AddWidget(WorkspaceLayouts.ClockWidget) && !hud.AddWidget(WorkspaceLayouts.CalendarWidget),"the former built-in widgets are not offered by the app");
         Assert(hud.AddWorkspaceTab("업무") && tabs.Items.Count==6 && new Store(runtime.Store.Root).Load().Workspace!.Tabs.Any(t=>t.Title=="업무"),"new tab is saved and shown");
         string added=runtime.Data.Workspace!.Tabs.First(t=>t.Title=="업무").Id;
         Assert(AutomationName(tabs.Items[tabs.Items.Count-1])=="설정" && AutomationName(tabs.Items[tabs.Items.Count-2])=="업무","new tab stays before settings");
@@ -66,7 +53,63 @@ internal static partial class Program
         hud.HandleEscape();Assert(!modalHandle.IsOpen,"a throwing callback cannot trap the user");
         modalHandle=widgetModal.Show(modalContent)!;modalHandle.Close();Assert(!modalHandle.IsOpen && modalLayer.Visibility==Visibility.Collapsed,"the widget can close its modal");
 
+#if PLUGIN_CHECKS
+        // Without its plugin the app has no music at all; connecting the plugin brings the widget and the agent tools.
+        Assert(!typeof(Controller).Assembly.GetTypes().Any(t=>t.Name.Contains("Music")) && !AgentToolCatalog.Tools.Any(t=>t.Name.Contains("music")) && runtime.Plugins.AgentTools.Count==0,"the app holds no music code or tools without the plugin");
+        string musicFolder=Path.Combine(runtime.Store.Root,"plugins","music");Directory.CreateDirectory(musicFolder);
+        File.Copy(Path.Combine(AppContext.BaseDirectory,"Facet.MusicPlugin.dll"),Path.Combine(musicFolder,"Facet.MusicPlugin.dll"),true);
+        File.WriteAllText(Path.Combine(musicFolder,"plugin.json"),"{\"id\":\"facet.music\",\"name\":\"음악\",\"version\":\"1.0.0\",\"assembly\":\"Facet.MusicPlugin.dll\"}");
+        var musicPlugin=hud.DiscoverPlugins().Single(p=>p.Id=="facet.music");
+        Assert(hud.SetPluginEnabled(musicPlugin,true) && hud.PluginState("facet.music").Length==0 && hud.AddWidget("plugin.facet.music.player"),"the music plugin loads from its folder and its widget can be placed");
+        Layout();
+        Assert(Directory.Exists(Path.Combine(runtime.Store.Root,"plugin-data","facet.music")),"the app creates the plugin's data folder outside its code folder");
+        Assert(runtime.Plugins.AgentTools.Select(t=>t.Name).Order().SequenceEqual(["facet_music_pause","facet_music_play","facet_music_status","facet_music_volume"]),"the enabled plugin offers its agent tools");
+        var toolHost=new AgentToolHost(runtime);
+        var toolReply=toolHost.HandleAsync(new AgentToolCall{Tool="facet_music_status"});MusicAwait(toolReply);
+        Assert(toolReply.Result.Ok && toolReply.Result.Result!["playlist"] is System.Text.Json.Nodes.JsonArray,"an agent call reaches the plugin's tool: "+toolReply.Result.Message);
+        var toolList=toolHost.HandleAsync(new AgentToolCall{Tool=Facet.Integration.AgentToolProtocol.ListPluginTools});MusicAwait(toolList);
+        Assert(toolList.Result.Result is System.Text.Json.Nodes.JsonArray{Count:4},"the MCP server can list plugin tools");
+        var badVolume=toolHost.HandleAsync(new AgentToolCall{Tool="facet_music_volume",Arguments=new(){["percent"]=500}});MusicAwait(badVolume);
+        Assert(badVolume.Result.Code=="invalid_request","a plugin tool reports a bad request");
+        var rebuilt=new OverlayTabs();rebuilt.Connect(runtime);
+        Assert(rebuilt.IsPluginEnabled("facet.music") && runtime.Plugins.AgentTools.Count==4,"a rebuilt overlay keeps the same running plugin");
+        rebuilt.StopWidgets();
+        var musicTab=WorkspaceLayouts.Current(runtime.Data).Tabs.Single(t=>t.Widgets.Any(w=>w.WidgetId=="plugin.facet.music.player"));
+        hud.RemoveWorkspaceWidgetForCheck(musicTab.Id,musicTab.Widgets.Single(w=>w.WidgetId=="plugin.facet.music.player").Id);
+        Assert(hud.SetPluginEnabled(musicPlugin,false) && runtime.Plugins.AgentTools.Count==0 && !hud.AddWidget("plugin.facet.music.player"),"turning the plugin off removes its tools and widget");
+        var unknownTool=toolHost.HandleAsync(new AgentToolCall{Tool="facet_music_status"});MusicAwait(unknownTool);
+        Assert(unknownTool.Result.Code=="invalid_request","a tool of a stopped plugin is unknown");
+        Directory.Delete(musicFolder,true);
 
+        // The condition plugin brings both widgets and its tools; the records stay when its folder goes.
+        Assert(!typeof(Controller).Assembly.GetTypes().Any(t=>t.Name.StartsWith("Condition")) && !AgentToolCatalog.Tools.Any(t=>t.Name.Contains("condition")) && !AgentToolCatalog.Tools.Any(t=>t.Description.Contains("컨디션")),"the app holds no condition code or tools without the plugin");
+        Assert(!hud.AddWidget("plugin.facet.condition.current"),"the condition widgets need the plugin");
+        string conditionFolder=Path.Combine(runtime.Store.Root,"plugins","condition");Directory.CreateDirectory(conditionFolder);
+        File.Copy(Path.Combine(AppContext.BaseDirectory,"Facet.ConditionPlugin.dll"),Path.Combine(conditionFolder,"Facet.ConditionPlugin.dll"),true);
+        File.WriteAllText(Path.Combine(conditionFolder,"plugin.json"),"{\"id\":\"facet.condition\",\"name\":\"컨디션\",\"version\":\"1.0.0\",\"assembly\":\"Facet.ConditionPlugin.dll\"}");
+        var conditionPlugin=hud.DiscoverPlugins().Single(p=>p.Id=="facet.condition");
+        tabs.SelectedIndex=0;
+        Assert(hud.SetPluginEnabled(conditionPlugin,true) && hud.PluginState("facet.condition").Length==0,"the condition plugin loads: "+hud.PluginState("facet.condition"));
+        Assert(hud.AddWidget("plugin.facet.condition.current") && hud.AddWidget("plugin.facet.condition.history"),"connecting the plugin offers both widgets: "+hud.WorkspaceError);
+        Layout();
+        Assert(Directory.Exists(Path.Combine(runtime.Store.Root,"plugin-data","facet.music")),"the app creates the plugin's data folder outside its code folder");
+        Assert(runtime.Plugins.AgentTools.Select(t=>t.Name).Order().SequenceEqual(["facet_list_conditions","facet_set_condition"]),"the condition plugin offers its agent tools");
+        var setCondition=toolHost.HandleAsync(new AgentToolCall{Tool="facet_set_condition",Arguments=new(){["kind"]="tired"}});MusicAwait(setCondition);
+        Assert(setCondition.Result.Ok,"an agent records a condition: "+setCondition.Result.Message);
+        var badCondition=toolHost.HandleAsync(new AgentToolCall{Tool="facet_set_condition",Arguments=new(){["kind"]="angry"}});MusicAwait(badCondition);
+        Assert(badCondition.Result.Code=="invalid_request","an unknown condition is a bad request");
+        var futureCondition=toolHost.HandleAsync(new AgentToolCall{Tool="facet_set_condition",Arguments=new(){["kind"]="good",["at"]=DateTimeOffset.Now.AddDays(1).ToString("o")}});MusicAwait(futureCondition);
+        Assert(futureCondition.Result.Code=="invalid_request","a future condition is a bad request");
+        var listCondition=toolHost.HandleAsync(new AgentToolCall{Tool="facet_list_conditions"});MusicAwait(listCondition);
+        Assert(listCondition.Result.Result is System.Text.Json.Nodes.JsonArray{Count:1},"an agent reads the records back");
+        foreach(var tab in WorkspaceLayouts.Current(runtime.Data).Tabs.ToArray())
+            foreach(var item in tab.Widgets.Where(w=>w.WidgetId.StartsWith("plugin.facet.condition.")).ToArray()) hud.RemoveWorkspaceWidgetForCheck(tab.Id,item.Id);
+        Assert(hud.SetPluginEnabled(conditionPlugin,false) && runtime.Plugins.AgentTools.Count==0,"turning the plugin off removes its tools");
+        Directory.Delete(conditionFolder,true);
+        Assert(new Facet.ConditionPlugin.ConditionRecords(PluginFileStore.For(runtime.Store.Root,LegacyConditions.Plugin)).Entries.Single().Kind=="tired","the records outlive the plugin and its folder");
+        toolHost.Dispose();
+
+#endif
         // Save failure keeps the previous layout.
         var before=WorkspaceLayouts.Current(runtime.Data).Tabs.Single(t=>t.Id==added).Title;
         using(var locked=File.Open(runtime.Store.PathName+".tmp",FileMode.OpenOrCreate,FileAccess.ReadWrite,FileShare.None))
@@ -80,6 +123,11 @@ internal static partial class Program
         File.WriteAllText(Path.Combine(runtime.Store.Root,"plugins","escape","plugin.json"),"{\"id\":\"escape\",\"assembly\":\"..\\\\..\\\\evil.dll\"}");
         var plugin=hud.DiscoverPlugins().Single();
         Assert(plugin.Id=="sample" && !hud.IsPluginEnabled("sample"),"discovery reads manifests, skips paths outside the folder and enables nothing");
+#if PLUGIN_CHECKS
+        var clockView=new Facet.ClockPlugin.ClockView();clockView.ShowTime(new DateTime(2026,10,24,9,8,7));
+        Assert(clockView.DateLine=="2026년 10월 24일 토요일" && clockView.TimeLine=="오전 09:08:07","the clock plugin shows the dashboard clock's date and time");
+        clockView.Dispose();
+#endif
         const string widget="plugin.sample.greeting";
         tabs.SelectedItem=tabs.Items.OfType<TabItem>().First(t=>AutomationName(t)=="작업");
         Assert(!hud.AddWidget(widget),"a disabled plugin offers no widgets");
@@ -190,13 +238,83 @@ internal static partial class Program
         Assert(TabIcons.Presets.Length==24 && TabIcons.Presets.Select(p=>p.Kind).Distinct().Count()==24,"24 distinct tab icon presets");
         foreach(var (kind,_) in TabIcons.Presets){var presetIcon=new Facet.Design.Icon{Kind=kind,Width=24,Height=24};presetIcon.Measure(new Size(24,24));presetIcon.Arrange(new Rect(0,0,24,24));new System.Windows.Media.Imaging.RenderTargetBitmap(24,24,96,96,System.Windows.Media.PixelFormats.Pbgra32).Render(presetIcon);}
         var firstTabs=new OverlayTabs();var firstStrip=(TabControl)firstTabs.FindName("Tabs");
-        Assert(firstTabs.SetWorkspaceTabIcon(WorkspaceLayouts.ChatTab,Facet.Design.IconKind.Music) && ((StackPanel)((TabItem)firstStrip.Items[3]).Header).Children[0] is Facet.Design.Icon{Kind:Facet.Design.IconKind.Music},"choosing an icon updates the tab header");
-        Assert(firstTabs.RenameWorkspaceTab(WorkspaceLayouts.ChatTab,"대화") && AutomationName(firstStrip.Items[3])=="대화","a first tab can be renamed");
-        Assert(firstTabs.RemoveWorkspaceTab(WorkspaceLayouts.SleepTab) && firstStrip.Items.Count==4 && !firstStrip.Items.Contains(firstTabs.FindName("SleepTab")),"a first tab can be deleted");
+        Assert(firstTabs.SetWorkspaceTabIcon(WorkspaceLayouts.DashboardTab,Facet.Design.IconKind.Music) && ((StackPanel)((TabItem)firstStrip.Items[0]).Header).Children[0] is Facet.Design.Icon{Kind:Facet.Design.IconKind.Music},"choosing an icon updates the tab header");
+        Assert(firstTabs.RenameWorkspaceTab(WorkspaceLayouts.DashboardTab,"홈") && AutomationName(firstStrip.Items[0])=="홈","a first tab can be renamed");
+        Assert(firstTabs.RemoveWorkspaceTab(WorkspaceLayouts.DashboardTab) && firstStrip.Items.Count==1 && !firstStrip.Items.Contains(firstTabs.FindName("DashboardTab")),"a first tab can be deleted");
+#if PLUGIN_CHECKS
+        // The weather plugin runs from its folder alone, with its icons and regions inside the DLL.
+        string weatherFolder=Path.Combine(runtime.Store.Root,"plugins","weather");Directory.CreateDirectory(weatherFolder);
+        File.Copy(Path.Combine(AppContext.BaseDirectory,"Facet.WeatherPlugin.dll"),Path.Combine(weatherFolder,"Facet.WeatherPlugin.dll"),true);
+        File.WriteAllText(Path.Combine(weatherFolder,"plugin.json"),"{\"id\":\"facet.weather\",\"name\":\"날씨\",\"version\":\"1.0.0\",\"assembly\":\"Facet.WeatherPlugin.dll\"}");
+        var weatherPlugin=hud.DiscoverPlugins().Single(p=>p.Id=="facet.weather");
+        hud.RemoveWorkspaceWidgetForCheck(WorkspaceLayouts.DashboardTab,WorkspaceLayouts.WeatherWidget);// the legacy layout's placeholder for the same widget
+        tabs.SelectedItem=hud.FindName("DashboardTab");
+        Assert(hud.SetPluginEnabled(weatherPlugin,true) && hud.PluginState("facet.weather").Length==0 && hud.AddWidget("plugin.facet.weather.weather"),"the weather plugin loads from its own folder and can be placed");
+        var weatherRow=pluginPanel.Children.OfType<Grid>().Single(g=>g.Children.OfType<CheckBox>().Single() is var box && System.Windows.Automation.AutomationProperties.GetName(box).StartsWith("날씨"));
+        var weatherFold=weatherRow.Children.OfType<System.Windows.Controls.Primitives.ToggleButton>().Single(b=>b is not CheckBox);
+        var weatherSection=pluginPanel.Children.OfType<Border>().Single();
+        Assert(weatherFold.IsEnabled && weatherSection.Visibility==Visibility.Collapsed,"plugin settings start folded");
+        weatherFold.IsChecked=true;Assert(weatherSection.Visibility==Visibility.Visible,"clicking the row unfolds plugin settings");
+        weatherFold.IsChecked=false;Assert(weatherSection.Visibility==Visibility.Collapsed,"clicking the row folds plugin settings");
+        var reading=Facet.WeatherPlugin.WeatherReading.Parse("{\"current\":{\"time\":1790000000,\"temperature_2m\":12.5,\"relative_humidity_2m\":60,\"weather_code\":61,\"is_day\":1}}");
+        Assert(reading.Temperature==12.5 && reading.Humidity==60 && reading.Description=="비" && reading.IconName=="rain","the weather plugin reads the forecast response");
+        bool badReading=false;try{Facet.WeatherPlugin.WeatherReading.Parse("{\"current\":{\"time\":1,\"relative_humidity_2m\":500}}");}catch(InvalidDataException){badReading=true;}
+        Assert(badReading,"the weather plugin rejects out-of-range values");
+        var weatherView=new Facet.WeatherPlugin.WeatherView(new("one",runtime.Store.Root));weatherView.Show(reading);
+        Assert(weatherView.ConditionLine=="비" && weatherView.TemperatureLine=="12.5°C" && weatherView.IconSource!=null,"the weather widget shows the reading with its embedded icon");
+        Assert(weatherView.HumidityLine=="60%","the weather widget shows humidity beside the drop icon");
+        weatherView.Measure(new Size(400,120));weatherView.Arrange(new Rect(0,0,400,120));weatherView.UpdateLayout();
+        bool ButtonAt(double x,double y){for(var hit=System.Windows.Media.VisualTreeHelper.HitTest(weatherView,new Point(x,y))?.VisualHit;hit!=null;hit=System.Windows.Media.VisualTreeHelper.GetParent(hit))if(hit is Button)return true;return false;}
+        Assert(ButtonAt(1,1) && ButtonAt(399,1) && ButtonAt(1,119) && ButtonAt(399,119) && ButtonAt(390,60),"the whole tile takes clicks, including empty space");
+        Assert(VisualElements(weatherView).OfType<TextBlock>().All(t=>!t.Text.StartsWith("System.")),"the refresh surface shows its content, not a type name");
+        Assert(Facet.WeatherPlugin.WeatherAssets.PlaceName(37.5665,126.978)=="서울특별시" && Facet.WeatherPlugin.WeatherAssets.PlaceName(35.1796,129.0756)=="부산광역시" && Facet.WeatherPlugin.WeatherAssets.PlaceName(48.8,2.3)==null,"an automatic location shows its Korean region");
+        weatherView.Dispose();
+
+        // Lookup: tabs and placements by id, and a separate store for the same widget on another tab.
+        var host=hud.PluginRuntime!;
+        string weatherId=Facet.Plugins.WidgetIds.Of("facet.weather","weather");
+        Assert(!hud.AddWidget(weatherId),"AllowMultiple false keeps one per tab");
+        Assert(hud.AddWorkspaceTab("날씨2"),"a second tab can be added");
+        string secondTab=runtime.Data.Workspace!.Tabs.First(t=>t.Title=="날씨2").Id;
+        tabs.SelectedItem=tabs.Items.OfType<TabItem>().First(t=>AutomationName(t)=="날씨2");
+        Assert(hud.AddWidget(weatherId),"AllowMultipleTabs places the widget on another tab");
+        var placed=host.WidgetsById(weatherId);
+        Assert(placed.Count==2 && placed[0].InstanceId!=placed[1].InstanceId && placed.All(w=>w.PluginId=="facet.weather" && w.Data!=null),"the app creates a store for each placement and lookup finds every tab");
+        Assert(host.WidgetsInTab(secondTab).Single().InstanceId==placed[1].InstanceId && host.Widget(secondTab,placed[1].InstanceId)!=null && host.Widget(WorkspaceLayouts.DashboardTab,placed[1].InstanceId)==null,"lookup by tab then widget stays inside the tab");
+        Assert(host.Tabs.Any(t=>t.Id==secondTab && t.Title=="날씨2") && host.WidgetsById(WorkspaceLayouts.ClockWidget).Count==0,"tabs have ids and the former built-in ids are gone from the layout");
+        var firstData=host.DataFor(placed[0].InstanceId,"facet.weather",weatherId);
+        Assert(firstData.Set("note","서울") && placed[0].Data!.Get("note")=="서울" && placed[1].Data!.Get("note")==null,"the same widget on another tab has its own data");
+        Assert(placed[0].Data is not Facet.Plugins.IWidgetData,"another widget's store is read-only");
+        Assert(!firstData.Set("big",new string('x',PluginData.MaxValueLength+1)) && !firstData.Set(" ","x"),"stores reject oversized values and blank keys");
+        Assert(PluginData.Store(new Store(runtime.Store.Root).Load(),placed[0].InstanceId)!.Values["note"]=="서울","widget data lives in the app's records");
+        Assert(hud.RemoveWorkspaceTab(secondTab) && PluginData.Store(runtime.Data,placed[1].InstanceId)==null && PluginData.Store(runtime.Data,placed[0].InstanceId)!=null,"removing a tab removes only its widgets' stores");
+
+        // Settings: declared fields are drawn, validated and saved; the native row is gone.
+        var section=host.Section("facet.weather")!;
+        var regionField=section.Fields.OfType<Facet.Plugins.ChoiceSetting>().Single();
+        string seoulId=WeatherRegions.All.Single(r=>r.DisplayName=="서울특별시").Id;
+        Assert(regionField.Options.Count==246,"the region choice keeps Windows and every Korean region");
+        Assert(!host.WriteSetting("facet.weather",regionField,"없는 지역"),"a choice outside the options is rejected");
+        Assert(host.WriteSetting("facet.weather",regionField,seoulId) && PluginData.WeatherRegion(new Store(runtime.Store.Root).Load())==seoulId,"the region setting saves in the app's records and drives the built-in weather");
+        var slider=new Facet.Plugins.SliderSetting("size","크기",0,10,5);var color=new Facet.Plugins.ColorSetting("tint","색","#112233");
+        Assert(host.SettingsFor("none").Get("size")=="" && host.WriteSetting("none",slider,"99") && host.SettingsFor("none").GetNumber("size")==10,"sliders clamp to the declared range");
+        Assert(!host.WriteSetting("none",color,"red") && host.WriteSetting("none",color,"#ABCDEF"),"colors must be #RRGGBB");
+        Assert(host.WriteSetting("none",new Facet.Plugins.TextListSetting("items","목록"),"가\n나") && host.SettingsFor("none").GetList("items").Count==2,"text lists read one entry per line");
+        Assert(host.SettingsFor("none").Get("missing")=="" ,"unknown keys read empty");
+        var settingsView=(OverlaySettingsView)hud.FindName("SettingsView");settingsView.PluginPanel.Refresh();
+        var drawn=settingsView.PluginPanel.Children.OfType<Border>().Select(b=>(StackPanel)b.Child).Single();
+        var regionCombo=drawn.Children.OfType<ComboBox>().Single();
+        Assert(settingsView.PluginPanel.Children.OfType<Grid>().Count(row=>row.Children.OfType<Button>().Any())==hud.DiscoverPlugins().Count(p=>hud.HasPluginGrant(p.Id)) && hud.DiscoverPlugins().Any(p=>hud.HasPluginGrant(p.Id)),"each enabled plugin has its own reload button");
+        Assert((string)regionCombo.SelectedValue==seoulId && drawn.Children.OfType<Button>().Count()==2,"the plugin section draws its declared fields with saved values");
+        string busan=WeatherRegions.All.First(r=>r.DisplayName.StartsWith("부산")).Id;regionCombo.SelectedValue=busan;
+        Assert(PluginData.WeatherRegion(runtime.Data)==busan,"changing a drawn field saves it");
+        Assert(hud.SetPluginEnabled(weatherPlugin,false),"the plugin can be turned off");
+        Assert(!settingsView.PluginPanel.Children.OfType<Border>().Any() && settingsView.WorkspacePanel.Children.OfType<CheckBox>().Count()==0,"a disabled plugin has no section and tabs stay a separate panel");
         var seeded=new AppData();seeded.Settings.WeatherRegionId="kr-1";PluginData.Normalize(seeded);
         Assert(PluginData.Setting(seeded,"facet.weather","region")=="kr-1","the native region carries over once");
         seeded.Settings.WeatherRegionId="kr-2";PluginData.Normalize(seeded);
         Assert(PluginData.WeatherRegion(seeded)=="kr-1","the plugin setting wins after moving");
+#endif
         // Uninstalling: the folder and placements go; records and settings only when asked.
         string doomed=Path.Combine(runtime.Store.Root,"plugins","doomed"),doomedData=Path.Combine(runtime.Store.Root,"plugin-data");Directory.CreateDirectory(doomed);
         File.Copy(Path.Combine(AppContext.BaseDirectory,"Facet.SamplePlugin.dll"),Path.Combine(doomed,"Facet.SamplePlugin.dll"),true);

@@ -14,7 +14,7 @@ internal static class Packages
 {
     private const long MaxPluginBytes = 1L << 30, MaxSkinBytes = 64L << 20;
     private const int MaxEntries = 5000;
-    private static readonly string[] SkinExtensions = [".json", ".png", ".txt", ".md"];
+    private static readonly string[] SkinExtensions = [".json", ".png", ".txt", ".md", ".html", ".ttf", ".otf"];
     private static readonly Regex ReservedName = new(@"^(con|prn|aux|nul|com\d|lpt\d)(\..*)?$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     internal static long MaxBytes => MaxPluginBytes;
@@ -79,13 +79,13 @@ internal static class Packages
         return extracted;
     }
 
-    // A skin is data, so anything that could run has no place in it.
+    // Only a world page may run, inside the locked WebView2 of Design/WorldBackdrop; nothing else in a skin can execute (ADR 0091).
     private static void CheckSkinFiles(string folder)
     {
         foreach (string file in Directory.GetFiles(folder, "*", SearchOption.AllDirectories))
             if (!SkinExtensions.Contains(Path.GetExtension(file), StringComparer.OrdinalIgnoreCase)) throw new InvalidDataException("스킨에 넣을 수 없는 파일입니다: " + Path.GetFileName(file));
-        foreach (string asset in ExternalSkins.Read(folder)?.Theme is { } theme ? new[] { theme.Background, theme.Frame }.OfType<string>() : [])
-            if (!File.Exists(Path.Combine(folder, asset))) throw new InvalidDataException("스킨 이미지가 없습니다: " + asset);
+        foreach (string asset in ExternalSkins.Read(folder)?.Theme is { } theme ? new[] { theme.Background, theme.Frame, theme.WorldPage, theme.BodyFont?.File, theme.HeadingFont?.File }.OfType<string>() : [])
+            if (!File.Exists(Path.Combine(folder, asset))) throw new InvalidDataException("스킨 파일이 없습니다: " + asset);
     }
 
     private static void Extract(string zipFile, string destination)

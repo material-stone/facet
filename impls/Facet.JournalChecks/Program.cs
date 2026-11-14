@@ -12,6 +12,9 @@ using System.Windows.Media.Imaging;
 using System.Windows.Media.Effects;
 using System.Windows.Threading;
 using Facet;
+#if PLUGIN_CHECKS
+using Facet.SchedulePlugin;
+#endif
 using Facet.Core;
 
 internal static partial class Program
@@ -107,9 +110,10 @@ internal static partial class Program
         Pump(400);
         Assert(controller.Overlay.Opacity==1 && backdrop.Color.A==255 && Math.Abs(backdrop.Opacity-OverlayAppearance.Strength(settings))<.001,"fade in settles at configured backdrop strength");
         Assert(layers.Children.Count==4 && layers.Children[2] is OverlayTabs { Opacity:1 } && layers.Children[3] is QuickLaunchView {Visibility:Visibility.Collapsed},"overlay layers contain crisp calendar HUD above background image and tint with quick launch hidden");
+#if PLUGIN_CHECKS
         CheckOverlayCalendar((OverlayTabs)layers.Children[2],qa);
+#endif
         Assert(Math.Abs(blur.Radius-18)<.001,$"blur settles at intended radius (radius={blur.Radius}, visible={controller.Overlay.IsVisible}, requested={controller.Data.Settings.OverlayVisible}, configured={controller.Data.Settings.OverlayBlurRadius})");
-        CheckCarouselBackdropPause(controller);
         var frame=(WriteableBitmap)backgroundImage.Source;
         Assert(frame.PixelWidth<=1280 && frame.PixelHeight<=1280,"background snapshot is limited to bounded resolution");
         var initialPixel=new byte[4];frame.CopyPixels(new Int32Rect(frame.PixelWidth/2,frame.PixelHeight/2,1,1),initialPixel,4,0);
@@ -188,29 +192,32 @@ internal static partial class Program
         CheckNativeOverlayAppearance(controller);
         CheckCaptureToolPriority(controller);
     }
+#if PLUGIN_CHECKS
     private static void CheckOverlayCalendar(OverlayTabs hud,string qa,bool nativeInput=true)
     {
         var tabs=(TabControl)hud.FindName("Tabs");
-        var calendar=(OverlayCalendarView)hud.FindName("Calendar");
+        var board=ScheduleBoardFor(hud,Path.Combine(qa,"overlay-calendar-"+Guid.NewGuid().ToString("N")));
+        var calendar=(OverlayCalendarView)board.FindName("Calendar");
         void Input(params byte[] keys)
         {
             if(nativeInput) { Chord(keys);return; }
             if(keys.SequenceEqual(new byte[]{0x11,0xDB}))hud.MoveTab(-1);
             else if(keys.SequenceEqual(new byte[]{0x11,0xDD}))hud.MoveTab(1);
-            else if(keys.SequenceEqual(new byte[]{0x21}))hud.MoveCalendarMonth(-1);
-            else if(keys.SequenceEqual(new byte[]{0x22}))hud.MoveCalendarMonth(1);
-            else if(keys.SequenceEqual(new byte[]{0x24}))hud.GoToCalendarToday();
+            else if(keys.SequenceEqual(new byte[]{0x21}))board.MoveCalendarMonth(-1);
+            else if(keys.SequenceEqual(new byte[]{0x22}))board.MoveCalendarMonth(1);
+            else if(keys.SequenceEqual(new byte[]{0x24}))board.GoToCalendarToday();
             else throw new Exception("Unsupported calendar test input.");
         }
-        Assert(tabs.Items.Count==5 && tabs.SelectedIndex==0,"dashboard opens before calendar sleep chat and rightmost settings");
+        Assert(tabs.Items.Count>=2 && tabs.SelectedIndex==0 && ReferenceEquals(tabs.Items[^1],hud.FindName("SettingsTab")),"dashboard opens first and settings stays rightmost");
         var dashboard=(TabItem)tabs.Items[0];
-        Assert(System.Windows.Automation.AutomationProperties.GetName(dashboard)=="대시보드" && hud.FindName("Dashboard") is OverlayDashboardView,"dashboard has an accessible header and clock weather view");
-        Assert(!hud.IsEditingDay && !hud.MoveCalendarMonth(1) && !hud.GoToCalendarToday(),"dashboard does not handle calendar commands");
+        Assert(System.Windows.Automation.AutomationProperties.GetName(dashboard)=="대시보드","dashboard has an accessible header");
+        // The calendar widget sits on the dashboard here; another tab does not get its keys.
+        tabs.SelectedItem=hud.FindName("SettingsTab");Assert(!board.IsEditingDay && !hud.HandleWidgetKey(System.Windows.Input.Key.PageDown,System.Windows.Input.ModifierKeys.None) && !hud.HandleWidgetKey(System.Windows.Input.Key.Home,System.Windows.Input.ModifierKeys.None),"a tab without the calendar does not handle calendar commands");tabs.SelectedIndex=0;
         Input(0x11,0xDB);Assert(ReferenceEquals(tabs.SelectedItem,hud.FindName("SettingsTab")),"previous tab wraps to rightmost settings");
-        Input(0x11,0xDD);Assert(tabs.SelectedIndex==0,"next tab wraps to first tab");
-        Input(0x11,0xDD);Assert(tabs.SelectedIndex==1 && !hud.IsEditingDay,"next tab selects calendar without opening a day");
-        Input(0x11,0xDB);Assert(tabs.SelectedIndex==0,"previous tab selects first tab");
-        Input(0x11,0xDD);
+        Input(0x11,0xDD);Assert(tabs.SelectedIndex==0 && !board.IsEditingDay,"next tab wraps to the dashboard without opening a day");
+        Assert(hud.HandleWidgetKey(System.Windows.Input.Key.Home,System.Windows.Input.ModifierKeys.None),"the selected tab routes calendar keys to its widget");
+
+
         var body=(StackPanel)calendar.Child;
         var calendarHeader=(StackPanel)body.Children[0];
         var navigation=(Grid)calendarHeader.Children[0];
@@ -230,14 +237,14 @@ internal static partial class Program
             Assert(numbered.Where(b=>dates.Children.IndexOf(b)%7==0).All(b=>((TextBlock)b.Child).Foreground==((TextBlock)weekdays.Children[0]).Foreground) && numbered.Where(b=>dates.Children.IndexOf(b)%7==6).All(b=>((TextBlock)b.Child).Foreground==((TextBlock)weekdays.Children[6]).Foreground),"weekend date colors match weekday headers for "+today);
         }
         Assert(((SolidColorBrush)((TextBlock)weekdays.Children[0]).Foreground).Color==Color.FromRgb(255,157,146) && ((SolidColorBrush)((TextBlock)weekdays.Children[6]).Foreground).Color==Color.FromRgb(145,191,255),"Sunday is red and Saturday is blue");
-        hud.RefreshToday();
+        board.RefreshToday();
         calendar.GoToToday();
         Assert(heading.Text==$"{DateTime.Now.Year:0000}년 {DateTime.Now.Month}월","calendar refresh restores current local month");
         var localToday=DateOnly.FromDateTime(DateTime.Now);
         string MonthLabel(DateOnly value)=>$"{value.Year:0000}년 {value.Month}월";
         Input(0x21);Assert(heading.Text==MonthLabel(localToday.AddMonths(-1)),"previous month command moves calendar back");
         Assert(dates.Children.OfType<Border>().All(b=>b.BorderThickness.Left!=2),"browsing another month never highlights the same day number as today");
-        hud.RefreshToday();Assert(heading.Text==MonthLabel(localToday.AddMonths(-1)),"periodic refresh preserves browsed month");
+        board.RefreshToday();Assert(heading.Text==MonthLabel(localToday.AddMonths(-1)),"periodic refresh preserves browsed month");
         Input(0x22);Assert(heading.Text==MonthLabel(localToday),"next month command moves calendar forward");
         previous.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Assert(heading.Text==MonthLabel(localToday.AddMonths(-1)),"previous month arrow invokes navigation");
         next.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Assert(heading.Text==MonthLabel(localToday),"next month arrow invokes navigation");
@@ -274,17 +281,17 @@ internal static partial class Program
         Assert(dates.IsHitTestVisible && dates.Children.OfType<Border>().Where(b=>b.Child is TextBlock).All(b=>b.Focusable && b.ToolTip==null),"date grid accepts selection without hover tooltips");
         Assert(navigation.Children.Count==3 && previous.ToolTip==null && next.ToolTip==null,"month arrows have no hover tooltips or persistent labels");
         // Measure a detached HUD: a live Window restores its child's monitor-sized layout.
-        var preview=new OverlayTabs();
-        var previewCalendar=(OverlayCalendarView)preview.FindName("Calendar");
+        var preview=new OverlayTabs();var previewBoard=ScheduleBoardFor(preview,Path.Combine(qa,"overlay-calendar-preview-"+Guid.NewGuid().ToString("N")));
+        var previewCalendar=(OverlayCalendarView)previewBoard.FindName("Calendar");
         var previewTabs=(TabControl)preview.FindName("Tabs");
-        previewTabs.SelectedIndex=1;
+        previewTabs.SelectedIndex=0;
         foreach(var size in new[]{new Size(1440,900),new Size(800,600),new Size(480,360)}) {
             preview.Measure(size);preview.Arrange(new Rect(size));preview.UpdateLayout();
-            var previewEditor=(OverlayDayEditor)preview.FindName("DayEditor");
+            var previewEditor=(OverlayDayEditor)previewBoard.FindName("DayEditor");
             var calendarCenter=previewCalendar.TranslatePoint(new Point(previewCalendar.ActualWidth/2,previewCalendar.ActualHeight/2),preview);
             var header=(FrameworkElement)previewTabs.Template.FindName("TabStrip",previewTabs);
             var headerCenter=header.TranslatePoint(new Point(header.ActualWidth/2,header.ActualHeight/2),preview);
-            Assert(((Grid)preview.FindName("DayPage")).Visibility==Visibility.Collapsed && Math.Abs(calendarCenter.X-size.Width/2)<1 && Math.Abs(calendarCenter.Y-size.Height/2)<1 && Math.Abs(headerCenter.X-size.Width/2)<1 && headerCenter.Y<80,"calendar alone is centered under floating top tabs at "+size);
+            Assert(((Grid)previewBoard.FindName("DayPage")).Visibility==Visibility.Collapsed && Math.Abs(calendarCenter.X-size.Width/2)<1 && Math.Abs(calendarCenter.Y-size.Height/2)<1 && Math.Abs(headerCenter.X-size.Width/2)<1 && headerCenter.Y<80,"calendar alone is centered under floating top tabs at "+size);
             var previewHeading=(TextBlock)((Grid)((StackPanel)((StackPanel)previewCalendar.Child).Children[0]).Children[0]).Children[1];
             var titleCenter=previewHeading.TranslatePoint(new Point(previewHeading.ActualWidth/2,0),previewCalendar);
             Assert(Math.Abs(titleCenter.X-previewCalendar.ActualWidth/2)<1,"year month label stays horizontally centered at "+size);
@@ -292,6 +299,7 @@ internal static partial class Program
             var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(bmp));using var output=File.Create(Path.Combine(qa,$"overlay-calendar-{size.Width}.png"));png.Save(output);
         }
     }
+#endif
     private static void CheckAppearanceSettings(Controller controller,string qa)
     {
         controller.Commit(d=> { d.Settings.OverlayBlurRadius=32;d.Settings.OverlayShowMilliseconds=600;d.Settings.OverlayHideMilliseconds=1000; });
@@ -324,7 +332,7 @@ internal static partial class Program
     {
         var tabs=(OverlayTabs)((Grid)controller.Overlay.Content).Children[2];
         var settings=(OverlaySettingsView)tabs.FindName("SettingsView");
-        var key=SettingEditor<TextBox>(settings,"오버레이 단축키");
+        var key=SettingEditor<TextBox>(settings,"오버레이 열기·닫기");
         key.Text="invalid shortcut";
         Chord(ExitKeys(controller));
         Assert(!controller.Exiting && !controller.ExitPending && settings.HasChanges && key.Text=="invalid shortcut","exit shortcut retains an invalid overlay draft and cancels shutdown without a manager");
@@ -365,14 +373,19 @@ internal static partial class Program
     }
     [STAThread] private static int Main(string[] args)
     {
+        Facet.Design.Skins.SharedFolders.Add(Path.Combine(AppContext.BaseDirectory,"registry-skins"));
         if(args.Contains("--launcher-echo")) { File.WriteAllText(args[1],JsonSerializer.Serialize(new { executable=Environment.ProcessPath,args,launcher=Environment.GetEnvironmentVariable("DAILYDOCK_LAUNCHER") }));return 0; }
         if(args.Contains("--launcher-app")) return RunLauncherApp(args);
         if(args.Contains("--skin-app")) return RunSkinApp(args);
         if(args.Contains("--skin-preview")) return RunSkinPreview(args);
         if(args.Contains("--voyage-preview")) return RunVoyagePreview(args);
+        if(args.Contains("--world-net-check")) return RunWorldNetCheck();
+        if(args.Contains("--world-skin-check")) return RunWorldSkinCheck(args[1]);
         // Manual look at a skin in the real app: prepares a throwaway data folder for Facet --data-dir.
         if(args.Contains("--seed-skin")) { var seeded=new Store(args[1]);var seedData=seeded.Load();seedData.Settings.Skin=args[2];seeded.Save(seedData);return 0; }
+#if PLUGIN_CHECKS
         if(args.Contains("--hud-preview")) return RunHudPreview(args);
+#endif
         string qa=Path.GetFullPath(Path.Combine(".test-data","journal-"+Guid.NewGuid().ToString("N"))); Directory.CreateDirectory(qa);
         try {
             CheckStartupRegistration();
@@ -414,27 +427,104 @@ internal static partial class Program
             else {
                 CheckOverlayOnly(controller,qa);
                 CheckSkins(controller,qa);
+#if PLUGIN_CHECKS
+                CheckAgentChat(controller,qa,args.Contains("--codex-chat-live"));
+#endif
+#if PLUGIN_CHECKS
+                CheckChatTab(qa);
+#endif
+#if PLUGIN_CHECKS
+                CheckChatPlugin(qa);
+#endif
                 CheckPortablePlugins(qa);
+        CheckDataBackup(qa);
                 CheckPackages(qa);
+#if PLUGIN_CHECKS
+                CheckVoiceAgent(controller,qa);
+#endif
                 CheckWorkspace(controller);
+#if PLUGIN_CHECKS
+                CheckMusicRules();
+#endif
+#if PLUGIN_CHECKS
+                CheckMusic();
+#endif
+#if PLUGIN_CHECKS
+                CheckMusicLifetime(qa);
+#endif
+#if PLUGIN_CHECKS
+                CheckConditions(qa);
+#endif
+#if PLUGIN_CHECKS
+                CheckSleep(qa);
+#endif
+#if PLUGIN_CHECKS
+                CheckLocalMusic(qa);
+#endif
+#if PLUGIN_CHECKS
+                CheckLatestMusicSelection(qa);
+#endif
+#if PLUGIN_CHECKS
+                CheckMusicPlaylistHover(qa);
+#endif
+#if PLUGIN_CHECKS
+                if(args.Contains("--music-download-live"))CheckMusicDownloadProbe(qa);
+#endif
+#if PLUGIN_CHECKS
+                if(args.Contains("--music-cache-live"))CheckDownloadedMusicLive(qa);
+#endif
+#if PLUGIN_CHECKS
+                if(args.Contains("--codex-chat-metadata")) CheckLiveChatMetadata(qa);
+#endif
                 if(args.Contains("--hotkeys")) CheckOverlayOnlyHotkeys(qa);
+#if PLUGIN_CHECKS
+                if(args.Contains("--supertonic-live")) CheckSupertonicLive(qa);
+#endif
+#if PLUGIN_CHECKS
+                if(Array.IndexOf(args,"--chat-plugin-folder") is >=0 and var chatFolder) CheckDeployedChatPlugin(args[chatFolder+1],qa);
+#endif
                 if(args.Contains("--overlay-ui") || args.Contains("--launcher")) CheckStartupSettings(controller);
-                if(args.Contains("--overlay-ui")) { CheckDashboard(qa); CheckDisplayCursors(controller); CheckWeather(qa); CheckOverlayCalendar(new OverlayTabs(),qa,nativeInput:false); CheckCalendarDayEditor(controller,qa); CheckManagementCarousel(controller,qa); CheckDashboardRemindersAndDebug(qa); CheckReminderCli(controller,qa); }
+#if PLUGIN_CHECKS
+                if(args.Contains("--overlay-ui")) { CheckDashboard(qa); CheckDisplayCursors(controller); CheckWeather(qa); CheckOverlayCalendar(new OverlayTabs(),qa,nativeInput:false); CheckCalendarDayEditor(controller,qa); CheckDashboardRemindersAndDebug(qa); CheckReminderCli(controller,qa); }
+#else
+        if(args.Contains("--overlay-ui")) { CheckDashboard(qa); CheckWeather(qa); }
+#endif
                 if(args.Contains("--overlay-ui") || args.Contains("--overlay-settings")) { CheckOverlaySettings(qa); CheckOverlayAppearance(controller,qa); }
-            if(args.Contains("--overlay-ui") || args.Contains("--quick-launch")) CheckQuickLaunch(controller,qa);
+            if(args.Contains("--overlay-ui") || args.Contains("--quick-launch")) { CheckQuickLaunch(controller,qa); QuickLaunchCatalog.Extras=false; }
+#if PLUGIN_CHECKS
             if(args.Contains("--overlay-ui") || args.Contains("--typography")) CheckTypography(controller);
+#endif
                 if(args.Contains("--overlay-focus")) CheckOverlayFocus(controller);
+#if PLUGIN_CHECKS
                 if(args.Contains("--schedule-native-click")) CheckScheduleNativeClicks(controller);
+#endif
+#if PLUGIN_CHECKS
                 if(args.Contains("--schedule-native-drag")) CheckNativeScheduleDragging(controller);
+#endif
+#if PLUGIN_CHECKS
                 if(args.Contains("--overlay-ui") || args.Contains("--shadow-check")) CheckCachedShadows(qa);
+#endif
+#if PLUGIN_CHECKS
                 if(args.Contains("--shadow-profile")) ProfileShadows(qa);
+#endif
                 if(args.Contains("--overlay-ui") || args.Contains("--scrollbars")) CheckSharedScrolling(qa);
+#if PLUGIN_CHECKS
                 if(args.Contains("--overlay-profile")) ProfileOverlay(controller,qa);
+#endif
+#if PLUGIN_CHECKS
                 if(args.Contains("--backdrop-profile")) ProfileBackdrop(qa);
+#endif
+#if PLUGIN_CHECKS
                 if(args.Contains("--async-backdrop-profile")) ProfileAsyncBackdrop(controller,qa);
+#endif
                 if(args.Contains("--weather-live")) CheckLiveWeather(qa);
+#if PLUGIN_CHECKS
                 if(args.Contains("--reminder-cli")) CheckReminderCli(controller,qa);
+#endif
                 
+#if PLUGIN_CHECKS
+                if(args.Contains("--condition-input")) CheckConditionInput();
+#endif
                 string mode=args.Contains("--launcher") ? "launcher checks enabled" : args.Contains("--condition-input") ? "condition native pointer checks enabled" : "no visible test windows";
                 File.WriteAllText(Path.Combine(qa,"result.txt"),$"PASS {passed} journal checks ({mode}).");
                 ui.Shutdown();

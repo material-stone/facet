@@ -1,7 +1,7 @@
 // Lists voxel boxes of different colors whose same-facing faces share a plane and overlap: those flicker as z-fighting.
 // Usage: node scripts/check-world-overlaps.js   (exit 1 when any overlap is found)
 const fs = require('fs'), path = require('path');
-const html = fs.readFileSync(path.join(__dirname, '../impls/Facet/Design/World/world.html'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '../registry/skins/voxel/world.html'), 'utf8');
 const js = html.slice(html.indexOf('/* ---------- 수학'), html.indexOf('/* ---------- 셰이더'));
 const run = new Function('window', js + '\nreturn { M, buildStreet, buildNature, buildCave };');
 const world = run({});

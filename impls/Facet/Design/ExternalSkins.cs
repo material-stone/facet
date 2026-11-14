@@ -66,12 +66,17 @@ internal static class ExternalSkins
         System(SystemColors.ControlTextBrushKey,"Ink");
         System(SystemColors.HighlightBrushKey,"Selected");
         System(SystemColors.HighlightTextBrushKey,"Ink");
+        void Font(string key,ThemeFont? font) {
+            if(font==null || !File.Exists(Path.Combine(skin.Directory,font.File))) return;
+            result[key]=new FontFamily(new Uri(Path.GetFullPath(skin.Directory).TrimEnd(Path.DirectorySeparatorChar)+Path.DirectorySeparatorChar),"./#"+font.Family);
+        }
+        Font("AppFontFamily",skin.Theme?.BodyFont);Font("HudHeadingFont",skin.Theme?.HeadingFont);
         return result;
     }
 
     private static SolidColorBrush Brush(Color color) { var brush=new SolidColorBrush(color);brush.Freeze();return brush; }
 
-    internal static ThemeVisuals? Visuals(ExternalSkin skin)=>skin.Theme is { } theme ? ThemeVisuals.From(theme,name=>OpenImage(Path.Combine(skin.Directory,name))) : null;
+    internal static ThemeVisuals? Visuals(ExternalSkin skin)=>skin.Theme is { } theme ? ThemeVisuals.From(theme,name=>name.EndsWith(".html",StringComparison.Ordinal) ? File.OpenRead(Path.Combine(skin.Directory,name)) : OpenImage(Path.Combine(skin.Directory,name))) : null;
 
     // The header alone gives the size, so an oversized image is refused before it is decoded.
     private static Stream OpenImage(string path)

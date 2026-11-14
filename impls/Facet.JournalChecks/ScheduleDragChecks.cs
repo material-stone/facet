@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Facet;
+using Facet.SchedulePlugin;
 using Facet.Core;
 
 internal static partial class Program
@@ -62,11 +63,12 @@ internal static partial class Program
     {
         using var host=new KeyboardHost();host.Window.Show();Pump(100);var original=System.Windows.Forms.Cursor.Position;
         var date=DateOnly.FromDateTime(DateTime.Now);var item=new DaySchedule {Name="실제 드래그 일정",StartMinute=1320,DurationMinutes=120};
-        controller.Commit(data=>{data.Settings.OverlayShowMilliseconds=0;data.Settings.OverlayHideMilliseconds=0;CalendarNotes.Save(data,new(){Date=date,Schedules=[item]},DateTime.Now);});
-        var overlay=controller.Overlay;var hud=(OverlayTabs)((Grid)overlay.Content).Children[2];hud.Connect(controller);hud.AnimateDayTransitions=false;
-        ((TabControl)hud.FindName("Tabs")).SelectedItem=hud.FindName("ManagementTab");
-        var dial=(OverlayScheduleDial)hud.FindName("ScheduleDial");var editor=(OverlayDayEditor)hud.FindName("DayEditor");var modal=(Grid)hud.FindName("ScheduleModal");
-        var viewport=(Viewbox)hud.FindName("DayViewport");double originalWidth=viewport.Width;
+        controller.Commit(data=>{data.Settings.OverlayShowMilliseconds=0;data.Settings.OverlayHideMilliseconds=0;});
+        var overlay=controller.Overlay;var hud=(OverlayTabs)((Grid)overlay.Content).Children[2];var board=ScheduleBoardFor(hud,controller.Store.Root);hud.Connect(controller);board.AnimateDayTransitions=false;
+        board.Records.Commit(data=>CalendarNotes.Save(data,new(){Date=date,Schedules=[item]},DateTime.Now));
+        ((TabControl)hud.FindName("Tabs")).SelectedItem=hud.FindName("DashboardTab");
+        var dial=(OverlayScheduleDial)board.FindName("ScheduleDial");var editor=(OverlayDayEditor)board.FindName("DayEditor");var modal=(Grid)board.FindName("ScheduleModal");
+        var viewport=(Viewbox)board.FindName("DayViewport");double originalWidth=viewport.Width;
         void Pointer(double slot){
             bool settled=false;
             for(int attempt=0;attempt<5;attempt++) {
@@ -81,23 +83,23 @@ internal static partial class Program
         }
         void Drag(double first,params double[] rest){Pointer(first);mouse_event(0x0002,0,0,0,0);Pump(35);Assert(dial.IsMouseCaptured,"native schedule drag captures the pointer");foreach(var slot in rest)Pointer(slot);mouse_event(0x0004,0,0,0,0);Pump(120);}
         DateOnly savedOwner=default;
-        DaySchedule Read(){var data=new Store(controller.Store.Root).Load();var owner=data.CalendarDays.Single(day=>day.Schedules.Any(schedule=>schedule.Id==item.Id));savedOwner=owner.Date;return owner.Schedules.Single(schedule=>schedule.Id==item.Id);}
+        DaySchedule Read(){var data=ScheduleData(controller.Store.Root);var owner=data.CalendarDays.Single(day=>day.Schedules.Any(schedule=>schedule.Id==item.Id));savedOwner=owner.Date;return owner.Schedules.Single(schedule=>schedule.Id==item.Id);}
         try {
-            controller.ToggleOverlay();AwaitBackdrop(()=>overlay.IsVisible);Pump(200);hud.OpenDay(date);overlay.UpdateLayout();Pump(100);
+            controller.ToggleOverlay();AwaitBackdrop(()=>overlay.IsVisible);Pump(200);board.OpenDay(date);overlay.UpdateLayout();Pump(100);
             editor.BeginNoteEdit();var note=(TextBox)typeof(OverlayDayEditor).GetField("note",System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.NonPublic)!.GetValue(editor)!;note.Text="드래그 전 기록";
             Drag(46.2,47.2,.2);var saved=Read();
-            Assert(savedOwner==date && saved.StartMinute==1380 && saved.DurationMinutes==120 && modal.Visibility==Visibility.Collapsed && CalendarNotes.Get(controller.Data,date).Note==note.Text,"native body drag crosses midnight and saves duration while record blur stays safe");
-            hud.OpenDay(date.AddDays(1));overlay.UpdateLayout();Drag(2,3,4);saved=Read();
+            Assert(savedOwner==date && saved.StartMinute==1380 && saved.DurationMinutes==120 && modal.Visibility==Visibility.Collapsed && CalendarNotes.Get(ScheduleData(controller.Store.Root),date).Note==note.Text,"native body drag crosses midnight and saves duration while record blur stays safe");
+            board.OpenDay(date.AddDays(1));overlay.UpdateLayout();Drag(2,3,4);saved=Read();
             Assert(savedOwner==date && saved.StartMinute==1380 && saved.DurationMinutes==180,"native continuation end-edge drag updates the original event");
-            hud.OpenDay(date);overlay.UpdateLayout();Drag(46,45,44);saved=Read();
+            board.OpenDay(date);overlay.UpdateLayout();Drag(46,45,44);saved=Read();
             Assert(savedOwner==date && saved.StartMinute==1320 && saved.DurationMinutes==240,"native start-edge drag preserves the end across the date boundary");
-            string before=JsonSerializer.Serialize(controller.Data);Pointer(46.2);mouse_event(0x0002,0,0,0,0);Pointer(47.2);Assert(dial.IsSelecting,"native schedule movement reaches its drag preview");
+            string before=ScheduleRecords.Serialize(board.Records.Data);Pointer(46.2);mouse_event(0x0002,0,0,0,0);Pointer(47.2);Assert(dial.IsSelecting,"native schedule movement reaches its drag preview");
             Chord(0x1B);mouse_event(0x0004,0,0,0,0);Pump(100);
-            Assert(hud.IsEditingDay && !dial.IsSelecting && JsonSerializer.Serialize(controller.Data)==before,"native Escape cancels a captured time change without leaving the day or saving (day="+hud.IsEditingDay+", selecting="+dial.IsSelecting+", same="+(JsonSerializer.Serialize(controller.Data)==before)+")");
+            Assert(board.IsEditingDay && !dial.IsSelecting && ScheduleRecords.Serialize(board.Records.Data)==before,"native Escape cancels a captured time change without leaving the day or saving (day="+board.IsEditingDay+", selecting="+dial.IsSelecting+", same="+(ScheduleRecords.Serialize(board.Records.Data)==before)+")");
             var mini=new DaySchedule {Name="작은30분 일정",StartMinute=600,DurationMinutes=30};
-            controller.Commit(data=>{var entry=CalendarNotes.Get(data,date);entry.Schedules.Add(mini);CalendarNotes.Save(data,entry,DateTime.Now);});
-            hud.Connect(controller);hud.OpenDay(date);viewport.Width=780;overlay.UpdateLayout();Pump(60);Drag(20.5,21.5);
-            var compact=CalendarNotes.Get(new Store(controller.Store.Root).Load(),date).Schedules.Single(schedule=>schedule.Id==mini.Id);
+            board.Records.Commit(data=>{var entry=CalendarNotes.Get(data,date);entry.Schedules.Add(mini);CalendarNotes.Save(data,entry,DateTime.Now);});
+            board.OpenDay(date);viewport.Width=780;overlay.UpdateLayout();Pump(60);Drag(20.5,21.5);
+            var compact=CalendarNotes.Get(ScheduleData(controller.Store.Root),date).Schedules.Single(schedule=>schedule.Id==mini.Id);
             Assert(compact.StartMinute==630 && compact.DurationMinutes==30,"native compact half-hour body drag moves instead of resizing the narrow sector");
         } finally {viewport.Width=originalWidth;mouse_event(0x0004,0,0,0,0);controller.HideOverlay();Pump(100);System.Windows.Forms.Cursor.Position=original;}
     }
@@ -105,23 +107,23 @@ internal static partial class Program
     private static void CheckScheduleDragPersistence(Controller controller,string qa,DateOnly date)
     {
         var next=date.AddDays(1);var item=new DaySchedule {Name="시간 직접 편집",StartMinute=1320,DurationMinutes=120};
-        controller.Commit(data=>{CalendarNotes.Save(data,new(){Date=date,Note="시작 날짜 기록",Schedules=[item]},DateTime.Now);CalendarNotes.Save(data,new(){Date=next,Note="다음 날짜 기록"},DateTime.Now);});
-        var hud=(OverlayTabs)((Grid)controller.Overlay.Content).Children[2];hud.Connect(controller);hud.AnimateDayTransitions=false;hud.OpenDay(date);
+        var hud=(OverlayTabs)((Grid)controller.Overlay.Content).Children[2];var board=ScheduleBoardFor(hud,controller.Store.Root);hud.Connect(controller);board.AnimateDayTransitions=false;
+        board.Records.Commit(data=>{CalendarNotes.Save(data,new(){Date=date,Note="시작 날짜 기록",Schedules=[item]},DateTime.Now);CalendarNotes.Save(data,new(){Date=next,Note="다음 날짜 기록"},DateTime.Now);});board.OpenDay(date);
         hud.Measure(new Size(1440,900));hud.Arrange(new Rect(0,0,1440,900));hud.UpdateLayout();
-        var dial=(OverlayScheduleDial)hud.FindName("ScheduleDial");var editor=(OverlayDayEditor)hud.FindName("DayEditor");var modal=(Grid)hud.FindName("ScheduleModal");var form=(OverlayScheduleEditor)hud.FindName("ScheduleEditor");
+        var dial=(OverlayScheduleDial)board.FindName("ScheduleDial");var editor=(OverlayDayEditor)board.FindName("DayEditor");var modal=(Grid)board.FindName("ScheduleModal");var form=(OverlayScheduleEditor)board.FindName("ScheduleEditor");
         void Drag(double first,params double[] rest){dial.BeginSelection(dial.PointAt(first,dial.Radius*.6));foreach(double slot in rest)dial.MovePointer(dial.PointAt(slot,dial.Radius*.6));dial.EndSelection(dial.PointAt(rest[^1],dial.Radius*.6));hud.UpdateLayout();}
-        Drag(46.2,47.2,.2);var loaded=new Store(controller.Store.Root).Load();var stored=CalendarNotes.Get(loaded,date).Schedules.Single();
+        Drag(46.2,47.2,.2);var loaded=ScheduleData(controller.Store.Root);var stored=CalendarNotes.Get(loaded,date).Schedules.Single();
         Assert(stored.Id==item.Id && stored.StartMinute==1380 && stored.DurationMinutes==120 && modal.Visibility==Visibility.Collapsed,"body drop immediately persists the same event through the encrypted writer");
         Assert(editor.Schedules.Single().VisibleDurationMinutes==60 && CalendarNotes.SchedulesForDate(loaded,next).Single().VisibleDurationMinutes==60,"saved manipulation clips each date instead of leaving a wrapped ghost");
-        Drag(46,45,44);stored=CalendarNotes.Get(new Store(controller.Store.Root).Load(),date).Schedules.Single();
+        Drag(46,45,44);stored=CalendarNotes.Get(ScheduleData(controller.Store.Root),date).Schedules.Single();
         Assert(stored.StartMinute==1320 && stored.DurationMinutes==180,"start edge drop preserves the original end timestamp");
-        hud.OpenDay(next);Drag(2,3,4);stored=CalendarNotes.Get(new Store(controller.Store.Root).Load(),date).Schedules.Single();
+        board.OpenDay(next);Drag(2,3,4);stored=CalendarNotes.Get(ScheduleData(controller.Store.Root),date).Schedules.Single();
         Assert(stored.StartMinute==1320 && stored.DurationMinutes==240 && editor.Schedules.Single().VisibleDurationMinutes==120,"continuation end edge edits the original owner's event");
-        string before=JsonSerializer.Serialize(controller.Data);dial.BeginSelection(dial.PointAt(2.2,dial.Radius*.6));dial.MovePointer(dial.PointAt(3.2,dial.Radius*.6));
-        Assert(hud.HandleEscape() && hud.IsEditingDay && !dial.IsSelecting && JsonSerializer.Serialize(controller.Data)==before,"Escape pops an in-progress schedule manipulation without saving or leaving the day");
-        editor.Configure(day=>CalendarNotes.Get(controller.Data,day),_=>false,day=>CalendarNotes.SchedulesForDate(controller.Data,day),(_,_,_)=>false);
+        string before=ScheduleRecords.Serialize(board.Records.Data);dial.BeginSelection(dial.PointAt(2.2,dial.Radius*.6));dial.MovePointer(dial.PointAt(3.2,dial.Radius*.6));
+        Assert(board.HandleEscape() && board.IsEditingDay && !dial.IsSelecting && ScheduleRecords.Serialize(board.Records.Data)==before,"Escape pops an in-progress schedule manipulation without saving or leaving the day");
+        editor.Configure(day=>CalendarNotes.Get(ScheduleData(controller.Store.Root),day),_=>false,day=>CalendarNotes.SchedulesForDate(ScheduleData(controller.Store.Root),day),(_,_,_)=>false);
         Drag(2.2,3.2);var failed=form.TimePicker.GetRange();
-        Assert(modal.Visibility==Visibility.Visible && failed.StartDate==date && failed.StartMinute==1350 && failed.EndDate==next && failed.EndMinute==150 && JsonSerializer.Serialize(controller.Data)==before,"failed direct time save preserves the draft in the existing edit modal and leaves storage unchanged");
-        form.Close();hud.Connect(controller);hud.ReturnToCalendar();
+        Assert(modal.Visibility==Visibility.Visible && failed.StartDate==date && failed.StartMinute==1350 && failed.EndDate==next && failed.EndMinute==150 && ScheduleRecords.Serialize(board.Records.Data)==before,"failed direct time save preserves the draft in the existing edit modal and leaves storage unchanged");
+        form.Close();board.ConnectEditor();board.ReturnToCalendar();
     }
 }

@@ -9,6 +9,8 @@ using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using Facet;
+using Facet.SchedulePlugin;
+using Facet.Widgets;
 using Facet.Core;
 
 internal static partial class Program
@@ -36,24 +38,20 @@ internal static partial class Program
     private static void ProfileOverlay(Controller controller,string qa)
     {
         var layers=(Grid)controller.Overlay.Content;var hud=(OverlayTabs)layers.Children[2];
-        ((TabControl)hud.FindName("Tabs")).SelectedItem=hud.FindName("ManagementTab");hud.Opacity=1;
-        var carousel=(OverlayCarousel)hud.FindName("ManagementCarousel");carousel.AnimateTransitions=false;carousel.Select(0,false);
+        ScheduleBoardFor(hud,controller.Store.Root);((TabControl)hud.FindName("Tabs")).SelectedItem=hud.FindName("DashboardTab");hud.Opacity=1;
         var size=new Size(1440,900);layers.Measure(size);layers.Arrange(new Rect(size));layers.UpdateLayout();
         var bitmap=new RenderTargetBitmap(1440,900,96,96,PixelFormats.Pbgra32);var pixel=new byte[4];
         void Render(Visual visual) {bitmap.Clear();bitmap.Render(visual);bitmap.CopyPixels(new Int32Rect(720,450,1,1),pixel,4,0);}
         var runs=new Dictionary<string,object>();
         void Run(string name,Visual visual) {
-            carousel.Select(0,false);carousel.BeginDrag(new Point(400,200),carousel.SelectedContent);
             var input=new List<double>();var transform=new List<double>();var layout=new List<double>();var render=new List<double>();
             for(int i=-5;i<40;i++) {
-                long start=Stopwatch.GetTimestamp();carousel.ContinueDrag(new Point(360-Math.Max(0,i)%50,200));
-                double inputMs=Stopwatch.GetElapsedTime(start).TotalMilliseconds;start=Stopwatch.GetTimestamp();
-                carousel.RenderPendingDrag();double transformMs=Stopwatch.GetElapsedTime(start).TotalMilliseconds;start=Stopwatch.GetTimestamp();
+                // The calendar no longer slides; each frame measures input-free layout and rendering of the overlay.
+                long start=Stopwatch.GetTimestamp();double inputMs=0,transformMs=0;layers.InvalidateArrange();
                 layers.UpdateLayout();double layoutMs=Stopwatch.GetElapsedTime(start).TotalMilliseconds;start=Stopwatch.GetTimestamp();
                 Render(visual);double renderMs=Stopwatch.GetElapsedTime(start).TotalMilliseconds;
                 if(i>=0) {input.Add(inputMs);transform.Add(transformMs);layout.Add(layoutMs);render.Add(renderMs);}
             }
-            carousel.CompleteDrag(new Point(400,200));
             runs[name]=new {input=Costs(input),transforms=Costs(transform),steadyLayout=Costs(layout),render=Costs(render)};
         }
         var shadows=VisualElements(hud).OfType<CachedShadow>().ToArray();
@@ -128,7 +126,7 @@ internal static partial class Program
     {
         using var host=new KeyboardHost();host.Window.Show();Native.CoverScreen(host.Window,true);Pump(250);
         var overlay=controller.Overlay;var layers=(Grid)overlay.Content;var hud=(OverlayTabs)layers.Children[2];
-        ((TabControl)hud.FindName("Tabs")).SelectedItem=hud.FindName("ManagementTab");
+        ((TabControl)hud.FindName("Tabs")).SelectedItem=hud.FindName("DashboardTab");
         controller.Commit(data=> {data.Settings.OverlayBlurRadius=18;data.Settings.OverlayShowMilliseconds=0;data.Settings.OverlayHideMilliseconds=0;});
         var captures=new List<BackdropCapture.Timings>();var revealCosts=new List<double>();var workers=new List<int>();
         var priorFactory=overlay.BackdropSourceFactory;

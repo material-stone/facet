@@ -1,0 +1,880 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+<title>Facet world</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}canvas{display:block;width:100vw;height:100vh}</style>
+</head><body><canvas id="world"></canvas><script>
+'use strict';
+/* ---------- 수학 ---------- */
+const m4 = {
+  id: () => [1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1],
+  mul(a, b) { const o = new Array(16); for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) o[c*4+r] = a[r]*b[c*4] + a[4+r]*b[c*4+1] + a[8+r]*b[c*4+2] + a[12+r]*b[c*4+3]; return o; },
+  T: (x, y, z) => [1,0,0,0, 0,1,0,0, 0,0,1,0, x,y,z,1],
+  S: (x, y, z) => [x,0,0,0, 0,y,0,0, 0,0,z,0, 0,0,0,1],
+  Ry(a) { const c = Math.cos(a), s = Math.sin(a); return [c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]; },
+  Rx(a) { const c = Math.cos(a), s = Math.sin(a); return [1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1]; },
+  Rz(a) { const c = Math.cos(a), s = Math.sin(a); return [c,s,0,0, -s,c,0,0, 0,0,1,0, 0,0,0,1]; },
+  persp(f, asp, n, r) { const t = 1 / Math.tan(f / 2); return [t/asp,0,0,0, 0,t,0,0, 0,0,(r+n)/(n-r),-1, 0,0,2*r*n/(n-r),0]; },
+  ortho(s, n, r) { return [1/s,0,0,0, 0,1/s,0,0, 0,0,-2/(r-n),0, 0,0,-(r+n)/(r-n),1]; },
+  look(e, c, u) {
+    const sub = (a, b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]], nrm = (a) => { const l = Math.hypot(a[0],a[1],a[2]) || 1; return [a[0]/l,a[1]/l,a[2]/l]; };
+    const cr = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]], dt = (a, b) => a[0]*b[0]+a[1]*b[1]+a[2]*b[2];
+    const z = nrm(sub(e, c)), x = nrm(cr(u, z)), y = cr(z, x);
+    return [x[0],y[0],z[0],0, x[1],y[1],z[1],0, x[2],y[2],z[2],0, -dt(x,e),-dt(y,e),-dt(z,e),1];
+  },
+  inv(m) {
+    const a = m, o = new Array(16);
+    o[0]=a[5]*a[10]*a[15]-a[5]*a[11]*a[14]-a[9]*a[6]*a[15]+a[9]*a[7]*a[14]+a[13]*a[6]*a[11]-a[13]*a[7]*a[10];
+    o[4]=-a[4]*a[10]*a[15]+a[4]*a[11]*a[14]+a[8]*a[6]*a[15]-a[8]*a[7]*a[14]-a[12]*a[6]*a[11]+a[12]*a[7]*a[10];
+    o[8]=a[4]*a[9]*a[15]-a[4]*a[11]*a[13]-a[8]*a[5]*a[15]+a[8]*a[7]*a[13]+a[12]*a[5]*a[11]-a[12]*a[7]*a[9];
+    o[12]=-a[4]*a[9]*a[14]+a[4]*a[10]*a[13]+a[8]*a[5]*a[14]-a[8]*a[6]*a[13]-a[12]*a[5]*a[10]+a[12]*a[6]*a[9];
+    o[1]=-a[1]*a[10]*a[15]+a[1]*a[11]*a[14]+a[9]*a[2]*a[15]-a[9]*a[3]*a[14]-a[13]*a[2]*a[11]+a[13]*a[3]*a[10];
+    o[5]=a[0]*a[10]*a[15]-a[0]*a[11]*a[14]-a[8]*a[2]*a[15]+a[8]*a[3]*a[14]+a[12]*a[2]*a[11]-a[12]*a[3]*a[10];
+    o[9]=-a[0]*a[9]*a[15]+a[0]*a[11]*a[13]+a[8]*a[1]*a[15]-a[8]*a[3]*a[13]-a[12]*a[1]*a[11]+a[12]*a[3]*a[9];
+    o[13]=a[0]*a[9]*a[14]-a[0]*a[10]*a[13]-a[8]*a[1]*a[14]+a[8]*a[2]*a[13]+a[12]*a[1]*a[10]-a[12]*a[2]*a[9];
+    o[2]=a[1]*a[6]*a[15]-a[1]*a[7]*a[14]-a[5]*a[2]*a[15]+a[5]*a[3]*a[14]+a[13]*a[2]*a[7]-a[13]*a[3]*a[6];
+    o[6]=-a[0]*a[6]*a[15]+a[0]*a[7]*a[14]+a[4]*a[2]*a[15]-a[4]*a[3]*a[14]-a[12]*a[2]*a[7]+a[12]*a[3]*a[6];
+    o[10]=a[0]*a[5]*a[15]-a[0]*a[7]*a[13]-a[4]*a[1]*a[15]+a[4]*a[3]*a[13]+a[12]*a[1]*a[7]-a[12]*a[3]*a[5];
+    o[14]=-a[0]*a[5]*a[14]+a[0]*a[6]*a[13]+a[4]*a[1]*a[14]-a[4]*a[2]*a[13]-a[12]*a[1]*a[6]+a[12]*a[2]*a[5];
+    o[3]=-a[1]*a[6]*a[11]+a[1]*a[7]*a[10]+a[5]*a[2]*a[11]-a[5]*a[3]*a[10]-a[9]*a[2]*a[7]+a[9]*a[3]*a[6];
+    o[7]=a[0]*a[6]*a[11]-a[0]*a[7]*a[10]-a[4]*a[2]*a[11]+a[4]*a[3]*a[10]+a[8]*a[2]*a[7]-a[8]*a[3]*a[6];
+    o[11]=-a[0]*a[5]*a[11]+a[0]*a[7]*a[9]+a[4]*a[1]*a[11]-a[4]*a[3]*a[9]-a[8]*a[1]*a[7]+a[8]*a[3]*a[5];
+    o[15]=a[0]*a[5]*a[10]-a[0]*a[6]*a[9]-a[4]*a[1]*a[10]+a[4]*a[2]*a[9]+a[8]*a[1]*a[6]-a[8]*a[2]*a[5];
+    const d = a[0]*o[0]+a[1]*o[4]+a[2]*o[8]+a[3]*o[12] || 1;
+    return o.map(v => v / d);
+  }
+};
+const tx = (m, p) => [m[0]*p[0]+m[4]*p[1]+m[8]*p[2]+m[12], m[1]*p[0]+m[5]*p[1]+m[9]*p[2]+m[13], m[2]*p[0]+m[6]*p[1]+m[10]*p[2]+m[14]];
+const hx = (s) => [1, 3, 5].map(i => Math.pow(parseInt(s.substr(i, 2), 16) / 255, 2.2));
+const rng = (seed) => () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+const vn2 = (x, y) => {
+  const h = (a, b) => { const s = Math.sin(a * 127.1 + b * 311.7) * 43758.5453; return s - Math.floor(s); };
+  const i = Math.floor(x), j = Math.floor(y); let f = x - i, g = y - j; f = f*f*(3-2*f); g = g*g*(3-2*g);
+  return (h(i,j)*(1-f)+h(i+1,j)*f)*(1-g) + (h(i,j+1)*(1-f)+h(i+1,j+1)*f)*g;
+};
+
+/* ---------- 메시. flag: 0 고체, 1 상시 발광, 2 잎, 3 풀, 4 물, 5 쌓인 눈, 6 야간 발광 ---------- */
+const FACES = [
+  [[1,0,0],[1,1,0],[1,1,1],[1,0,1]], [[0,0,0],[0,0,1],[0,1,1],[0,1,0]],
+  [[0,1,0],[0,1,1],[1,1,1],[1,1,0]], [[0,0,0],[1,0,0],[1,0,1],[0,0,1]],
+  [[0,0,1],[1,0,1],[1,1,1],[0,1,1]], [[0,0,0],[0,1,0],[1,1,0],[1,0,0]]
+];
+const HM = { w: 320, h: 400, x0: -40, z0: 0, res: .25 };
+class M {
+  constructor(useHm) { this.v = new Float32Array(1 << 16); this.n = 0; this.hm = useHm ? new Float32Array(HM.w * HM.h).fill(-100) : null; this.water = useHm ? new Uint8Array(HM.w * HM.h) : null; }
+  face(x, y, z, w, h, d, id, c, flag) {
+    if (this.n + 28 > this.v.length) { const b = new Float32Array(this.v.length * 2); b.set(this.v); this.v = b; }
+    const v = this.v; let n = this.n;
+    for (const k of FACES[id]) {
+      v[n++] = x + k[0]*w; v[n++] = y + k[1]*h; v[n++] = z + k[2]*d;
+      v[n++] = id + flag*10 + (k[1] ? 100 : 0);
+      v[n++] = c[0]; v[n++] = c[1]; v[n++] = c[2];
+    }
+    this.n = n;
+  }
+  mark(x, y, z, w, d, flag) {
+    if (!this.hm) return;
+    const a = Math.max(0, Math.floor((x - HM.x0) / HM.res)), b = Math.min(HM.w - 1, Math.ceil((x + w - HM.x0) / HM.res) - 1);
+    const e = Math.max(0, Math.floor((z - HM.z0) / HM.res)), f = Math.min(HM.h - 1, Math.ceil((z + d - HM.z0) / HM.res) - 1);
+    for (let j = e; j <= f; j++) for (let i = a; i <= b; i++) {
+      const q = j * HM.w + i;
+      if (y > this.hm[q]) { this.hm[q] = y; this.water[q] = flag === 4 ? 1 : 0; }
+    }
+  }
+  box(x, y, z, w, h, d, c, flag = 0) {
+    for (let i = 0; i < 6; i++) if (i !== 3 || flag !== 3) this.face(x, y, z, w, h, d, i, c, flag);
+    if (flag !== 3) this.mark(x, y + h, z, w, d, flag);
+  }
+}
+const QUADS = (n) => { const a = new Uint32Array(n * 6); for (let i = 0; i < n; i++) { const b = i * 4, o = i * 6; a[o]=b; a[o+1]=b+1; a[o+2]=b+2; a[o+3]=b; a[o+4]=b+2; a[o+5]=b+3; } return a; };
+
+/* ---------- 형태 ---------- */
+const P = {
+  grass: hx('#6E9C45'), grass2: hx('#8FAE4C'), dirt: hx('#7A5238'), bark: hx('#5A3D2C'), plank: hx('#9A6C42'), plankD: hx('#6B4930'),
+  wall: hx('#F0E0BF'), wall2: hx('#E7C9A0'), wall3: hx('#CFE0D2'), wall4: hx('#EBB9A0'), timber: hx('#4E3424'), roof: hx('#B8533B'), roof2: hx('#8E3F3C'), roof3: hx('#3F6E78'),
+  stone: hx('#8C8A8A'), stone2: hx('#6F6D70'), cobble: hx('#8D8378'), glass: hx('#FFC56B'), lamp: hx('#FFD58A'), white: hx('#F6F2E8')
+};
+function leaves(m, cx, cy, cz, r, pal, R, v = .25) {
+  for (let x = -r; x <= r; x += v) for (let y = -r * .8; y <= r * .9; y += v) for (let z = -r; z <= r; z += v) {
+    const d = Math.hypot(x, y * 1.15, z) + (R() - .5) * .55;
+    if (d < r && d > r - .6) m.box(cx + x, cy + y, cz + z, v, v, v, pal[Math.floor(R() * pal.length)], 2);
+  }
+}
+function tree(m, x, y, z, s, pal, R, v = .25) {
+  const H = 2.6 * s;
+  for (let h = 0; h < H; h += .25) { const w = .5 * s * (1 - h / H * .45); m.box(x - w/2, y + h, z - w/2, w, .25, w, P.bark); }
+  for (let k = 0; k < 3; k++) { const a = R() * 6.28, by = y + H * (.55 + k * .15); for (let t = 0; t < 1.2 * s; t += .125) m.box(x + Math.cos(a) * t - .06, by + t * .6, z + Math.sin(a) * t - .06, .125, .125, .125, P.bark); }
+  leaves(m, x, y + H + .8 * s, z, 1.9 * s, pal, R, v);
+  leaves(m, x + 1.1 * s, y + H + .1 * s, z + .3 * s, 1.2 * s, pal, R, v);
+  leaves(m, x - 1 * s, y + H + .3 * s, z - .4 * s, 1.25 * s, pal, R, v);
+}
+function pine(m, x, y, z, s, R, v = .25) {
+  m.box(x - .2 * s, y, z - .2 * s, .4 * s, 1.4 * s, .4 * s, P.bark);
+  const pal = [hx('#3F6A4B'), hx('#4E7D57'), hx('#355C44')], H = 6 * s;
+  for (let h = 0; h < H; h += v) {
+    const t = h / H, r = (1 - t) * 1.9 * s * (.82 + .18 * Math.abs(Math.sin(t * 11))) + .1;
+    for (let a = -r; a <= r; a += v) for (let b = -r; b <= r; b += v) {
+      const d = Math.hypot(a, b);
+      if (d < r && d > r - v * 1.6) m.box(x + a, y + 1 * s + h, z + b, v, v, v, pal[Math.floor(R() * 3)], 2);
+    }
+  }
+}
+function tuft(m, x, y, z, R, base) {
+  for (let i = 0; i < 3; i++) { const h = .18 + R() * .28, c = [base[0] * (.85 + R() * .4), base[1] * (.85 + R() * .4), base[2]]; m.box(x + (R() - .5) * .18, y, z + (R() - .5) * .18, .0625, h, .0625, c, 3); }
+}
+function flower(m, x, y, z, c, R) {
+  const h = .25 + R() * .15, s = .0625, g = hx('#4F7E3A');
+  m.box(x, y, z, s, h, s, g, 3);
+  [[1,0],[-1,0],[0,1],[0,-1]].forEach(([a, b]) => m.box(x + a*s, y + h, z + b*s, s, s, s, c, 3));
+  m.box(x, y + h, z, s, s, s, hx('#F4C23C'), 3);
+  m.box(x + s, y + h * .45, z, s, s, s, g, 3);
+}
+/* 방향: 0 앞면 -z, 1 앞면 -x, 2 앞면 +x */
+function orient(m, x, z, o) {
+  return (lx, y, lz, w, h, d, c, f = 0) => {
+    if (o === 0) m.box(x + lx, y, z + lz, w, h, d, c, f);
+    else if (o === 1) m.box(x + lz, y, z + lx, d, h, w, c, f);
+    else m.box(x - lz - d, y, z + lx, d, h, w, c, f);
+  };
+}
+function windowAt(b, lx, y, w, h, lit, lights, world) {
+  b(lx - .125, y - .125, -.125, w + .25, .125, .25, P.plankD);
+  b(lx - .125, y + h, -.125, w + .25, .125, .25, P.plankD);
+  b(lx - .125, y, -.0625, .125, h, .125, P.plankD); b(lx + w, y, -.0625, .125, h, .125, P.plankD);
+  b(lx + .01, y + .01, -.03, w - .02, h - .02, .06, lit ? P.glass : hx('#5E7C8C'), lit ? 6 : 0);
+  b(lx + w / 2 - .03, y + .01, -.08, .0625, h - .02, .05, P.plankD); b(lx + .01, y + h / 2 - .03, -.09, w - .02, .0625, .05, P.plankD);
+}
+function house(m, x, y0, z, W, D, floors, o, wall, roof, R, lights, pots = true) {
+  const b = orient(m, x, z, o), H = floors * 2.5;
+  b(0, y0, 0, W, H, D, wall);
+  b(-.1, y0, -.1, W + .2, .375, D + .2, P.stone);
+  b(-.02, y0, -.12, .29, H - .02, .2, P.timber); b(W - .27, y0, -.12, .29, H - .02, .2, P.timber);
+  for (let f = 1; f <= floors; f++) b(.03, y0 + f * 2.5 - .125, -.08, W - .06, .25, .125, P.timber);
+  const n = Math.max(1, Math.floor(W / 2));
+  for (let f = 0; f < floors; f++) for (let i = 0; i < n; i++) {
+    const wx = (i + .5) * W / n - .4;
+    if (f === 0 && i === Math.floor(n / 2)) {
+      b(wx - .1, y0, -.13, 1, 1.9, .15, P.plankD); b(wx, y0, -.16, .8, 1.8, .15, hx('#7E3E2C')); b(wx + .62, y0 + .85, -.23, .0625, .125, .08, P.lamp);
+    } else {
+      windowAt(b, wx, y0 + f * 2.5 + .85, .8, 1, R() > .25);
+      if (pots) { b(wx - .1, y0 + f * 2.5 + .6, -.3, 1, .15, .25, P.plankD); for (let k = 0; k < 7; k++) b(wx - .05 + k * .14, y0 + f * 2.5 + .75, -.28 + R() * .1, .125, .125 + R() * .12, .125, [hx('#E4627A'), hx('#F4C23C'), hx('#5E9A46'), hx('#F39AB0')][Math.floor(R() * 4)], 2); }
+    }
+  }
+  const steps = Math.ceil(D / 2 / .25) + 2;
+  for (let i = 0; i < steps; i++) {
+    const c = i % 2 ? roof : [roof[0] * .82, roof[1] * .82, roof[2] * .82], yy = y0 + H + i * .2;
+    b(-.1, yy, -.5 + i * .25, W + .2, .2, .25, c);
+    b(-.1, yy, D + .25 - i * .25, W + .2, .2, .25, c);
+    const fillFrom = Math.max(0, -.25 + i * .25), fillTo = Math.min(D, D + .25 - i * .25);
+    if (fillTo > fillFrom) b(0, yy, fillFrom, W, .2, fillTo - fillFrom, wall);
+  }
+  const ch = W * .7;
+  for (let i = 0; i < 12; i++) b(ch + .03, y0 + H + i * .25 + .01, D * .3 + .03, .75, .25, .75, i % 2 ? P.stone : P.stone2);
+  return { chimney: o === 0 ? [x + ch + .37, y0 + H + 3.2, z + D * .3 + .37] : null };
+}
+
+/* ---------- 움직이는 부품 ---------- */
+function humanParts(u, skin, shirt, pants, hair, hat) {
+  const t = new M(); t.box(-.22, 0, -.13, .44, .6, .26, shirt); t.box(-.23, 0, -.14, .46, .08, .28, pants); t.box(-.06, .3, -.15, .12, .04, .02, P.white);
+  const h = new M(); h.box(-.17, 0, -.17, .34, .34, .34, skin); h.box(-.18, .22, -.18, .36, .16, .36, hair); h.box(-.18, .1, .1, .36, .16, .09, hair);
+  h.box(-.1, .14, -.18, .05, .05, .02, hx('#241A14')); h.box(.05, .14, -.18, .05, .05, .02, hx('#241A14')); h.box(-.04, .05, -.18, .08, .025, .02, hx('#A9604F'));
+  if (hat) { h.box(-.27, .34, -.27, .54, .05, .54, hat); h.box(-.17, .39, -.17, .34, .13, .34, hat); }
+  const a = new M(); a.box(-.06, -.55, -.06, .12, .55, .12, shirt); a.box(-.06, -.62, -.06, .12, .1, .12, skin);
+  const l = new M(); l.box(-.09, -.72, -.09, .18, .72, .18, pants); l.box(-.09, -.85, -.13, .18, .13, .26, hx('#3A2A20'));
+  return { t: u(t), h: u(h), a: u(a), l: u(l) };
+}
+function drawHuman(emit, p, x, z, dir, t, walk, run = 0, umbrella = null) {
+  const stride = t * (6.2 + 5 * run), s = walk ? Math.sin(stride) * (.6 + .35 * run) : 0, b = walk ? Math.abs(Math.sin(stride)) * (.05 + .06 * run) : Math.sin(t * 1.6) * .01;
+  const base = m4.mul(m4.mul(m4.T(x, b, z), m4.Ry(dir)), m4.Rx(-.24 * run));
+  const at = (mesh, a, c) => emit(mesh, m4.mul(m4.mul(base, m4.T(a[0], a[1], a[2])), c));
+  at(p.t, [0, .85, 0], m4.id()); at(p.h, [0, 1.45, 0], m4.Ry(run ? 0 : Math.sin(t * .7) * .3));
+  at(p.l, [-.11, .85, 0], m4.Rx(s)); at(p.l, [.11, .85, 0], m4.Rx(-s));
+  const wave = !walk && !umbrella && Math.sin(t * .5) > .6 ? Math.PI * .8 + Math.sin(t * 7) * .25 : 0;
+  at(p.a, [-.28, 1.42, 0], m4.Rx(-s * .8 + wave - run * .5));
+  if (umbrella) { at(p.a, [.28, 1.42, 0], m4.Rx(1.55)); at(umbrella, [.28, 1.42, -.6], m4.id()); }
+  else at(p.a, [.28, 1.42, 0], m4.Rx(s * .8 - run * .5));
+}
+function umbrellaMesh(u, color) {
+  const m = new M();
+  m.box(-.02, -.1, -.02, .04, 1.05, .04, hx('#3A2A20'));
+  for (let i = 0; i < 4; i++) { const r = .68 - i * .17; m.box(-r, .82 + i * .07, -r, r * 2, .07, r * 2, i % 2 ? color : color.map(v => v * .8)); }
+  return u(m);
+}
+
+/* ---------- 장면 1: 시장 거리 ---------- */
+function stall(m, x, z, side, c1, R, lights) {
+  const b = orient(m, x, z, side);
+  [[0,0],[3.75,0],[0,2.1],[3.75,2.1]].forEach(([a, e]) => b(a, 0, e, .125, 2.4 - e * .15, .125, P.plankD));
+  b(-.05, .85, -.05, 3.9, .1, 1.1, P.plank); b(.05, 0, .1, 3.65, .85, .85, P.plankD);
+  for (let i = 0; i < 16; i++) for (let k = 0; k < 7; k++) b(i * .25 - .1, 2.5 - k * .1, -.45 + k * .34, .25, .1, .34, i % 2 ? c1 : P.white);
+  const fruit = [hx('#D9472F'), hx('#F0A030'), hx('#7FB23A'), hx('#E9D14A'), hx('#A0406E')];
+  for (let g = 0; g < 4; g++) { const c = fruit[Math.floor(R() * 5)];
+    b(.2 + g * .9, .95, .05, .7, .12, .8, P.plank);
+    for (let k = 0; k < 26; k++) { const a = R() * .55, e = R() * .65, h = (1 - Math.abs(a - .28) * 2) * (1 - Math.abs(e - .33) * 2) * .25; b(.25 + g * .9 + a, 1.07 + h * R(), .08 + e, .0625 * 1.5, .0625 * 1.5, .0625 * 1.5, [c[0] * (.85 + R() * .3), c[1] * (.85 + R() * .3), c[2]]); }
+  }
+  b(1.93, 1.97, .38, .25, .3, .25, P.lamp, 6);
+  lights.push(side === 1 ? [x + .5, 2, z + 2, 6, 1, .62, .28] : [x - .5, 2, z + 2, 6, 1, .62, .28]);
+}
+function buildStreet(u) {
+  const m = new M(true), R = rng(101), lights = [];
+  m.box(-40, -1, 0, 80, 1, 100, P.cobble);
+  for (let cz = 0; cz < 62; cz += .375) for (let cx = -4.5; cx < 4.5; cx += .375) { if (R() < .3) continue; const k = .8 + R() * .4; m.box(cx + .02, 0, cz + .02, .335, .02 + R() * .03, .335, [P.cobble[0] * k, P.cobble[1] * k, P.cobble[2] * k]); }
+  for (let z = 2; z < 66; z += .25) { m.box(-4.75, 0, z, .25, .06, .25, P.stone2); m.box(4.5, 0, z, .25, .06, .25, P.stone2); }
+  const cols = [hx('#C7473A'), hx('#3E7E8A'), hx('#D9A23A'), hx('#6F4E96'), hx('#4F8A52')];
+  for (let z = 6, i = 0; z < 56; z += 5.5, i++) { stall(m, -7, z, 2, cols[i % 5], R, lights); stall(m, 7, z + 2, 1, cols[(i + 2) % 5], R, lights); }
+  const walls = [P.wall, P.wall2, P.wall3, P.wall4], roofs = [P.roof, P.roof2, P.roof3];
+  for (let z = 2, i = 0; z < 78; i++) { const W = 5 + Math.floor(R() * 3), fl = 2 + Math.floor(R() * 3);
+    house(m, -10, 0, z, W, 7, fl, 2, walls[i % 4], roofs[i % 3], R, lights);
+    const W2 = 5 + Math.floor(R() * 3);
+    house(m, 10, 0, z + 1, W2, 7, 2 + Math.floor(R() * 3), 1, walls[(i + 1) % 4], roofs[(i + 1) % 3], R, lights);
+    z += Math.max(W, W2) + .375;
+  }
+  for (let z = 10; z < 62; z += 8) {
+    for (let t = 0; t <= 1; t += .025) { const x = -9.4 + 18.8 * t, y = 5.6 - Math.sin(t * Math.PI) * 1.2; m.box(x, y, z, .0625, .0625, .0625, P.timber);
+      if (Math.round(t * 40) % 4 === 0 && Math.abs(x) > 1.6) { m.box(x - .1, y - .25, z - .1, .25, .25, .25, Math.round(t * 40) % 8 ? hx('#FFC56B') : hx('#FF8E6B'), 6); }
+    }
+    lights.push([0, 4.4, z, 9, 1, .6, .3]);
+  }
+  for (let y = 0; y < 22; y += .5) m.box(-2.5 + y * .02, y, 74, 5 - y * .04, .5, 5 - y * .04, Math.round(y * 2) % 4 ? P.stone : P.stone2);
+  m.box(-1.2, 16, 73.8, 2.4, 2.4, .25, P.white, 6); m.box(-.06, 17.2, 73.7, .125, 1, .1, P.timber); m.box(-.06, 17.2, 73.7, .7, .125, .1, P.timber);
+  for (let i = 0; i < 14; i++) m.box(-3 + i * .2, 22 + i * .45, 73.5 + i * .2, 6 - i * .4, .45, 6 - i * .4, i % 2 ? P.roof3 : hx('#325C66'));
+  for (let y = 0; y < .6; y += .125) m.box(-1.8, y, 34, 3.6, .125, 3.6, P.stone);
+  m.box(-1.5, .4, 34.3, 3, .2, 3, hx('#5FAFC4'), 4);
+  for (let y = 0; y < 1.6; y += .125) m.box(-.25 + y * .03, .6 + y, 35.55 + y * .03, .5 - y * .06, .125, .5 - y * .06, P.stone2);
+  lights.push([0, 1.4, 34, 5, .5, .8, 1]);
+  return finishScene(u, m, lights, 'street');
+}
+/* ---------- 장면 2: 물가의 집과 동물 ---------- */
+function natureH(x, z) {
+  let h = .8 + .9 * vn2(x / 14 + 3, z / 14) + .35 * vn2(x / 5, z / 5 + 9);
+  const lake = Math.hypot((x + 10) * .62, (z - 34) * .8);
+  h = h * Math.min(1, Math.max(0, (lake - 9) / 7)) - .9 * (1 - Math.min(1, lake / 12));
+  const rise = Math.max(0, Math.min(1, (z - 38) / 34)), ridge = 9 + 24 * vn2(x / 15 + 2, z / 19) + 6 * vn2(x / 6 + 8, z / 7);
+  h += rise * rise * ridge * (1 + .45 * Math.max(0, Math.min(1, (6 - x) / 20))) + Math.max(0, Math.abs(x) - 26) * .34 * (.6 + .8 * vn2(z / 12, x / 12));
+  const home = Math.max(0, 1 - Math.hypot(x - 11, z - 26) / 11); h = h * (1 - home) + 1.25 * home;
+  const near = Math.max(0, Math.min(1, 1 - (Math.hypot(x, z) - 6) / 12)); h = h * (1 - near) + .75 * near;
+  const snapped = Math.round(h * 8) / 8;
+  return snapped === 0 ? -.125 : snapped;
+}
+// The height of the terrain column a point stands on; props must use this, not the smooth field.
+const groundAt = (x, z) => natureH(Math.floor(x * 2) / 2 + .25, Math.floor(z * 2) / 2 + .25);
+function buildNature(u) {
+  const m = new M(true), R = rng(211), lights = [], st = .5;
+  const H = (x, z) => natureH(x + st / 2, z + st / 2);
+  for (let z = 0; z < 100; z += st) for (let x = -40; x < 40; x += st) {
+    if (Math.abs(x) > z * 1.75 + 8) continue;
+    const h = H(x, z), line = vn2(x / 5, z / 5) * 3, top = h <= .25 ? hx('#D9C088') : h > 17 + line ? P.white : h > 9.5 + line ? (vn2(x / 3, z / 3) > .5 ? P.stone : P.stone2) : h > 7 + line ? hx('#5F7F4A') : (vn2(x / 7, z / 7) > .5 ? P.grass : P.grass2);
+    m.face(x, h - 1, z, st, 1, st, 2, top, 0); m.mark(x, h, z, st, st, 0);
+    for (const [id, nx, nz] of [[0, st, 0], [1, -st, 0], [4, 0, st], [5, 0, -st]]) {
+      const n = H(x + nx, z + nz); if (n < h) m.face(x, n, z, st, h - n, st, id, h > 5 ? [top[0] * .86, top[1] * .86, top[2] * .86] : h > n + .6 ? P.stone2 : h > n + .3 ? P.dirt : top, 0);
+    }
+  }
+  m.box(-40, -.3, 0, 80, .3, 100, hx('#3E8FA6'), 4);
+  const tu = [P.grass, P.grass2];
+  for (let i = 0; i < 4500; i++) { const z = 1.5 + Math.pow(R(), 1.5) * 42, x = (R() - .5) * (6 + z * 2.4), h = groundAt(x, z); if (h > .35 && Math.hypot(x - 11, z - 26) > 4.8) tuft(m, x, h, z, R, tu[Math.floor(R() * 2)]); }
+  const fc = [hx('#F4A0B5'), hx('#F7E3A0'), hx('#C78BE0'), hx('#F7F7F2'), hx('#F06E5A')];
+  for (let i = 0; i < 700; i++) { const z = 2 + R() * 32, x = (R() - .5) * (6 + z * 2), h = groundAt(x, z), pat = vn2(x / 4, z / 4); if (h > .35 && pat > .5 && Math.hypot(x - 11, z - 26) > 4.8) flower(m, x, h, z, fc[Math.floor(pat * 9) % 5], R); }
+  const autumn = [[hx('#E08A2E'), hx('#EFA93C'), hx('#C96A22')], [hx('#D45A48'), hx('#E9806A'), hx('#B8453E')], [hx('#7FA244'), hx('#98B64E'), hx('#648A3E')], [hx('#F2B8C6'), hx('#F7CDD8'), hx('#E09AAE')]];
+  for (let i = 0; i < 70; i++) { const z = 8 + R() * 80, x = (R() - .5) * Math.min(76, 18 + z * 1.5), h = groundAt(x, z), far = z > 42;
+    if (h > .4 && h < 11 && Math.hypot(x - 11, z - 26) > 9 && Math.hypot(x - 20, z - 44) > 6 && (far || Math.abs(x - 2) > 16)) { if (far || R() < .3) pine(m, x, h, z, .8 + R() * .7, R, far ? .5 : .25); else tree(m, x, h, z, 1 + R() * .4, autumn[Math.floor(R() * 4)], R); }
+  }
+  /* 바위, 덤불, 수련 */
+  for (let i = 0; i < 30; i++) { const z = 11 + R() * 34, x = (R() - .5) * (8 + z * 2), h = groundAt(x, z); if (h < .4 || Math.hypot(x - 11, z - 26) < 7) continue;
+    if (i % 2) { const r = .35 + R() * .5; for (let a = -r; a <= r; a += .125) for (let b = -r; b <= r; b += .125) { const top = Math.sqrt(Math.max(0, r * r - a * a - b * b)); if (top > .02) m.box(x + a, h, z + b, .125, Math.ceil(top * 8) / 8, .125, R() > .5 ? P.stone : P.stone2); } }
+    else leaves(m, x, h + .35, z, .55 + R() * .3, [hx('#5E8F45'), hx('#6F9F4C'), hx('#4F7E3A')], R, .125);
+  }
+  for (let i = 0; i < 12; i++) { const a = R() * 6.28, r = 3 + R() * 6, x = -10 + Math.cos(a) * r, z = 34 + Math.sin(a) * r * .7; m.box(x, .01, z, .5, .03, .5, hx('#4F8A52'), 0); if (i % 3 === 0) m.box(x + .19, .04, z + .19, .125, .06, .125, hx('#F4A0B5'), 0); }
+  const y0 = 1.25, hx0 = 7, hz0 = 23;
+  const hs = house(m, hx0, y0, hz0, 8, 7, 1, 0, P.wall, P.roof, R, lights, true);
+  lights.push([hx0 + 2, y0 + 1.5, hz0 - 1.2, 7, 1, .6, .25], [hx0 + 6, y0 + 1.5, hz0 - 1.2, 7, 1, .6, .25]);
+  for (let f = 0; f < 3; f++) { m.box(hx0 + 2.6 + f * .15, y0 + f * -.2 - .2, hz0 - 1 - f * .4, 1.6 - f * .3 + .4, .2, .4, P.stone); }
+  for (let t = 0; t < 22; t += .25) { const px = hx0 + 3.2 - t * .35 + Math.sin(t * .4) * .8, pz = hz0 - 1.6 - t * .75; if (pz > 1.5) m.box(Math.round(px * 8) / 8, groundAt(px, pz) + .02, Math.round(pz * 8) / 8, .75, .05, .5, P.stone); }
+  for (let a = 0; a < 26; a += 1.5) { m.box(3.5 + a * .05, y0, 19 + a * .0, .125, .8, .125, P.plank); }
+  for (let i = 0; i < 18; i++) { m.box(5 + i * .75, y0 + .55, 19.52, .75, .08, .06, P.plank); m.box(5 + i * .75 + .01, y0 + .01, 19.5, .1, .8, .1, P.plankD); }
+  /* 부두 */
+  for (let i = 0; i < 26; i++) { m.box(3.5 - i * .25, .3, 27, .25, .08, 1.6, i % 2 ? P.plank : P.plankD); if (i % 6 === 0) { m.box(3.53 - i * .25, -.8, 27.03, .15, 1.15, .15, P.bark); m.box(3.53 - i * .25, -.8, 28.42, .15, 1.15, .15, P.bark); } }
+  m.box(-3, .38, 27.2, .25, 1, .15, P.bark); m.box(-3.1, 1.2, 27.1, .45, .45, .45, P.lamp, 6); lights.push([-3, 1.6, 27.5, 8, 1, .62, .3]);
+  /* 우물 */
+  for (let a = 0; a < 6.28; a += .35) m.box(13 + Math.cos(a) * .8, y0, 18 + Math.sin(a) * .8, .25, .75, .25, P.stone);
+  m.box(12.4, y0 + .5, 17.4, 1.2, .1, 1.2, hx('#3E8FA6'), 4);
+  m.box(11.95, y0, 18, .125, 2, .125, P.plankD); m.box(14.05, y0, 18, .125, 2, .125, P.plankD);
+  for (let i = 0; i < 6; i++) m.box(11.7, y0 + 2 + i * .1, 17.4 + i * .08, 2.6, .1, 1.2 - i * .16, P.roof2);
+  /* 풍차 몸통 */
+  const wx = 20, wz = 44, wy = groundAt(wx, wz);
+  for (let y = 0; y < 9; y += .25) { const w = 3 - y * .15; m.box(wx - w / 2, wy + y, wz - w / 2, w, .25, w, y % 1 ? P.white : P.wall2); }
+  for (let i = 0; i < 6; i++) m.box(wx - 1.1 + i * .18, wy + 9 + i * .2, wz - 1.1 + i * .18, 2.2 - i * .36, .2, 2.2 - i * .36, P.roof3);
+  const blade = new M(); for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2; for (let r = .3; r < 3.4; r += .25) { const px = Math.cos(a), py = Math.sin(a); blade.box(px * r - .1, py * r - .1, 0, .25, .25, .08, P.plankD); if (r > 1) blade.box(px * r - py * .35 - .1, py * r + px * .35 - .1, .02, .25, .25, .04, P.white); } }
+  const s = finishScene(u, m, lights, 'nature'); s.camY = 3.5; s.lookY = .4;
+  const sheepB = new M(); for (let x = -.45; x < .45; x += .15) for (let y = 0; y < .45; y += .15) for (let z = -.3; z < .29; z += .15) sheepB.box(x, y, z, .15, .15, .15, y === 0 && Math.abs(x) > .3 ? hx('#D8CFBF') : P.white);
+  sheepB.box(.42, .18, -.12, .25, .25, .24, hx('#3A302A')); sheepB.box(.66, .3, -.1, .02, .05, .05, P.white); sheepB.box(.66, .3, .05, .02, .05, .05, P.white); sheepB.box(.46, .38, -.17, .1, .05, .05, hx('#3A302A')); sheepB.box(.46, .38, .12, .1, .05, .05, hx('#3A302A'));
+  const leg = new M(); leg.box(-.05, -.32, -.05, .1, .32, .1, hx('#3A302A'));
+  const deer = new M(); deer.box(-.6, 0, -.2, 1.2, .5, .4, hx('#A06A3C')); deer.box(-.6, 0, -.15, .2, .3, .3, hx('#EDE0C8')); deer.box(.5, .4, -.12, .25, .6, .24, hx('#A06A3C')); deer.box(.6, .9, -.13, .45, .25, .26, hx('#A06A3C')); deer.box(1.04, .94, -.06, .06, .08, .12, hx('#241A14')); deer.box(.62, 1.15, -.15, .05, .35, .05, hx('#6A4A32')); deer.box(.62, 1.15, .1, .05, .35, .05, hx('#6A4A32')); deer.box(.62, 1.4, -.25, .05, .05, .15, hx('#6A4A32')); deer.box(.62, 1.4, .15, .05, .05, .15, hx('#6A4A32'));
+  const dleg = new M(); dleg.box(-.06, -.7, -.06, .12, .7, .12, hx('#7E5230'));
+  const duck = new M(); duck.box(-.2, 0, -.11, .4, .18, .22, P.white); duck.box(.12, .15, -.07, .14, .2, .14, hx('#3F7A4C')); duck.box(.26, .24, -.03, .08, .04, .06, hx('#E89A30')); duck.box(-.26, .1, -.05, .1, .1, .1, P.white);
+  const wing = new M(); wing.box(0, 0, -.03, .1, .012, .08, hx('#F49A3C')); wing.box(.02, 0, .01, .05, .014, .03, hx('#2A1E18'));
+  const puff = new M(); puff.box(-.25, -.25, -.25, .5, .5, .5, hx('#EFE8E2'));
+  const firefly = new M(); firefly.box(-.04, -.04, -.04, .08, .08, .08, hx('#FFE27A'), 1);
+  const boat = new M(); for (let i = 0; i < 12; i++) { const w = .55 - Math.abs(i - 5.5) * .07; boat.box(-1.5 + i * .25, 0, -w, .25, .3, w * 2, i % 2 ? P.plank : P.plankD); } boat.box(-.1, .3, -.02, .06, 1.6, .04, P.bark); boat.box(0, .6, -.01, .7, .9, .02, P.white);
+  const u_ = { sheepB: u(sheepB), leg: u(leg), deer: u(deer), dleg: u(dleg), duck: u(duck), wing: u(wing), puff: u(puff), firefly: u(firefly), blade: u(blade), boat: u(boat) };
+  const sheep = [[-7, 15, 0], [3, 14, 1.7], [-3, 11, 3.1], [17, 16, 4.4]], deers = [[24, 34, .5], [-22, 52, 2]];
+  s.actors = (t, env, emit) => {
+    sheep.forEach(([x, z, ph]) => {
+      // Distance along the path eases to a stop now and then; the body always faces where it is heading.
+      const speed = .34 + .33 * Math.cos(t * .22 + ph), s = t * .34 + Math.sin(t * .22 + ph) * 1.5, go = speed > .06;
+      const X = x + Math.sin(s * .28 + ph) * 3.5, Z = z + Math.cos(s * .21 + ph) * 2;
+      const dir = Math.atan2(.21 * 2 * Math.sin(s * .21 + ph), .28 * 3.5 * Math.cos(s * .28 + ph));
+      const base = m4.mul(m4.T(X, groundAt(X, Z) + .32 + (go ? Math.abs(Math.sin(t * 7 + ph)) * .04 : 0), Z), m4.Ry(dir));
+      emit(u_.sheepB, base);
+      [[-.3,-.15],[-.3,.15],[.3,-.15],[.3,.15]].forEach(([a, b], i) => emit(u_.leg, m4.mul(m4.mul(base, m4.T(a, .02, b)), m4.Rz(go ? Math.sin(t * 7 + (i === 0 || i === 3 ? 0 : 3.14)) * .35 : 0))));
+    });
+    deers.forEach(([x, z, ph]) => {
+      const X = x + Math.sin(t * .07 + ph) * 8, Z = z + Math.cos(t * .05 + ph) * 5;
+      const base = m4.mul(m4.T(X, groundAt(X, Z) + .7, Z), m4.Ry(Math.atan2(.25 * Math.sin(t * .05 + ph), .56 * Math.cos(t * .07 + ph))));
+      emit(u_.deer, base);
+      [[-.5,-.15],[-.5,.15],[.45,-.15],[.45,.15]].forEach(([a, b], i) => emit(u_.dleg, m4.mul(m4.mul(base, m4.T(a, 0, b)), m4.Rz(Math.sin(t * 2.4 + (i === 0 || i === 3 ? 0 : 3.14)) * .28))));
+    });
+    for (let i = 0; i < 6; i++) { const a = t * .12 + i * .55, X = -10 + Math.cos(a) * (4 + i * .3), Z = 30 + Math.sin(a) * (3.4 + i * .25); emit(u_.duck, m4.mul(m4.T(X, -.04 + Math.sin(t * 2 + i) * .02, Z), m4.Ry(-a - Math.PI / 2))); }
+    emit(u_.boat, m4.mul(m4.mul(m4.T(-6, -.1 + Math.sin(t * .9) * .05, 24.6), m4.Ry(.3)), m4.Rx(Math.sin(t * .7) * .04)));
+    for (let i = 0; i < 16; i++) { const X = Math.sin(t * .23 + i * 2.1) * (3 + i * .7) + (i % 2 ? 3 : -2), Z = 8 + i * 1.6 + Math.cos(t * .3 + i) * 2, y = groundAt(X, Z) + .8 + Math.sin(t * 1.2 + i) * .35, f = Math.sin(t * 22 + i) * .9, b = m4.mul(m4.T(X, y, Z), m4.Ry(t * .4 + i));
+      emit(u_.wing, m4.mul(b, m4.Rz(f))); emit(u_.wing, m4.mul(m4.mul(b, m4.S(-1, 1, 1)), m4.Rz(f))); }
+    emit(u_.blade, m4.mul(m4.T(wx, wy + 8.2, wz - 1.8), m4.Rz(t * .7)));
+    for (let i = 0; i < 10; i++) { const l = ((t * .11 + i * .1) % 1), c = .5 + l * 2.4, ch = hs.chimney; emit(u_.puff, m4.mul(m4.T(ch[0] + Math.sin(i * 7 + t * .3) * l * 1.2 + l * 2, ch[1] + l * 7, ch[2] + l * .8), m4.S(c, c, c))); }
+    if (env.lamp > .4) for (let i = 0; i < 40; i++) { const X = (Math.sin(i * 12.9) * .5) * 40 + Math.sin(t * .3 + i) * 1.5, Z = 6 + Math.abs(Math.sin(i * 78.2)) * 30 + Math.cos(t * .27 + i) * 1.5, y = groundAt(X, Z) + .7 + Math.sin(t * .6 + i * 3) * .5; emit(u_.firefly, m4.T(X, y, Z)); }
+  };
+  return s;
+}
+/* ---------- 장면 3: 동굴 ---------- */
+function caveW(z) { return 6.5 + 2.5 * Math.sin(z * .13) + 1.5 * Math.sin(z * .37 + 2); }
+function caveCx(z) { return 2.5 * Math.sin(z * .09); }
+function buildCave(u) {
+  const m = new M(true), R = rng(307), lights = [], st = .5;
+  const rock = [hx('#4A464E'), hx('#55505A'), hx('#3E3B45'), hx('#5E5862')];
+  const fl = (x, z) => Math.round((.5 * vn2(x / 4, z / 4) + Math.max(0, Math.abs(x - caveCx(z)) - caveW(z) * .55) * .25) * 8) / 8;
+  const ce = (x, z) => Math.round((7 + 3 * vn2(x / 6 + 5, z / 6) - Math.abs(x - caveCx(z)) * .2 + 2 * Math.sin(z * .1)) * 4) / 4;
+  const ins = (x, z) => Math.abs(x - caveCx(z)) < caveW(z);
+  for (let z = -10; z < 92; z += st) for (let x = -24; x < 24; x += st) {
+    const c = rock[Math.floor(R() * 4)];
+    if (ins(x, z)) {
+      const y = fl(x, z), t = ce(x, z);
+      if (z >= 0) m.mark(x, y, z, st, st, 0);
+      m.face(x, y - 1, z, st, 1, st, 2, c, 0);
+      m.face(x, t, z, st, 1, st, 3, rock[Math.floor(R() * 4)], 0);
+      for (const [id, nx, nz] of [[0, st, 0], [1, -st, 0], [4, 0, st], [5, 0, -st]]) {
+        if (!ins(x + nx, z + nz)) { const ox = nx > 0 ? st : 0; const f = R(); const col = f > .94 ? hx('#E0B04A') : f > .89 ? hx('#3FC7A0') : rock[Math.floor(R() * 4)]; m.face(x, y - 1, z, st, t - y + 2, st, id, col, 0); }
+        else { const ny = fl(x + nx, z + nz), nt = ce(x + nx, z + nz); if (ny < y) m.face(x, ny, z, st, y - ny, st, id, c, 0); if (nt > t) m.face(x, t, z, st, nt - t, st, id, c, 0); }
+      }
+    }
+  }
+  m.face(-24, -3, 92, 48, 30, .1, 4, rock[2], 0); m.face(-24, -3, -10, 48, 30, .1, 5, rock[2], 0);
+  for (let i = 0; i < 170; i++) { const z = 9 + R() * 78, off = (R() - .5) * 2 * caveW(z), x = caveCx(z) + off, up = R() > .5, s = .6 + R() * 1, H = 1 + R() * 2.4;
+    const c = rock[Math.floor(R() * 4)], nudge = i * .0007;
+    for (let h = 0; h < H; h += .25) { const w = s * (1 - h / H) + .125 + nudge; if (up) m.box(x - w / 2, fl(x, z) + h + nudge, z - w / 2, w, .25, w, c); else m.box(x - w / 2, ce(x, z) - h - .25 - nudge, z - w / 2, w, .25, w, c); }
+  }
+  let crystalNudge = 0; const crystal = (x, y0c, z, s, c, lean) => { crystalNudge = (crystalNudge + 1) % 23; const y = y0c + crystalNudge * .0031, jog = crystalNudge * .0041; x += jog; z += jog; for (let h = 0; h < 2.4 * s; h += .125) { const t = h / (2.4 * s), w = (t < .75 ? .55 : .55 * (1 - t) * 4) * s; m.box(x - w / 2 + lean * h, y + h, z - w / 2, w, .125, w, [c[0] * (.7 + t * .9), c[1] * (.7 + t * .9), c[2] * (.7 + t * .9)], 1); } };
+  const CC = [[hx('#4FE3D0'), [.2, .9, .8]], [hx('#B07BFF'), [.6, .35, 1]], [hx('#FFB547'), [1, .62, .2]], [hx('#FF6F91'), [1, .3, .45]]];
+  for (let i = 0; i < 16; i++) { const z = 5 + i * 5 + R() * 2, sd = i % 2 ? 1 : -1, x = caveCx(z) + sd * (caveW(z) - 1.2), [c, lc] = CC[i % 4], y = fl(x, z);
+    for (let k = 0; k < 6; k++) crystal(x + (R() - .5) * 1.8, y, z + (R() - .5) * 2.2, .5 + R() * .9, c, (R() - .5) * .25);
+    lights.push([x - sd, y + 1.4, z, 9, lc[0] * .6 + .25, lc[1] * .6 + .25, lc[2] * .6 + .25]);
+  }
+  for (let z = 2; z < 80; z += .5) { const x = caveCx(z), y = fl(x, z); m.box(x - .85, y + .04, z, 1.7, .06, .25, P.plankD); m.box(x - .7, y + .1, z, .08, .08, .5, P.stone); m.box(x + .62, y + .1, z, .08, .08, .5, P.stone); }
+  for (let z = 8; z < 80; z += 9) { const x = caveCx(z), w = caveW(z) - .4, y = fl(x, z), t = ce(x, z);
+    m.box(x - 3.6, y, z, .375, t - y, .375, P.plank); m.box(x + 3.3, y, z, .375, t - y, .375, P.plank); m.box(x - 3.7, Math.min(t - .6, y + 4.4), z - .06, 7.5, .4, .5, P.plankD);
+    m.box(x - 3.15, y + 2.4, z - .2, .125, .5, .125, P.bark); m.box(x - 3.2, y + 2.9, z - .25, .25, .3, .25, hx('#FFA038'), 6);
+    lights.push([x - 3, y + 3, z - .7, 11, 1, .55, .2]);
+  }
+  /* 광차 */
+  const cz = 18, cx = caveCx(cz), cy = fl(cx, cz);
+  m.box(cx - .87, cy + .4, cz - 1.27, 1.74, .13, 2.54, hx('#5A5358'));
+  for (const [a, b, w, d] of [[-.9, -1.3, 1.8, .1], [-.9, 1.2, 1.8, .1], [-.9, -1.3, .1, 2.6], [.8, -1.3, .1, 2.6]]) m.box(cx + a, cy + .5, cz + b, w, .8, d, P.plankD);
+  for (let i = 0; i < 90; i++) m.box(cx - .75 + R() * 1.4, cy + 1.1 + R() * .35, cz - 1.1 + R() * 2.1, .125, .125, .125, [hx('#E0B04A'), hx('#3FC7A0'), P.stone][Math.floor(R() * 3)], R() > .6 ? 1 : 0);
+  /* 지하 호수 */
+  const pz = 46, px = caveCx(pz) + 2.5; m.box(px - 4, fl(px, pz) + .08, pz - 4, 8, .06, 7, hx('#2FB3C0'), 4); lights.push([px, 1.4, pz, 12, .2, .75, .85]);
+  const s = finishScene(u, m, lights, 'cave');
+  s.camY = 2.4; s.lookY = 2; s.indoor = 1; s.fogCol = [.012, .012, .02];
+  const slime = new M(); [[hx('#6FD66B'),1],[hx('#5AC25F'),.9]].forEach(() => {}); for (let x = -.45; x < .45; x += .125) for (let z = -.45; z < .45; z += .125) { const h = .6 * (1 - Math.hypot(x, z) * 1.1); for (let y = 0; y < h; y += .125) slime.box(x, y, z, .125, .125, .125, [.25, .75, .35], 1); }
+  slime.box(-.2, .3, -.5, .1, .14, .08, hx('#14281A')); slime.box(.1, .3, -.5, .1, .14, .08, hx('#14281A'));
+  const batB = new M(); batB.box(-.1, -.1, -.2, .2, .2, .4, hx('#2C2436')); batB.box(-.07, .08, -.25, .05, .1, .05, hx('#2C2436')); batB.box(.03, .08, -.25, .05, .1, .05, hx('#2C2436')); batB.box(-.06, 0, -.21, .04, .04, .02, hx('#FF4A4A'), 1); batB.box(.02, 0, -.21, .04, .04, .02, hx('#FF4A4A'), 1);
+  const batW = new M(); for (let i = 0; i < 5; i++) batW.box(0 + i * .12, -i * .02, -.15 + i * .02, .12, .02, .3 - i * .04, hx('#3A2F48'));
+  const gB = new M(); for (let y = 0; y < 1.1; y += .25) gB.box(-.5, y, -.32, 1, .25, .64, rock[Math.floor(R() * 4)]); gB.box(-.35, 1.1, -.3, .7, .55, .6, rock[2]); gB.box(-.2, 1.35, -.32, .12, .1, .03, hx('#FFB547'), 1); gB.box(.08, 1.35, -.32, .12, .1, .03, hx('#FFB547'), 1); gB.box(-.1, .4, -.34, .2, .3, .03, hx('#4FE3D0'), 1); gB.box(-.42, 1.65, -.1, .15, .2, .15, hx('#4FE3D0'), 1); gB.box(.25, 1.65, .02, .18, .28, .18, hx('#B07BFF'), 1);
+  const gA = new M(); gA.box(-.17, -1, -.17, .34, 1, .34, rock[1]); gA.box(-.2, -1.25, -.2, .4, .3, .4, rock[3]);
+  const gL = new M(); gL.box(-.2, -.85, -.2, .4, .85, .4, rock[0]);
+  const dust = new M(); dust.box(-.02, -.02, -.02, .04, .04, .04, hx('#FFE9B0'), 1);
+  const a_ = { slime: u(slime), batB: u(batB), batW: u(batW), gB: u(gB), gA: u(gA), gL: u(gL), dust: u(dust) };
+  s.actors = (t, env, emit) => {
+    // Both models look along -z: this turns one toward the next point of its path.
+    const heading = (x0, z0, x1, z1) => Math.atan2(x0 - x1, z0 - z1);
+    const slimeAt = (i, time) => { const p = time * .35 + i * 2, z = 13 + i * 6 + Math.cos(p) * 2.4; return [caveCx(z) + Math.sin(p) * 3.4, z]; };
+    const batAt = (i, time) => { const a = time * (.7 + i * .05) + i, z = 14 + i * 5 + Math.sin(a) * 4; return [caveCx(z) + Math.cos(a) * 4, z, a]; };
+    for (let i = 0; i < 7; i++) { const [x, z] = slimeAt(i, t), ahead = slimeAt(i, t + .05), ph = (t * 1.2 + i * 1.3) % 1, j = 4 * ph * (1 - ph), Y = fl(x, z) + j * 1.1, q = 1 + (j < .15 ? (.15 - j) * 2.2 : -j * .18), sc = .8 + (i % 3) * .35;
+      emit(a_.slime, m4.mul(m4.mul(m4.T(x, Y, z), m4.Ry(heading(x, z, ahead[0], ahead[1]))), m4.S(sc / Math.sqrt(q), sc * q, sc / Math.sqrt(q)))); }
+    for (let i = 0; i < 9; i++) { const [x, z, a] = batAt(i, t), ahead = batAt(i, t + .05), y = 3.6 + Math.sin(a * 2.3) * 1.1, b = m4.mul(m4.T(x, y, z), m4.Ry(heading(x, z, ahead[0], ahead[1]))), f = Math.sin(t * 19 + i) * .75;
+      emit(a_.batB, b); emit(a_.batW, m4.mul(m4.mul(b, m4.T(.08, .05, 0)), m4.Rz(f))); emit(a_.batW, m4.mul(m4.mul(m4.mul(b, m4.T(-.08, .05, 0)), m4.S(-1, 1, 1)), m4.Rz(f))); }
+    for (let i = 0; i < 2; i++) { const z = 30 + i * 17 + Math.sin(t * .12 + i * 3) * 6, x = caveCx(z) + (i ? 2 : -2), dir = Math.cos(t * .12 + i * 3) > 0 ? Math.PI : 0, base = m4.mul(m4.T(x, fl(x, z) + .85 + Math.abs(Math.sin(t * 1.5)) * .07, z), m4.Ry(dir)), sw = Math.sin(t * 1.5) * .5;
+      emit(a_.gB, base); emit(a_.gL, m4.mul(m4.mul(base, m4.T(-.25, 0, 0)), m4.Rx(sw))); emit(a_.gL, m4.mul(m4.mul(base, m4.T(.25, 0, 0)), m4.Rx(-sw))); emit(a_.gA, m4.mul(m4.mul(base, m4.T(-.65, 1.5, 0)), m4.Rx(-sw * .7))); emit(a_.gA, m4.mul(m4.mul(base, m4.T(.65, 1.5, 0)), m4.Rx(sw * .7))); }
+    for (let i = 0; i < 60; i++) { const z = 3 + (i * 1.37) % 34, x = caveCx(z) + Math.sin(i * 9.1 + t * .12) * caveW(z) * .7, y = 1 + ((i * 7.7 + t * .18) % 5); emit(a_.dust, m4.T(x, y, z)); }
+  };
+  return s;
+}
+function finishScene(u, m, lights, name) {
+  const snow = new M(), R = rng(9);
+  if (name !== 'cave') for (let j = 0; j < HM.h; j += 2) for (let i = 0; i < HM.w; i += 2) {
+    const z = HM.z0 + j * HM.res, x = HM.x0 + i * HM.res;
+    if (z > 62 || Math.abs(x) > z * 1.75 + 6) continue;
+    let top = -100, wat = 0; for (let a = 0; a < 2; a++) for (let b = 0; b < 2; b++) { const q = (j + b) * HM.w + i + a; if (m.hm[q] > top) { top = m.hm[q]; wat = m.water[q]; } }
+    if (top < -50 || wat) continue;
+    const n = R(); const c = [n, 0, 0];
+    for (let f = 0; f < 6; f++) if (f !== 3) snow.face(x, top - .03, z, .5, .03, .5, f, c, 5);
+  }
+  return { mesh: u(m), snow: snow.n ? u(snow) : null, hm: m.hm, lights: lights.slice(0, 16), indoor: 0, fogCol: null, actors: null, name };
+}
+
+/* ---------- 셰이더 ---------- */
+const V_HEAD = `#version 300 es
+precision highp float;
+`;
+const SKY_FN = `
+uniform vec3 uSunD,uMoonD,uSunCol,uSkyH,uSkyM,uSkyT,uCloud;
+uniform float uStars,uCover,uT;
+float h21(vec2 p){p=fract(p*vec2(.1031,.1130));p+=dot(p,p.yx+33.33);return fract((p.x+p.y)*p.x);}
+float vnz(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h21(i),h21(i+vec2(1,0)),f.x),mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x),f.y);}
+vec3 sky(vec3 rd){
+  float y=max(rd.y,0.);
+  vec3 c=mix(uSkyH,uSkyM,smoothstep(0.,.2,y));c=mix(c,uSkyT,smoothstep(.16,.6,y));
+  float cl=1.-uCover;
+  float s=max(dot(rd,uSunD),0.);
+  if(uSunD.y>-.1){c+=uSunCol*cl*(.2*pow(s,6.)+.5*pow(s,60.));c+=vec3(9.,7.,4.5)*smoothstep(.9988,.9992,s)*cl;}
+  float mo=max(dot(rd,uMoonD),0.);
+  if(uMoonD.y>-.05&&uStars>.01){
+    float d=smoothstep(.9990,.9993,mo);
+    float cr=.8+.2*vnz(rd.xy*90.);
+    c+=vec3(1.5,1.55,1.75)*cr*d*cl*uStars+vec3(.1,.13,.2)*pow(mo,70.)*cl*uStars;
+  }
+  if(uStars>.01&&rd.y>0.){
+    vec3 g=floor(rd*260.);float h=fract(sin(dot(g,vec3(12.9,78.2,37.7)))*43758.5);
+    if(h>.9965){float tw=.5+.5*sin(uT*(1.5+h*20.)+h*90.);c+=mix(vec3(.75,.85,1.),vec3(1.,.85,.7),fract(h*91.))*(1.2+1.8*tw)*uStars*cl;}
+  }
+  if(rd.y>.01){
+    vec2 p=rd.xz/(rd.y+.13)*vec2(1.,1.9)+vec2(uT*.006,0.);
+    p=floor(p*14.)/14.;
+    float n=.55*vnz(p*1.1)+.3*vnz(p*2.3+4.)+.15*vnz(p*5.);
+    float k=smoothstep(.56-uCover*.5,.70-uCover*.4,n)*smoothstep(.02,.14,rd.y);
+    c=mix(c,uCloud*(.92+.2*vnz(p*3.))+uSunCol*.1*cl*pow(s,3.),k*(.82+.18*uCover));
+  }
+  return c;
+}`;
+const VS_MAIN = V_HEAD + `
+in vec3 aP;in float aF;in vec3 aC;
+uniform mat4 uVP,uM;uniform float uTime,uWind,uSnow;
+out vec3 vW,vL,vN,vC;flat out int vFl;
+const vec3 NT[6]=vec3[6](vec3(1,0,0),vec3(-1,0,0),vec3(0,1,0),vec3(0,-1,0),vec3(0,0,1),vec3(0,0,-1));
+void main(){
+  int f=int(aF+.5);bool top=f>=100;int nid=f%10;int fl=(f/10)%10;
+  vec3 p=aP;vec3 c=aC;
+  if(fl==2)p+=vec3(sin(uTime*1.3+p.x*.7+p.y),sin(uTime*1.7+p.z*.9)*.5,cos(uTime*1.1+p.z*.8))*.035*uWind;
+  if(fl==3&&top)p.xz+=vec2(sin(uTime*2.1+p.x*2.+p.z*1.4),cos(uTime*1.7+p.z*2.))*.075*uWind;
+  if(fl==5){float n=aC.r;if(top){p.y+=(uSnow>n*.9)?min(.1+n*.45,(uSnow-n*.9)*1.6):-.06;}c=vec3(.93,.96,1.);}
+  vec4 w=uM*vec4(p,1.);
+  vW=w.xyz;vL=p;vN=mat3(uM)*NT[nid];vC=c;vFl=fl;
+  gl_Position=uVP*w;
+}`;
+const FS_DEPTH = V_HEAD + `out vec4 o;void main(){o=vec4(1.);}`;
+const FS_MAIN = V_HEAD + `
+in vec3 vW,vL,vN,vC;flat in int vFl;
+uniform vec3 uCam,uLightD,uLightC,uAmbS,uAmbG,uFogC;
+uniform mat4 uLVP;uniform sampler2D uShadow;
+uniform float uFog,uLamp,uIndoor,uWet,uSnow;
+uniform vec4 uLP[16];uniform vec3 uLC[16];
+uniform float uClip,uCut;
+` + SKY_FN + `
+out vec4 o;
+float h3(vec3 c){return fract(sin(dot(c,vec3(12.9898,78.233,37.719)))*43758.5453);}
+float shadow(vec3 w,vec3 n){
+  vec4 q=uLVP*vec4(w+n*.06,1.);vec3 s=q.xyz*.5+.5;
+  if(s.x<0.||s.x>1.||s.y<0.||s.y>1.||s.z>1.)return 1.;
+  float r=0.,tx=1./2048.;
+  for(int i=-1;i<=1;i++)for(int j=-1;j<=1;j++)r+=step(s.z-.0012,texture(uShadow,s.xy+vec2(i,j)*tx*1.3).r);
+  return r/9.;
+}
+void main(){
+  if(uClip>.5&&vL.z>-5.&&abs(vL.x)>max(vL.z,0.)*1.75+9.)discard;
+  if(uClip>.5&&uCut<900.&&(vL.y>uCut||vL.z<1.))discard;
+  vec3 n=normalize(vN);vec3 V=normalize(uCam-vW);float dist=length(uCam-vW);
+  vec3 col;
+  if(vFl==4){
+    vec2 p=vW.xz;
+    float a=uT*.9;
+    vec2 g=vec2(sin(p.x*1.6+a)+.6*sin(p.x*3.7-a*1.3+p.y)+.3*sin(p.y*8.+a*2.),sin(p.y*1.9-a*.8)+.6*sin(p.y*4.3+a*1.2-p.x)+.3*sin(p.x*9.-a*2.2))*.035;
+    if(uWet>.01){vec2 cc=floor(p*2.);float h=fract(sin(dot(cc,vec2(12.9,78.2)))*43758.5);vec2 ff=fract(p*2.)-.5;float l=fract(uT*.9+h),r=length(ff)*2.;g+=normalize(ff+.001)*sin((r-l)*30.)*smoothstep(.15,0.,abs(r-l))*(1.-l)*.3*uWet;}
+    vec3 wn=normalize(vec3(g.x,1.,g.y));
+    vec3 rr=reflect(-V,wn);rr.y=abs(rr.y);
+    float fr=.08+.92*pow(1.-max(dot(V,wn),0.),4.);
+    vec3 deep=(uIndoor>.5?vec3(.05,.55,.65):mix(uAmbG,vec3(.03,.2,.26)*(uAmbS.g*2.5+.2),.8));
+    vec3 ref=uIndoor>.5?vec3(.03,.1,.12):sky(rr);
+    col=mix(deep,ref,fr);
+    col+=uLightC*(1.-uIndoor)*pow(max(dot(rr,uLightD),0.),380.)*shadow(vW,vec3(0,1,0))*5.;
+    for(int i=0;i<16;i++){if(uLP[i].w<=0.)continue;vec3 L=uLP[i].xyz-vW;col+=uLC[i]*uLamp*pow(max(dot(rr,normalize(L)),0.),40.)*1.2/(1.+dot(L,L)*.03);}
+  }else{
+    vec3 a=vC;
+    float v=vFl==3||vFl==2?.25:.125;
+    vec3 cell=floor((vL+n*.001)/v);
+    float jh=h3(cell);
+    float fade=clamp(1.-dist/34.,0.,1.);
+    if(vFl!=1&&vFl!=6&&vFl!=5){
+      a*=.86+.28*jh;
+      vec3 fq=fract(vL/v);vec3 ee=min(fq,1.-fq);
+      vec3 an=abs(n);
+      float e=an.x>.5?min(ee.y,ee.z):an.y>.5?min(ee.x,ee.z):min(ee.x,ee.y);
+      a*=1.-.14*fade*smoothstep(.09,.0,e);
+      if(vFl==2)a*=1.-.0;
+    }
+    bool up=n.y>.5&&vFl!=1&&vFl!=6&&vFl!=5;
+    float pud=0.;
+    if(up&&uWet>.01){a*=1.-.3*uWet;if(vFl==0&&vC.g<vC.r*1.05)pud=smoothstep(.56,.68,vnz(vW.xz*.55))*uWet;}
+    if(up&&uSnow>.001){float cn=vnz(floor(vW.xz*4.)*.7)*.7+h3(floor(vL*8.))*.3;a=mix(a,vec3(.92,.95,1.),smoothstep(0.,.08,uSnow*1.25-cn));}
+    float ndl=max(dot(n,uLightD),0.);
+    float sh=(uIndoor>.5||ndl<=0.)?0.:shadow(vW,n);
+    vec3 li=uLightC*ndl*sh;
+    li+=mix(uAmbG,uAmbS,.5+.5*n.y);
+    vec3 lp=vec3(0.);
+    if(uLamp>.01)for(int i=0;i<16;i++){if(uLP[i].w<=0.)continue;vec3 L=uLP[i].xyz-vW;float d2=dot(L,L),r=uLP[i].w;float at=max(0.,1.-d2/(r*r));at*=at;float fl=.9+.1*sin(uT*9.+float(i)*2.3)*sin(uT*5.7+float(i));lp+=uLC[i]*(.25+.75*max(dot(n,normalize(L)),0.))*at*fl;}
+    li+=lp*uLamp*2.1;
+    col=a*li;
+    if(vFl==2||vFl==3){col+=a*uLightC*(1.-uIndoor)*.22*pow(max(dot(-V,uLightD),0.),3.);}
+    if(vFl==1){float ph=.75+.25*sin(uT*1.4+vL.x*2.+vL.z*1.7);col=a*(1.15+.35*max(n.y,0.)+.3*abs(n.x))*1.35*ph;}
+    if(vFl==6){col=mix(col,a*(2.6+.25*sin(uT*7.+vL.x*5.)),clamp(uLamp,0.,1.));}
+    if(pud>.01&&uIndoor<.5){vec3 rr=reflect(-V,vec3(0,1,0));float fr=.1+.9*pow(1.-max(V.y,0.),4.);col=mix(col,sky(rr)*.9,pud*fr);}
+    else if(n.y>.5)col+=uLightC*pow(max(dot(normalize(uLightD+V),n),0.),60.)*.08*sh*(1.+4.*uWet);
+  }
+  float hfog=exp(-max(vW.y,0.)*.05);
+  float f=1.-exp(-dist*uFog*hfog);
+  o=vec4(mix(col,uFogC,clamp(f,0.,1.)),1.);
+}`;
+const VS_FS = V_HEAD + `out vec2 vU;void main(){vec2 p=vec2((gl_VertexID==1)?3.:-1.,(gl_VertexID==2)?3.:-1.);vU=p*.5+.5;gl_Position=vec4(p,0.,1.);}`;
+const FS_SKY = V_HEAD + `in vec2 vU;uniform mat4 uIVP;uniform vec3 uCam;` + SKY_FN + `out vec4 o;
+void main(){vec4 q=uIVP*vec4(vU*2.-1.,1.,1.);vec3 rd=normalize(q.xyz/q.w-uCam);o=vec4(sky(rd),1.);}`;
+const VS_PART = V_HEAD + `
+in vec4 aS;
+uniform mat4 uVP,uM;uniform vec3 uCamL;uniform float uT,uMode;
+uniform highp sampler2D uHm;
+out float vA;
+float hAt(vec2 xz){vec2 uv=(xz-vec2(-40.,0.))/vec2(80.,100.);return texture(uHm,uv).r;}
+void main(){
+  float box=uMode<.5?28.:34.;float H=uMode<.5?22.:18.;
+  vec3 p;float h;vA=1.;
+  if(uMode<.5){
+    float l=fract(aS.y+uT*1.5);
+    p.xz=mod(aS.xz*box+vec2(.0,.0)-uCamL.xz+l*vec2(.8,.3),box)-box*.5+uCamL.xz;
+    p.y=H*(1.-l);h=hAt(p.xz);
+    p.y+=aS.w*.42;p.xz+=aS.w*vec2(-.02,-.01);
+    vA=.32;
+    if(p.y<h)vA=-1.;
+  }else if(uMode<1.5){
+    float l=fract(aS.y+uT*.09+aS.x*.3);
+    p.xz=mod(aS.xz*box+vec2(sin(uT*.6+aS.x*40.),cos(uT*.5+aS.z*40.))*.9-uCamL.xz,box)-box*.5+uCamL.xz;
+    p.y=H*(1.-l);h=hAt(p.xz);
+    vA=.9;
+    if(p.y<h)vA=-1.;
+  }else{
+    float l=fract(aS.y*3.+uT*2.5);
+    p.xz=mod(aS.xz*box-uCamL.xz,box)-box*.5+uCamL.xz;
+    h=hAt(p.xz);p.y=h+.03+l*.1;
+    vA=(1.-l)*.5;
+    if(h<-50.)vA=-1.;
+  }
+  vec4 w=uVP*uM*vec4(p,1.);
+  gl_Position=vA<0.?vec4(2.,2.,2.,1.):w;
+  gl_PointSize=uMode<.5?1.:(uMode<1.5?clamp(60./w.w,1.5,9.):clamp(1.+(1.+l_size())*7./w.w,1.,3.));
+}`.replace('l_size()', 'fract(aS.y*3.+uT*2.5)');
+const FS_PART = V_HEAD + `in float vA;uniform vec3 uTint;out vec4 o;void main(){if(vA<0.)discard;o=vec4(uTint,vA);}`;
+const FS_BRIGHT = V_HEAD + `in vec2 vU;uniform sampler2D uTex;out vec4 o;void main(){vec3 c=texture(uTex,vU).rgb;float l=max(c.r,max(c.g,c.b));o=vec4(min(c*smoothstep(.95,1.7,l),vec3(8.)),1.);}`;
+const FS_BLUR = V_HEAD + `in vec2 vU;uniform sampler2D uTex;uniform vec2 uD;out vec4 o;void main(){vec3 c=texture(uTex,vU).rgb*.227;c+=(texture(uTex,vU+uD*1.38).rgb+texture(uTex,vU-uD*1.38).rgb)*.316;c+=(texture(uTex,vU+uD*3.23).rgb+texture(uTex,vU-uD*3.23).rgb)*.07;o=vec4(c,1.);}`;
+const FS_POST = V_HEAD + `in vec2 vU;uniform sampler2D uTex,uBloom,uDepth;uniform vec2 uRes,uSunUV;uniform float uRays,uFade,uT2;out vec4 o;
+float lin(float d){float z=d*2.-1.;return 2.*.3*300./(300.+.3-z*(300.-.3));}
+vec3 aces(vec3 x){return clamp((x*(2.51*x+.03))/(x*(2.43*x+.59)+.14),0.,1.);}
+float rnd(vec2 p){return fract(sin(dot(p,vec2(12.9,78.2)))*43758.5);}
+void main(){
+  vec3 c=texture(uTex,vU).rgb;
+  float d=lin(texture(uDepth,vU).r);
+  float ao=0.;
+  if(d<150.){
+    float r=rnd(gl_FragCoord.xy)*6.28,rad=clamp(26./d,1.5,26.);
+    for(int i=0;i<12;i++){float a=r+float(i)*2.4,k=(float(i)+.5)/12.;vec2 o2=vec2(cos(a),sin(a))*rad*sqrt(k)/uRes;float s=lin(texture(uDepth,vU+o2).r);float df=d-s;ao+=smoothstep(.02,.1,df)*smoothstep(1.4,.3,df);}
+    ao/=12.;
+  }
+  c*=1.-ao*.62;
+  vec3 b=texture(uBloom,vU).rgb;
+  c+=b*.75;
+  if(uRays>.001){
+    vec2 dir=(uSunUV-vU)/24.;vec2 u=vU+dir*rnd(gl_FragCoord.xy+1.);vec3 r=vec3(0.);float w=1.;
+    for(int i=0;i<24;i++){r+=texture(uBloom,u).rgb*w;w*=.95;u+=dir;}
+    c+=r/24.*uRays*.45;
+  }
+  c=aces(c*.95);
+  float l=dot(c,vec3(.3,.59,.11));c=mix(vec3(l),c,1.14);
+  vec2 q=vU-.5;c*=1.-dot(q,q)*.55;
+  c=pow(max(c,0.),vec3(1./2.2));
+  c+=(rnd(gl_FragCoord.xy+uT2)-.5)/160.;
+  o=vec4(c*uFade,1.);
+}`;
+
+/* ---------- 시간과 날씨 ---------- */
+const WEATHER = {
+  partly: { cover: .3, sun: 1, gray: 0, dark: 1, fog: .0075, rain: 0, snow: 0, wind: 1 },
+  clear: { cover: .06, sun: 1, gray: 0, dark: 1, fog: .006, rain: 0, snow: 0, wind: .8 },
+  cloud: { cover: .85, sun: .22, gray: .62, dark: .9, fog: .011, rain: 0, snow: 0, wind: 1.4 },
+  rain: { cover: 1, sun: .05, gray: .8, dark: .7, fog: .018, rain: 1, snow: 0, wind: 2.2 },
+  snow: { cover: .92, sun: .25, gray: .6, dark: 1, fog: .011, rain: 0, snow: 1, wind: .9 },
+  fog: { cover: .7, sun: .2, gray: .7, dark: .95, fog: .055, rain: 0, snow: 0, wind: .5 }
+};
+const KEYS = (() => {
+  const N = [[.07,.10,.21],[.035,.055,.15],[.012,.02,.075],[.20,.28,.48],[.09,.12,.23],[.035,.04,.07],1];
+  const D = [[1,.72,.58],[.75,.60,.72],[.35,.42,.68],[1.6,1.05,.7],[.38,.36,.50],[.25,.17,.13],.5];
+  const A = [[.78,.88,.95],[.50,.72,.93],[.22,.45,.82],[2.3,2.05,1.7],[.58,.66,.8],[.33,.27,.2],0];
+  const G = [[1,.66,.40],[.93,.46,.50],[.36,.33,.60],[2.1,1.2,.6],[.42,.36,.55],[.3,.19,.12],.65];
+  const U = [[.75,.42,.42],[.38,.27,.48],[.12,.13,.33],[.55,.35,.45],[.22,.2,.36],[.1,.08,.1],1];
+  return [[0,N],[5,N],[6.5,D],[9,A],[16,A],[17.3,G],[18.5,U],[19.8,N],[24,N]];
+})();
+function envAt(hour, w, yaw) {
+  const h = ((hour % 24) + 24) % 24;
+  let i = 0; while (i < KEYS.length - 2 && h >= KEYS[i + 1][0]) i++;
+  const [h0, a] = KEYS[i], [h1, b] = KEYS[i + 1], f = (h - h0) / (h1 - h0);
+  const mix3 = (x, y, m) => x.map((v, n) => v + (y[n] - v) * m);
+  const pal = a.map((v, n) => n === 6 ? v + (b[6] - v) * f : mix3(v, b[n], f));
+  const arc = (t) => { const c = Math.cos(t), s = Math.sin(t); const l = [-c * .85, s * .75, .62], L = Math.hypot(l[0], l[1], l[2]); const x = l[0]/L, y = l[1]/L, z = l[2]/L; return [x * Math.cos(yaw) + z * Math.sin(yaw), y, -x * Math.sin(yaw) + z * Math.cos(yaw)]; };
+  const sunD = arc((h - 6) / 13 * Math.PI), H2 = h < 6 ? h + 24 : h, moonD = arc((H2 - 19) / 11 * Math.PI);
+  const useMoon = !(h >= 6 && h < 19);
+  const ld = (useMoon ? moonD : sunD).slice(); ld[1] = Math.max(ld[1], .16); const LL = Math.hypot(ld[0], ld[1], ld[2]);
+  const grade = (c) => { const l = (c[0]+c[1]+c[2]) / 3; return mix3(c, [l, l, l * 1.04], w.gray).map(v => v * w.dark); };
+  const lost = 1 - w.sun, sum = pal[2][0] + pal[2][1] + pal[2][2], skyH = grade(pal[0]);
+  const sunEdge = useMoon ? 1 : Math.min(1, Math.max(.0, (Math.sin((h - 6) / 13 * Math.PI)) * 6));
+  return {
+    sunD, moonD, lightD: ld.map(v => v / LL), sunCol: pal[3].map(v => v * w.sun * sunEdge),
+    ambS: grade(pal[4]).map((v, n) => v + pal[3][n] * lost * .2 * w.dark), ambG: grade(pal[5]),
+    skyH, skyM: grade(pal[1]), skyT: grade(pal[2]), cloud: mix3(skyH, [1, 1, 1], .25 * Math.min(1, sum * 1.5)),
+    lamp: Math.max(pal[6], w.gray > .5 ? .4 : 0), stars: Math.max(0, Math.min(1, (.5 - sum) / .32)), useMoon
+  };
+}
+
+/* ---------- 엔진 ---------- */
+class Engine {
+  constructor(el, onStatus) {
+    this.el = el; this.onStatus = onStatus; this.mx = 0; this.my = 0; this.rainK = 0; this.strollDistance = 0; this.runDistance = 0; this.cur = 0; this.flash = 1; this.weather = 'partly';
+    this.snow = 0; this.wet = 0; this.t = 0; this.hour = 12;
+    const gl = this.gl = el.getContext('webgl2', { antialias: false, alpha: false, powerPreference: 'high-performance' });
+    if (!gl) throw new Error('이 브라우저에서 WebGL2를 쓸 수 없습니다.');
+    this.hdr = !!gl.getExtension('EXT_color_buffer_float');
+    gl.getExtension('OES_texture_float_linear');
+    const dpr = window.devicePixelRatio || 1, scale = Math.min(dpr, 1920 / window.innerWidth);
+    el.width = this.W = Math.round(window.innerWidth * scale); el.height = this.H = Math.round(window.innerHeight * scale);
+    this.pMain = this.prog(VS_MAIN, FS_MAIN); this.pDepth = this.prog(VS_MAIN, FS_DEPTH); this.pSky = this.prog(VS_FS, FS_SKY);
+    this.pPart = this.prog(VS_PART, FS_PART); this.pBright = this.prog(VS_FS, FS_BRIGHT); this.pBlur = this.prog(VS_FS, FS_BLUR); this.pPost = this.prog(VS_FS, FS_POST);
+    this.emptyVao = gl.createVertexArray();
+    this.upload = this.upload.bind(this);
+    const fmt = this.hdr ? [gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT] : [gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE];
+    const tex = (w, h, f, filter) => { const t = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, t); gl.texImage2D(gl.TEXTURE_2D, 0, f[0], w, h, 0, f[1], f[2], null); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE); return t; };
+    const dep = [gl.DEPTH_COMPONENT24, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT];
+    const fbo = (c, d) => { const f = gl.createFramebuffer(); gl.bindFramebuffer(gl.FRAMEBUFFER, f); if (c) gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, c, 0); else { gl.drawBuffers([gl.NONE]); gl.readBuffer(gl.NONE); } if (d) gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, d, 0); return f; };
+    this.tColor = tex(this.W, this.H, fmt, gl.LINEAR); this.tDepth = tex(this.W, this.H, dep, gl.NEAREST); this.fMain = fbo(this.tColor, this.tDepth);
+    this.tShadow = tex(2048, 2048, dep, gl.NEAREST); this.fShadow = fbo(null, this.tShadow);
+    this.bw = this.W >> 2; this.bh = this.H >> 2;
+    this.tB1 = tex(this.bw, this.bh, fmt, gl.LINEAR); this.fB1 = fbo(this.tB1); this.tB2 = tex(this.bw, this.bh, fmt, gl.LINEAR); this.fB2 = fbo(this.tB2);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    const n = 9000, d = new Float32Array(n * 2 * 4), R = rng(77);
+    for (let i = 0; i < n; i++) { const a = R(), b = R(), c = R(); d.set([a, b, c, 0, a, b, c, 1], i * 8); }
+    this.partVao = gl.createVertexArray(); gl.bindVertexArray(this.partVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, d, gl.STATIC_DRAW);
+    const loc = gl.getAttribLocation(this.pPart.p, 'aS'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 4, gl.FLOAT, false, 16, 0);
+    gl.bindVertexArray(null);
+    this.umbrellas = ['#C7473A', '#3E7E8A', '#E4B23C'].map(c => umbrellaMesh(this.upload, hx(c)));
+    this.humans = [
+      humanParts(this.upload, hx('#F1C7A1'), hx('#C7473A'), hx('#3C3F58'), hx('#3A2418')),
+      humanParts(this.upload, hx('#C98E62'), hx('#3E7E8A'), hx('#5A4632'), hx('#1F1612')),
+      humanParts(this.upload, hx('#F1C7A1'), hx('#E4B23C'), hx('#5B4A78'), hx('#B5672E'), hx('#8A5A34')),
+      humanParts(this.upload, hx('#8E5E40'), hx('#6F4E96'), hx('#2F4F4F'), hx('#141010')),
+      humanParts(this.upload, hx('#EFC3A0'), hx('#F4F0E4'), hx('#3E7E5A'), hx('#6B6B6B'), hx('#3E7E5A'))
+    ];
+  }
+  prog(vs, fs) {
+    const gl = this.gl, cs = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error('셰이더 오류: ' + gl.getShaderInfoLog(o)); return o; };
+    const p = gl.createProgram(); gl.attachShader(p, cs(gl.VERTEX_SHADER, vs)); gl.attachShader(p, cs(gl.FRAGMENT_SHADER, fs));
+    gl.bindAttribLocation(p, 0, 'aP'); gl.bindAttribLocation(p, 1, 'aF'); gl.bindAttribLocation(p, 2, 'aC');
+    gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error('링크 오류: ' + gl.getProgramInfoLog(p));
+    const cache = {}; return { p, u: (n) => (n in cache ? cache[n] : (cache[n] = gl.getUniformLocation(p, n))) };
+  }
+  upload(m) {
+    const gl = this.gl, quads = m.n / 28, vao = gl.createVertexArray(); gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ARRAY_BUFFER, m.v.subarray(0, m.n), gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer()); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, QUADS(quads), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 28, 0);
+    gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 1, gl.FLOAT, false, 28, 12);
+    gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 3, gl.FLOAT, false, 28, 16);
+    gl.bindVertexArray(null); m.v = null;
+    return { vao, n: quads * 6 };
+  }
+  addScene(s) {
+    const gl = this.gl; s.tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, s.tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, HM.w, HM.h, 0, gl.RED, gl.FLOAT, s.hm);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    s.hm = null; s.angle = 0; return s;
+  }
+  show(index) { this.cur = index; this.flash = 1; }
+  skyUniforms(p, e, w) {
+    const gl = this.gl;
+    gl.uniform3fv(p.u('uSunD'), e.sunD); gl.uniform3fv(p.u('uMoonD'), e.moonD); gl.uniform3fv(p.u('uSunCol'), e.sunCol);
+    gl.uniform3fv(p.u('uSkyH'), e.skyH); gl.uniform3fv(p.u('uSkyM'), e.skyM); gl.uniform3fv(p.u('uSkyT'), e.skyT); gl.uniform3fv(p.u('uCloud'), e.cloud);
+    gl.uniform1f(p.u('uStars'), e.stars); gl.uniform1f(p.u('uCover'), w.cover); gl.uniform1f(p.u('uT'), this.t);
+  }
+  drawScene(s, p, vp, passShadow) {
+    const gl = this.gl, model = m4.Ry(s.angle);
+    const emit = (mesh, mat) => { gl.uniformMatrix4fv(p.u('uM'), false, m4.mul(model, mat)); gl.bindVertexArray(mesh.vao); gl.drawElements(gl.TRIANGLES, mesh.n, gl.UNSIGNED_INT, 0); };
+    gl.uniform1f(p.u('uClip'), 1);
+    emit(s.mesh, m4.id());
+    if (s.snow && this.snow > .002) emit(s.snow, m4.id());
+    gl.uniform1f(p.u('uClip'), 0);
+    if (s.actors) s.actors(this.t, this.env, emit);
+    if (s.name === 'street') this.streetActors(emit);
+  }
+  streetActors(emit) {
+    const t = this.t, hs = this.humans, k = this.rainK, ease = k * k * (3 - 2 * k);
+    for (let i = 0; i < 26; i++) {
+      const dir = i % 2 ? 1 : -1, sp = .9 + (i * 37 % 10) * .05, covered = i % 3 === 0, L = 50;
+      const walked = covered ? this.strollDistance : this.runDistance;
+      const z = 7 + (((i * 7.3 + walked * sp * dir) % L) + L) % L;
+      const lane = (dir > 0 ? 1.4 : -1.4) + Math.sin(i * 4.1) * 1.8 + Math.sin(t * .3 + i) * .2;
+      // Without an umbrella people run close to the stalls.
+      const x = covered ? lane : lane + ((dir > 0 ? 4.2 : -4.2) - lane) * ease;
+      drawHuman(emit, hs[i % 5], x, z, dir > 0 ? Math.PI : 0, t + i, true, covered ? 0 : ease, covered && k > .4 ? this.umbrellas[i % 3] : null);
+    }
+    for (let z = 6, i = 0; z < 56; z += 5.5, i++) { drawHuman(emit, hs[(i + 2) % 5], -8.4, z + 1.9, -Math.PI / 2, t + i * 2, false); drawHuman(emit, hs[(i + 4) % 5], 8.4, z + 3.9, Math.PI / 2, t + i * 3, false); }
+    // Browsers step under the awning when it rains.
+    for (let i = 0; i < 6; i++) { const z = 15 + i * 7, side = i % 2 ? 1 : -1; drawHuman(emit, hs[i % 5], side * (3.6 + 3.08 * ease), z, side > 0 ? Math.PI / 2 : -Math.PI / 2, t + i, k > .02 && k < .98); }
+  }
+  frame(dt) {
+    const gl = this.gl, B = this.scene; if (!B) return;
+    this.t += dt;
+    const d = new Date();
+    this.hour = d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+    const w = WEATHER[this.weather] || WEATHER.partly;
+    this.snow = w.snow ? Math.min(1, this.snow + dt / 40) : Math.max(0, this.snow - dt / 50);
+    this.wet = w.rain ? Math.min(1, this.wet + dt / 12) : Math.max(0, this.wet - dt / 40);
+    this.rainK = w.rain ? Math.min(1, this.rainK + dt / 4) : Math.max(0, this.rainK - dt / 6);
+    this.strollDistance += dt; this.runDistance += dt * (1 + 1.6 * this.rainK);
+    this.flash = Math.max(0, this.flash - dt / .35);
+    const yaw = 0, camY = B.camY || 2.4, lookUp = B.lookY ?? 2;
+    const cam = [Math.sin(this.t * .23) * .25 + this.mx * .6, camY + Math.sin(this.t * .37) * .06, Math.sin(this.t * .13) * .35];
+    const look = [this.mx * 3.2, camY + lookUp + this.my * 1.6, 22];
+    const view = m4.look(cam, look, [0, 1, 0]), proj = m4.persp(1.05, this.W / this.H, .3, 300), vp = m4.mul(proj, view);
+    const e = this.env = envAt(this.hour, w, yaw);
+    const drawn = [B];
+    const fwd = [0, 0, 24];
+    const eye = [fwd[0] + e.lightD[0] * 120, 8 + e.lightD[1] * 120, fwd[2] + e.lightD[2] * 120];
+    const lvp = m4.mul(m4.ortho(50, 1, 300), m4.look(eye, [fwd[0], 8, fwd[2]], [0, 1, 0]));
+    gl.disable(gl.CULL_FACE); gl.disable(gl.BLEND);
+    /* 그림자 */
+    const sh = this.pDepth; gl.useProgram(sh.p);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fShadow); gl.viewport(0, 0, 2048, 2048); gl.enable(gl.DEPTH_TEST); gl.depthMask(true); this.fr = (this.fr || 0) + 1; const redo = this.fr % 2 === 0 || this.fr < 3; if (redo) gl.clear(gl.DEPTH_BUFFER_BIT);
+    gl.uniformMatrix4fv(sh.u('uVP'), false, lvp); gl.uniform1f(sh.u('uTime'), this.t); gl.uniform1f(sh.u('uWind'), w.wind); gl.uniform1f(sh.u('uSnow'), this.snow);
+    if (redo) drawn.forEach(s => { if (s.name !== 'cave') this.drawScene(s, sh, lvp, true); });
+    /* 하늘 */
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fMain); gl.viewport(0, 0, this.W, this.H); gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
+    gl.disable(gl.DEPTH_TEST); gl.depthMask(false);
+    const ps = this.pSky; gl.useProgram(ps.p); gl.bindVertexArray(this.emptyVao);
+    gl.uniformMatrix4fv(ps.u('uIVP'), false, m4.inv(vp)); gl.uniform3fv(ps.u('uCam'), cam); this.skyUniforms(ps, e, w);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    /* 장면 */
+    gl.enable(gl.DEPTH_TEST); gl.depthMask(true);
+    const pm = this.pMain; gl.useProgram(pm.p); this.skyUniforms(pm, e, w);
+    gl.uniformMatrix4fv(pm.u('uVP'), false, vp); gl.uniformMatrix4fv(pm.u('uLVP'), false, lvp); gl.uniform3fv(pm.u('uCam'), cam);
+    gl.uniform1f(pm.u('uTime'), this.t); gl.uniform1f(pm.u('uWind'), w.wind); gl.uniform1f(pm.u('uSnow'), this.snow); gl.uniform1f(pm.u('uWet'), this.wet);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.tShadow); gl.uniform1i(pm.u('uShadow'), 0);
+    const horizon = e.skyH.map((v, n) => v * .95);
+    drawn.forEach(s => {
+      const inA = s.indoor;
+      gl.uniform3fv(pm.u('uLightD'), e.lightD); gl.uniform3fv(pm.u('uLightC'), inA ? [0, 0, 0] : e.sunCol);
+      gl.uniform3fv(pm.u('uAmbS'), inA ? [.05, .05, .08] : e.ambS); gl.uniform3fv(pm.u('uAmbG'), inA ? [.035, .03, .04] : e.ambG);
+      gl.uniform3fv(pm.u('uFogC'), inA ? s.fogCol : horizon);
+      gl.uniform1f(pm.u('uFog'), inA ? .022 : w.fog); gl.uniform1f(pm.u('uCut'), 1000); gl.uniform1f(pm.u('uLamp'), inA ? 1 : e.lamp); gl.uniform1f(pm.u('uIndoor'), inA);
+      const lp = new Float32Array(64), lc = new Float32Array(48), mdl = m4.Ry(s.angle);
+      s.lights.forEach((l, i) => { const q = tx(mdl, [l[0], l[1], l[2]]); lp.set([q[0], q[1], q[2], l[3]], i * 4); lc.set([l[4], l[5], l[6]], i * 3); });
+      gl.uniform4fv(pm.u('uLP'), lp); gl.uniform3fv(pm.u('uLC'), lc);
+      this.drawScene(s, pm, vp, false);
+    });
+    /* 비와 눈 */
+    const cs = drawn[drawn.length - 1];
+    if ((w.rain || w.snow) && !cs.indoor) {
+      const pp = this.pPart; gl.useProgram(pp.p); gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+      const mdl = m4.Ry(cs.angle), inv = m4.Ry(-cs.angle), cl = tx(inv, cam);
+      gl.uniformMatrix4fv(pp.u('uVP'), false, vp); gl.uniformMatrix4fv(pp.u('uM'), false, mdl); gl.uniform3fv(pp.u('uCamL'), cl); gl.uniform1f(pp.u('uT'), this.t);
+      gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, cs.tex); gl.uniform1i(pp.u('uHm'), 0);
+      gl.bindVertexArray(this.partVao);
+      const lum = Math.max(.25, e.skyH[1] * 1.1);
+      if (w.rain) {
+        gl.uniform3f(pp.u('uTint'), .72 * lum + .15, .8 * lum + .15, .95 * lum + .2);
+        gl.uniform1f(pp.u('uMode'), 0); gl.drawArrays(gl.LINES, 0, 14000);
+        gl.uniform1f(pp.u('uMode'), 2); gl.drawArrays(gl.POINTS, 0, 6000);
+      } else {
+        gl.uniform3f(pp.u('uTint'), .9 * lum + .25, .93 * lum + .25, lum + .3);
+        gl.uniform1f(pp.u('uMode'), 1); gl.drawArrays(gl.POINTS, 0, 9000);
+      }
+      gl.disable(gl.BLEND); gl.depthMask(true);
+    }
+    /* 빛 번짐 */
+    gl.disable(gl.DEPTH_TEST); gl.bindVertexArray(this.emptyVao); gl.viewport(0, 0, this.bw, this.bh); gl.activeTexture(gl.TEXTURE0);
+    const pb = this.pBright, pl = this.pBlur;
+    gl.useProgram(pb.p); gl.bindFramebuffer(gl.FRAMEBUFFER, this.fB1); gl.bindTexture(gl.TEXTURE_2D, this.tColor); gl.uniform1i(pb.u('uTex'), 0); gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.useProgram(pl.p); gl.uniform1i(pl.u('uTex'), 0);
+    for (let i = 0; i < 2; i++) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.fB2); gl.bindTexture(gl.TEXTURE_2D, this.tB1); gl.uniform2f(pl.u('uD'), (1 + i) / this.bw, 0); gl.drawArrays(gl.TRIANGLES, 0, 3);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.fB1); gl.bindTexture(gl.TEXTURE_2D, this.tB2); gl.uniform2f(pl.u('uD'), 0, (1 + i) / this.bh); gl.drawArrays(gl.TRIANGLES, 0, 3);
+    }
+    /* 합성 */
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, this.W, this.H);
+    const po = this.pPost; gl.useProgram(po.p);
+    gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, this.tColor); gl.uniform1i(po.u('uTex'), 0);
+    gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.tB1); gl.uniform1i(po.u('uBloom'), 1);
+    gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, this.tDepth); gl.uniform1i(po.u('uDepth'), 2);
+    const sp = [cam[0] + e.sunD[0] * 100, cam[1] + e.sunD[1] * 100, cam[2] + e.sunD[2] * 100];
+    const c0 = vp[0]*sp[0]+vp[4]*sp[1]+vp[8]*sp[2]+vp[12], c1 = vp[1]*sp[0]+vp[5]*sp[1]+vp[9]*sp[2]+vp[13], c3 = vp[3]*sp[0]+vp[7]*sp[1]+vp[11]*sp[2]+vp[15];
+    let rays = 0, su = [.5, .5];
+    if (c3 > 0 && !e.useMoon && !B.indoor) { su = [c0 / c3 * .5 + .5, c1 / c3 * .5 + .5]; rays = (1 - w.cover) * Math.max(0, 1 - Math.hypot(su[0] - .5, su[1] - .5) * 1.1) * .9; }
+    gl.uniform2f(po.u('uRes'), this.W, this.H); gl.uniform2f(po.u('uSunUV'), su[0], su[1]); gl.uniform1f(po.u('uRays'), rays); gl.uniform1f(po.u('uFade'), 1 - this.flash); gl.uniform1f(po.u('uT2'), this.t % 10);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    gl.activeTexture(gl.TEXTURE0); gl.bindVertexArray(null);
+  }
+}
+
+/* ---------- 앱과의 연결 ---------- */
+const BUILDERS = { market: buildStreet, lakeside: buildNature, cave: buildCave };
+const FRAME_MS = 1000 / 30;
+const world = { engine: null, ids: [], built: {}, index: 0, visible: false, last: 0, frameAt: 0 };
+function report(type, message) { if (window.chrome && chrome.webview) chrome.webview.postMessage({ type, message: String(message || '') }); }
+function sceneAt(index) {
+  const id = world.ids[index];
+  if (!world.built[id]) world.built[id] = world.engine.addScene(BUILDERS[id](world.engine.upload));
+  return world.built[id];
+}
+function showScene(index) { world.index = index; world.engine.scene = sceneAt(index); world.engine.show(index); }
+function tick(now) {
+  requestAnimationFrame(tick);
+  if (!world.visible || now - world.frameAt < FRAME_MS - 2) return;
+  const dt = Math.min(.1, (now - (world.frameAt || now)) / 1000); world.frameAt = now;
+  try { world.engine.frame(dt); } catch (err) { world.visible = false; report('failed', err && err.message); }
+}
+function receive(m) {
+  try {
+    if (m.scenes) {
+      world.ids = m.scenes; world.engine = new Engine(document.getElementById('world'));
+      showScene(0); requestAnimationFrame(tick); report('ready');
+    }
+    if (!world.engine) return;
+    if (m.weather) world.engine.weather = m.weather;
+    if (m.visible !== undefined) { world.visible = m.visible; world.frameAt = 0; if (m.visible) world.engine.flash = 1; }
+    if (m.next) showScene((world.index + 1) % world.ids.length);
+    if (m.look) { world.engine.mx = m.look[0]; world.engine.my = m.look[1]; }
+  } catch (err) { report('failed', err && err.message); }
+}
+if (window.chrome && chrome.webview) chrome.webview.addEventListener('message', (e) => receive(e.data));
+window.addEventListener('error', (e) => report('failed', e.message));
+report('loaded');
+</script></body></html>

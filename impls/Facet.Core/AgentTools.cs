@@ -19,13 +19,7 @@ public static class AgentToolCatalog
 {
     private const string Empty = """{"type":"object","properties":{},"additionalProperties":false}""";
     public static readonly IReadOnlyList<AgentToolDefinition> Tools = [
-        new("facet_today", "오늘 날짜·시각, 오늘 일정과 할 일을 한 번에 확인합니다.", Empty),
-        new("facet_list_schedules", "특정 날짜의 일정을 조회합니다.",
-            """{"type":"object","properties":{"date":{"type":"string","description":"yyyy-MM-dd. 생략하면 오늘"}},"additionalProperties":false}"""),
-        new("facet_add_schedule", "캘린더에 일정을 등록합니다. 시작 시각과 길이는 30분 단위로 반올림됩니다.",
-            """{"type":"object","properties":{"date":{"type":"string","description":"yyyy-MM-dd"},"start":{"type":"string","description":"HH:mm"},"duration_minutes":{"type":"integer","minimum":30},"title":{"type":"string","maxLength":200},"content":{"type":"string"},"label":{"type":"string","maxLength":40}},"required":["date","start","title"],"additionalProperties":false}"""),
-        new("facet_delete_schedule", "일정을 삭제합니다. id는 facet_list_schedules 결과의 id입니다.",
-            """{"type":"object","properties":{"date":{"type":"string","description":"일정 시작일 yyyy-MM-dd"},"id":{"type":"string"}},"required":["date","id"],"additionalProperties":false}"""),
+        // The schedule tools (facet_today, facet_*_schedule) belong to the schedule plugin; their helpers below stay pure Core rules (ADR 0101).
         new("facet_add_reminder", "지정 시각에 Windows 알림을 띄울 알림을 등록합니다.",
             """{"type":"object","properties":{"title":{"type":"string"},"at":{"type":"string","description":"시간대 포함 ISO 8601. 예: 2026-10-31T18:00:00+09:00"},"body":{"type":"string"}},"required":["title","at"],"additionalProperties":false}"""),
         new("facet_weather", "대시보드 설정 지역의 현재 날씨를 확인합니다.", Empty),

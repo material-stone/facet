@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Facet;
+using Facet.SchedulePlugin;
 using Facet.Core;
 
 internal static partial class Program

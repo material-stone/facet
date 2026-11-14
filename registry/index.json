@@ -12,6 +12,16 @@
     },
     {
       "kind": "plugin",
+      "id": "facet.schedule",
+      "name": "일정",
+      "version": "1.0.0",
+      "author": "material-stone",
+      "description": "달력에서 날짜별 일정·할 일·노트를 관리하고, 오늘 일정을 보여 주는 위젯입니다.",
+      "url": "https://github.com/material-stone/facet/releases/download/plugin-facet.schedule-1.0.0/facet.schedule-1.0.0.zip",
+      "sha256": "a1ad543c4e44ddfe441290af7f0b7314153265bbec2df03cf98178a47b5ec108"
+    },
+    {
+      "kind": "plugin",
       "id": "facet.weather",
       "name": "날씨",
       "version": "1.0.0",
@@ -19,6 +29,36 @@
       "description": "현재 날씨와 습도를 보여 주는 위젯입니다. 지역은 플러그인 설정에서 고릅니다.",
       "url": "https://github.com/material-stone/facet/releases/download/plugin-facet.weather-1.0.0/facet.weather-1.0.0.zip",
       "sha256": "e01f159cb31fa0873348b3612864f9203a448486b6dec7a0e849529d1bd10de5"
+    },
+    {
+      "kind": "skin",
+      "id": "midnight",
+      "name": "미드나이트",
+      "version": "1.0.0",
+      "author": "material-stone",
+      "description": "보랏빛 남색으로 색만 바꾸는 가벼운 스킨입니다.",
+      "url": "https://github.com/material-stone/facet/releases/download/skin-midnight-1.0.0/midnight-1.0.0.zip",
+      "sha256": "cf851f22d59be98515e4675bc81d0a80fc6401c851fd28a500a10d4a86616a73"
+    },
+    {
+      "kind": "skin",
+      "id": "space",
+      "name": "우주",
+      "version": "1.0.0",
+      "author": "material-stone",
+      "description": "행성 사이를 지나는 우주 항해 배경과 각진 HUD 위젯입니다.",
+      "url": "https://github.com/material-stone/facet/releases/download/skin-space-1.0.0/space-1.0.0.zip",
+      "sha256": "1420e641b0271d6a11ac53e7aa2c7e1661d5b8d32348fbec8e319bb154f7b298"
+    },
+    {
+      "kind": "skin",
+      "id": "voxel",
+      "name": "복셀 월드",
+      "version": "1.1.0",
+      "author": "material-stone",
+      "description": "시장 거리, 물가의 집, 광맥 동굴을 오가는 실시간 3D 복셀 배경입니다. 시간과 날씨에 따라 바뀝니다.",
+      "url": "https://github.com/material-stone/facet/releases/download/skin-voxel-1.1.0/voxel-1.1.0.zip",
+      "sha256": "ef804391ce6c8a70b3e079d50f32f84595bc3d0b939e781436b8108cb79d350a"
     }
   ]
 }

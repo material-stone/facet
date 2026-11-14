@@ -33,8 +33,8 @@ internal static partial class Program
         var settings=(OverlaySettingsView)tabs.FindName("SettingsView");
         var names=((StackPanel)settings.FindName("Groups")).Children.OfType<StackPanel>().SelectMany(group=>group.Children.OfType<Grid>())
             .Select(row=>AutomationProperties.GetName((FrameworkElement)((StackPanel)row.Children[1]).Children[0])).ToArray();
-        Assert(!names.Any(name=>name.Contains("수면 단축키") || name.Contains("수면 알림") || name.Contains("제작 화면") || name.Contains("기상") || name.Contains("취침")) && names.Contains("사용자 알림 사용"),
-            "overlay settings omit retired shortcuts and sleep alarms while preserving user reminders");
+        Assert(!names.Any(name=>name.Contains("수면 단축키") || name.Contains("수면 알림") || name.Contains("제작 화면") || name.Contains("기상") || name.Contains("취침")) && !names.Contains("사용자 알림 사용") && !names.Contains("블러 강도") && !names.Contains("검색 엔진") && !names.Contains("탐색기 alias") && names.Contains("빠른 실행") && names.Contains("Facet 종료") && names.Contains("백업") && names.Contains("복원"),
+            "overlay settings omit retired and hidden rows and offer every app shortcut and backup");
         Assert(DashboardAgenda.Today(new AppData(),DateTimeOffset.Now).Count==0,"legacy scheduled sleep alerts never populate the dashboard");
 
         var root=Path.Combine(qa,"legacy-roundtrip");var store=new Store(root);
@@ -55,7 +55,7 @@ internal static partial class Program
         Assert(JsonSerializer.Serialize(loaded)==before,"saving active overlay content preserves every legacy field in the encrypted store");
         var view=(OverlaySettingsView)((OverlayTabs)((Grid)restored.Overlay.Content).Children[2]).FindName("SettingsView");
         view.Configure(()=>restored.Data.Settings,_=>false);
-        SettingEditor<TextBox>(view,"오버레이 단축키").Text="Ctrl+Alt+F2";
+        SettingEditor<TextBox>(view,"오버레이 열기·닫기").Text="Ctrl+Alt+F2";
         restored.Exit();
         Assert(!restored.Exiting && !restored.ExitPending && view.HasChanges,"failed overlay save cancels shutdown and retains the draft without a manager");
         ReloadSettings(view,restored.Data.Settings);

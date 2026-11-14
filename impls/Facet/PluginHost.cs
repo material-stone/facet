@@ -15,10 +15,10 @@ internal sealed class PluginHost(string dataRoot, Func<string, IPluginShell>? sh
     private sealed class LoadContext(string path) : AssemblyLoadContext(Path.GetFileNameWithoutExtension(path))
     {
         private readonly AssemblyDependencyResolver resolver = new(path);
-        // The contract must come from the app so plugin types implement the same interfaces, and the WinRT projection
+        // The contract and the pure Core rules must come from the app so plugin types match the app's, and the WinRT projection
         // keeps process-wide state that must not exist twice.
         protected override Assembly? Load(AssemblyName name) =>
-            name.Name is "Facet.Plugins" or "WinRT.Runtime" or "Microsoft.Windows.SDK.NET" || resolver.ResolveAssemblyToPath(name) is not { } file ? null : LoadUnlocked(file);
+            name.Name is "Facet.Plugins" or "Facet.Core" or "WinRT.Runtime" or "Microsoft.Windows.SDK.NET" || resolver.ResolveAssemblyToPath(name) is not { } file ? null : LoadUnlocked(file);
 
         // Native dependencies such as ONNX Runtime stay in the plugin's folder (ADR 0084).
         protected override IntPtr LoadUnmanagedDll(string name)

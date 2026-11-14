@@ -1,7 +1,7 @@
 <UserControl x:Class="Facet.OverlayTabs"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
- xmlns:local="clr-namespace:Facet" xmlns:design="clr-namespace:Facet.Design" Cursor="Arrow">
+ xmlns:local="clr-namespace:Facet" xmlns:design="clr-namespace:Facet.Design" xmlns:widgets="clr-namespace:Facet.Widgets;assembly=Facet.Plugins" Cursor="Arrow">
  <UserControl.Resources>
   <DropShadowEffect x:Key="OverlayShadow" Color="Black" Opacity="0.42" BlurRadius="24" ShadowDepth="6" Direction="270"/>
  </UserControl.Resources>
@@ -15,7 +15,7 @@
      <ContentPresenter x:Name="PART_SelectedContentHost" ContentSource="SelectedContent"
                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
      <!-- Keep effects on empty siblings so text never enters an effect bitmap. -->
-     <local:CachedShadow x:Name="TabShadow" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="24"
+     <widgets:CachedShadow x:Name="TabShadow" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="24"
              Width="{Binding ActualWidth, ElementName=TabStrip}" Height="{Binding ActualHeight, ElementName=TabStrip}"
              Background="{StaticResource Panel}" CornerRadius="12" Shadow="{StaticResource OverlayShadow}" IsHitTestVisible="False"/>
      <TabPanel x:Name="TabStrip" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="24"
@@ -75,62 +75,7 @@
                 Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
     </StackPanel>
    </TabItem.Header>
-   <Grid x:Name="ManagementPage">
-   <!-- Hosted by the calendar widget's tile; the transition between its two screens stays inside it. -->
-   <Grid x:Name="CalendarWidgetView" ClipToBounds="True">
-   <local:OverlayCarousel x:Name="ManagementCarousel"
-                          HorizontalAlignment="Center" VerticalAlignment="Center" AutomationProperties.Name="일정 달력 화면">
-    <Viewbox Stretch="Uniform" StretchDirection="DownOnly">
-     <Grid Width="{Binding ItemWidth, ElementName=ManagementCarousel}" Height="{Binding ItemHeight, ElementName=ManagementCarousel}">
-   <Grid x:Name="CalendarLayout" Margin="24" MaxWidth="1220">
-    <Viewbox x:Name="CalendarHost" Stretch="Uniform" StretchDirection="Both" HorizontalAlignment="Center" VerticalAlignment="Center">
-     <Grid>
-      <local:CachedShadow x:Name="CalendarShadow" Background="{StaticResource Panel}" CornerRadius="20"
-              Shadow="{StaticResource OverlayShadow}" IsHitTestVisible="False"/>
-      <local:OverlayCalendarView x:Name="Calendar"/>
-     </Grid>
-    </Viewbox>
-
-   </Grid>
-     </Grid>
-    </Viewbox>
-   </local:OverlayCarousel>
-   <Viewbox x:Name="DayViewport" Stretch="Uniform" StretchDirection="DownOnly"
-            HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding Visibility, ElementName=DayPage}">
-    <Grid Width="1560" Height="752">
-    <Grid x:Name="DayPage" Visibility="Collapsed" Focusable="True" KeyboardNavigation.IsTabStop="False" FocusVisualStyle="{x:Null}">
-     <Grid.ColumnDefinitions><ColumnDefinition Width="1140"/><ColumnDefinition Width="24"/><ColumnDefinition Width="396"/></Grid.ColumnDefinitions>
-     <Grid>
-      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-      <DockPanel Margin="12,8,0,16">
-       <Button x:Name="BackToCalendar" Width="40" Height="40" Padding="8" Margin="0,0,16,0"
-               Focusable="False" IsTabStop="False"
-               DockPanel.Dock="Left" VerticalAlignment="Center" ContentTemplate="{x:Null}"
-               HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-               AutomationProperties.Name="뒤로 가기" AutomationProperties.AcceleratorKey="Esc"
-               ToolTip="뒤로 가기 (Esc)" Click="BackToCalendar_Click">
-        <design:Icon Kind="Left" Width="20" Height="20"/>
-       </Button>
-       <TextBlock x:Name="DayHeading" FontSize="28" FontWeight="SemiBold" VerticalAlignment="Center"/>
-      </DockPanel>
-      <Grid Grid.Row="1">
-       <local:OverlayScheduleDial x:Name="ScheduleDial"/>
-        <ScrollViewer x:Name="ScheduleLegendScroll" Width="180" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="12,20,0,20"
-                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-         <StackPanel x:Name="ScheduleLegend"/>
-        </ScrollViewer>
-      </Grid>
-     </Grid>
-     <Grid Grid.Column="2">
-      <local:CachedShadow x:Name="EditorShadow" Background="{StaticResource Panel}" CornerRadius="20"
-              Shadow="{StaticResource OverlayShadow}" IsHitTestVisible="False"/>
-      <local:OverlayDayEditor x:Name="DayEditor"/>
-     </Grid>
-    </Grid>
-    </Grid>
-   </Viewbox>
-   </Grid>
-   </Grid>
+   <Grid x:Name="ManagementPage"/>
   </TabItem>
   <TabItem x:Name="SleepTab" AutomationProperties.Name="수면">
    <TabItem.Header>
@@ -161,8 +106,6 @@
    </Grid>
   </TabItem>
  </TabControl>
- <!-- Sections and music are hosted by widget tiles; these own their logic and stay out of layout. -->
- <local:OverlayDashboardView x:Name="Dashboard" Visibility="Collapsed"/>
  <StackPanel x:Name="WorkspaceBar" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,24,24,0" Panel.ZIndex="3" Visibility="Collapsed">
   <Grid x:Name="WorkspaceRow" HorizontalAlignment="Right">
   <Button x:Name="WorkspaceEdit" ContentTemplate="{x:Null}" Width="36" Height="36" Padding="0" ToolTip="위젯 편집" AutomationProperties.Name="위젯 편집" HorizontalAlignment="Right" VerticalAlignment="Center" Click="WorkspaceEdit_Click"><design:Icon Kind="Edit" Width="18" Height="18"/></Button>
@@ -185,26 +128,8 @@
  <Grid x:Name="WidgetModal" Background="{StaticResource ModalBackdrop}" Visibility="Collapsed" Panel.ZIndex="25" MouseDown="WidgetModal_MouseDown">
   <Border x:Name="WidgetModalFrame" Margin="24" Padding="16" HorizontalAlignment="Center" VerticalAlignment="Center" Background="{StaticResource Panel}" BorderBrush="{StaticResource Edge}" BorderThickness="1" CornerRadius="12" KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.ControlTabNavigation="Cycle"/>
  </Grid>
- <Grid x:Name="ScheduleModal" Background="{StaticResource ModalBackdrop}" Visibility="Collapsed" Panel.ZIndex="5">
-  <Viewbox Margin="56,116,56,116" Stretch="Uniform" StretchDirection="DownOnly"
-           HorizontalAlignment="Center" VerticalAlignment="Center">
-   <Grid Width="1560" Height="752">
-    <local:CachedShadow x:Name="ScheduleEditorShadow" Background="{StaticResource Panel}" CornerRadius="20"
-                        Width="{Binding ActualWidth, ElementName=ScheduleEditor}" Height="{Binding ActualHeight, ElementName=ScheduleEditor}"
-                        HorizontalAlignment="Center" VerticalAlignment="Center"
-                        Shadow="{StaticResource OverlayShadow}" IsHitTestVisible="False"/>
-    <local:OverlayScheduleEditor x:Name="ScheduleEditor" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-   </Grid>
-  </Viewbox>
-  <Grid x:Name="ScheduleTimeModal" Background="Transparent" Visibility="Collapsed" Panel.ZIndex="10">
-   <Canvas x:Name="ScheduleTimeCanvas">
-    <Grid x:Name="ScheduleTimeHost">
-     <local:CachedShadow x:Name="ScheduleTimeShadow" Background="{StaticResource Panel}" CornerRadius="12"
-                         Shadow="{StaticResource OverlayShadow}" IsHitTestVisible="False"/>
-    </Grid>
-   </Canvas>
-  </Grid>
- </Grid>
+ <!-- Full-overlay layers a widget owns (IWidgetLayer), above the boards and below widget modals (ADR 0101). -->
+ <Grid x:Name="WidgetLayers" Panel.ZIndex="5"/>
  </Grid>
  </AdornerDecorator>
 </UserControl>

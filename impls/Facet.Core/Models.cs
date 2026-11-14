@@ -75,6 +75,8 @@ public sealed class Settings
     public string SleepHotkey { get; set; } = "Ctrl+Alt+S";
     public string WorkHotkey { get; set; } = "Ctrl+Alt+P";
     public string OverlayHotkey { get; set; } = "Win+Alt+O";
+    public string QuickLaunchHotkey { get; set; } = "Win+Alt+Space";
+    public string ExitHotkey { get; set; } = "Win+Alt+End";
     public Dictionary<string, string> LaunchAliases { get; set; } = [];
     public WebSearchEngine LauncherSearchEngine { get; set; } = WebSearchEngine.Google;
     // Input only: PluginData.MoveChat carries these to the chat plugin once (ADR 0084).

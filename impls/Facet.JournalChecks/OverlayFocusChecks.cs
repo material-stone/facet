@@ -15,7 +15,7 @@ internal static partial class Program
     {
         var overlay = controller.Overlay;
         var settings = controller.Data.Settings;
-        var priorProbe = overlay.CaptureToolVisibleProbe;
+        var priorProbe = overlay.CaptureToolForegroundProbe;
         var priorFactory = overlay.BackdropSourceFactory;
         double priorBlur = settings.OverlayBlurRadius;
         int priorShow = settings.OverlayShowMilliseconds, priorHide = settings.OverlayHideMilliseconds;
@@ -33,7 +33,7 @@ internal static partial class Program
         }
         try {
             settings.OverlayBlurRadius = 0; settings.OverlayShowMilliseconds = 0;
-            overlay.CaptureToolVisibleProbe = () => false;
+            overlay.CaptureToolForegroundProbe = () => false;
             origin.Window.Show(); target.Window.Show();
             Assert(PositionFocusTestWindow(new WindowInteropHelper(origin.Window).Handle, IntPtr.Zero,
                 sourceScreen.Bounds.X + 30, sourceScreen.Bounds.Y + 30, 280, 140, 0x14), "place origin on secondary monitor when available");
@@ -95,7 +95,7 @@ internal static partial class Program
         }
         finally {
             controller.HideOverlay(restore: false); Pump(220);
-            overlay.SetQuickLaunch(false); overlay.CaptureToolVisibleProbe = priorProbe;
+            overlay.SetQuickLaunch(false); overlay.CaptureToolForegroundProbe = priorProbe;
             overlay.BackdropSourceFactory = priorFactory;
             settings.OverlayBlurRadius = priorBlur; settings.OverlayShowMilliseconds = priorShow; settings.OverlayHideMilliseconds = priorHide;
         }

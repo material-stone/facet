@@ -8,8 +8,11 @@ public sealed class Controller : IDisposable
 {
     public const string ExitHotkey = "Win+Alt+End";
     public const string QuickLaunchHotkey = "Win+Alt+Space";
-    internal string ExitShortcut { get; }
-    internal string QuickLaunchShortcut { get; }
+    // The settings own both keys; checks pass fixed keys so a real session's keys stay untouched (ADR 0099).
+    private readonly string? exitOverride, quickLaunchOverride;
+    internal string ExitShortcut => exitOverride ?? Data.Settings.ExitHotkey;
+    internal string QuickLaunchShortcut => quickLaunchOverride ?? Data.Settings.QuickLaunchHotkey;
+    private Forms.ToolStripMenuItem quickLaunchItem = null!, exitItem = null!;
     private static readonly int[] HotkeyIds = [103, 104, 105];
     private const int FirstPluginHotkey = 200;
     private readonly Dictionary<int, Action> pluginHotkeys = [];
@@ -39,11 +42,11 @@ public sealed class Controller : IDisposable
     private bool overlayRestoreAllowed = true;
     private string[] registered = [];
     private readonly string? bundledPluginError;
-    public Controller(string root) : this(root, ExitHotkey) { }
-    internal Controller(string root, string exitShortcut, string? quickLaunchShortcut = null)
+    public Controller(string root) : this(root, null) { }
+    internal Controller(string root, string? exitShortcut, string? quickLaunchShortcut = null)
     {
-        ExitShortcut = exitShortcut;
-        QuickLaunchShortcut = quickLaunchShortcut ?? QuickLaunchHotkey;
+        exitOverride = exitShortcut;
+        quickLaunchOverride = quickLaunchShortcut;
         Store = new(root); Data = Store.Load();
         Design.Skins.UseFolder(Path.Combine(root, "skins"));
         Design.Skins.Apply(Application.Current, Data.Settings.Skin);
@@ -59,16 +62,20 @@ public sealed class Controller : IDisposable
         tray = new Forms.NotifyIcon { Icon = trayIcon, Text = LaunchProtocol.DisplayName, Visible = true };
         var menu = Design.Typography.CreateTrayMenu();
         menu.Items.Add("오버레이 열기", null, (_, _) => ResetOverlay());
-        menu.Items.Add($"빠른 실행 ({QuickLaunchHotkey})", null, (_, _) => ToggleQuickLaunch());
+        quickLaunchItem = new Forms.ToolStripMenuItem("", null, (_, _) => ToggleQuickLaunch());
+        menu.Items.Add(quickLaunchItem);
         var pluginCommands = new Forms.ToolStripSeparator();
         menu.Items.Add(pluginCommands);
         // Plugins come and go while the app runs, so their commands are listed each time the menu opens.
         menu.Opening += (_, _) => {
+            quickLaunchItem.Text = $"빠른 실행 ({QuickLaunchShortcut})";
+            exitItem.Text = $"{LaunchProtocol.DisplayName} 종료 ({ExitShortcut})";
             int at = menu.Items.IndexOf(pluginCommands);
             while (at > 2) { menu.Items.RemoveAt(2); at--; }
             foreach (var (label, run) in Plugins.TrayCommands) menu.Items.Insert(at++, new Forms.ToolStripMenuItem(label, null, (_, _) => RunPluginAction(run)));
         };
-        menu.Items.Add($"{LaunchProtocol.DisplayName} 종료 ({ExitShortcut})", null, (_, _) => Exit());
+        exitItem = new Forms.ToolStripMenuItem("", null, (_, _) => Exit());
+        menu.Items.Add(exitItem);
         tray.ContextMenuStrip = menu;
         tray.DoubleClick += (_, _) => ResetOverlay();
         timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
@@ -92,7 +99,6 @@ public sealed class Controller : IDisposable
     }
     internal void HandleLaunch(bool mayOpen)
     {
-        _ = Overlay.RefreshWeatherOnLaunchAsync();
         if (!mayOpen) return;
         if (Data.Settings.ShowOverlayOnLaunch) ResetOverlay();
         else
@@ -293,11 +299,9 @@ public sealed class Controller : IDisposable
     }
     public string RegisterKeys(Settings s)
     {
-        string[] keys = [s.OverlayHotkey, ExitShortcut, QuickLaunchShortcut];
+        string[] keys = [s.OverlayHotkey, exitOverride ?? s.ExitHotkey, quickLaunchOverride ?? s.QuickLaunchHotkey];
         var parsed = keys.Select(Native.ParseHotkey).ToArray();
-        if (parsed[0] == parsed[1]) throw new ArgumentException($"{ExitShortcut}는 앱 종료 전용입니다. 다른 단축키를 지정하세요.");
-        if (parsed[0] == parsed[2]) throw new ArgumentException($"{QuickLaunchShortcut}는 빠른 실행 전용입니다. 다른 단축키를 지정하세요.");
-        if (parsed.Distinct().Count() != HotkeyIds.Length) throw new ArgumentException("단축키를 서로 다르게 지정하세요.");
+        if (parsed.Distinct().Count() != HotkeyIds.Length) throw new ArgumentException("오버레이·빠른 실행·종료 단축키를 서로 다르게 지정하세요.");
         for (int i = 0; i < HotkeyIds.Length; i++) Native.UnregisterHotKey(handle, HotkeyIds[i]);
         for (int i = 0; i < HotkeyIds.Length; i++)
         {
@@ -305,15 +309,14 @@ public sealed class Controller : IDisposable
             int error = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
             for (int j = 0; j < HotkeyIds.Length; j++) Native.UnregisterHotKey(handle, HotkeyIds[j]);
             for (int j = 0; j < registered.Length; j++) { var old = Native.ParseHotkey(registered[j]); Native.RegisterHotKey(handle, HotkeyIds[j], old.modifiers, old.key); }
-            string advice = i is 1 or 2 ? "다른 앱에서 이 고정 단축키를 사용 중인지 확인하세요." : "설정에서 바꾸세요.";
+            const string advice = "다른 앱이 쓰는 조합인지 확인하고 설정에서 바꾸세요.";
             return $"{keys[i]} 등록 실패: {new System.ComponentModel.Win32Exception(error).Message} (오류 {error}). {advice} 트레이는 계속 사용할 수 있습니다.";
         }
         registered = keys;
-        return $"전역 단축키 {HotkeyIds.Length}개가 등록되었습니다. 앱 종료: {ExitShortcut}";
+        return $"전역 단축키 {HotkeyIds.Length}개가 등록되었습니다. 앱 종료: {keys[1]}";
     }
     public bool ApplySettings(Settings next)
     {
-        bool weatherChanged = Data.Settings.WeatherRegionId != next.WeatherRegionId;
         bool skinChanged = Design.Skins.Resolve(Data.Settings.Skin) != Design.Skins.Resolve(next.Skin);
         string result = RegisterKeys(next);
         HotkeyStatus = result;
@@ -321,7 +324,6 @@ public sealed class Controller : IDisposable
         if (!Commit(d => d.Settings = next)) { RegisterKeys(Data.Settings); return false; }
         ApplyDisplay();
         Overlay.ApplyThemeOptions();
-        if (weatherChanged) Overlay.ReloadWeatherLocation();
         // The settings view that is saving gets replaced, so the switch waits until this save has returned.
         if (skinChanged) Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => { if (!Exiting && !disposed) Overlay.SwitchSkin(Data.Settings.Skin); }));
         return true;
@@ -352,7 +354,7 @@ public sealed class Controller : IDisposable
     }
     public void Dispose()
     {
-        if (disposed) return; disposed = true; timer.Stop(); Overlay.StopWeatherUpdates(); reminderServer?.Dispose(); agentTools?.Dispose(); toast?.Close();
+        if (disposed) return; disposed = true; timer.Stop(); Overlay.StopWidgets(); reminderServer?.Dispose(); agentTools?.Dispose(); toast?.Close();
         Plugins.Dispose();
         for (int i = 0; i < HotkeyIds.Length; i++) Native.UnregisterHotKey(handle, HotkeyIds[i]);
         foreach (int id in pluginHotkeys.Keys) Native.UnregisterHotKey(handle, id);

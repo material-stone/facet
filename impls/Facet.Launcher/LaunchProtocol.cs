@@ -17,8 +17,24 @@ internal static class LaunchProtocol
     public static string DataRoot(string[] args)
     {
         int index = Array.IndexOf(args, "--data-dir");
-        return index >= 0 && index + 1 < args.Length ? Path.GetFullPath(args[index + 1])
-            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MaterialStone", "DailyDock");
+        return index >= 0 && index + 1 < args.Length ? Path.GetFullPath(args[index + 1]) : DefaultRoot(LocalData);
+    }
+    private static string LocalData => Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+    // Records live in MaterialStone/Facet; the folder from before the rename is used until the app moves it (ADR 0099).
+    internal static string DefaultRoot(string local)
+    {
+        string current = Path.Combine(local, "MaterialStone", "Facet"), renamed = Path.Combine(local, "MaterialStone", "DailyDock");
+        return !Directory.Exists(current) && Directory.Exists(renamed) ? renamed : current;
+    }
+    // Moves the old records folder once, only while no app instance uses it. A failed move keeps the old folder in use.
+    public static void MoveRenamedRoot(string[] args) { if (Array.IndexOf(args, "--data-dir") < 0) MoveRenamedRoot(LocalData); }
+    internal static bool MoveRenamedRoot(string local)
+    {
+        string current = Path.Combine(local, "MaterialStone", "Facet"), renamed = Path.Combine(local, "MaterialStone", "DailyDock");
+        if (Directory.Exists(current) || !Directory.Exists(renamed)) return false;
+        if (System.Threading.Mutex.TryOpenExisting(Instance(renamed), out var running)) { running.Dispose(); return false; }
+        try { Directory.Move(renamed, current); return true; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }
     }
     public static string Hash(string value) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value.ToUpperInvariant())))[..20];
     public static string Instance(string root) => @"Local\DailyDock-" + Hash(root);

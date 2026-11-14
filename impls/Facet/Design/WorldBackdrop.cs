@@ -37,6 +37,14 @@ internal sealed class WorldBackdrop : IDisposable
     [StructLayout(LayoutKind.Sequential)] private struct NativeRect { public int Left,Top,Right,Bottom; }
 
     private static readonly TimeSpan WeatherInterval=TimeSpan.FromMinutes(30);
+    // Enforced by the host, so a skin page cannot opt out. The page text follows this, and a later policy can only narrow it.
+    private const string Lock="<!doctype html><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; worker-src blob:\">\n";
+    // A dead proxy and no direct UDP also stop what the policy does not cover, such as WebRTC.
+    private const string NoNetwork="--proxy-server=http://127.0.0.1:9 --proxy-bypass-list=<-loopback> --webrtc-ip-handling-policy=disable_non_proxied_udp --force-webrtc-ip-handling-policy";
+    private readonly string page;
+    internal Action<string>? ProbeForCheck;
+    internal string? DataFolderForCheck;
+    internal Exception? FailureForCheck;
     private readonly string[] scenes;
     private readonly Func<CancellationToken,Task<WeatherSnapshot>> fetchWeather;
     private readonly Window window;
@@ -47,9 +55,9 @@ internal sealed class WorldBackdrop : IDisposable
     private string weather="partly";
     internal event Action? Failed;
 
-    internal WorldBackdrop(string[] scenes,Func<CancellationToken,Task<WeatherSnapshot>> fetchWeather)
+    internal WorldBackdrop(string page,string[] scenes,Func<CancellationToken,Task<WeatherSnapshot>> fetchWeather)
     {
-        this.scenes=scenes;this.fetchWeather=fetchWeather;
+        this.page=page;this.scenes=scenes;this.fetchWeather=fetchWeather;
         window=new Window {
             WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.NoResize,ShowInTaskbar=false,ShowActivated=false,Topmost=true,
             Focusable=false,Background=Brushes.Black,Title="Facet world",Content=view,Left=-32000,Top=-32000,Width=1,Height=1
@@ -90,31 +98,33 @@ internal sealed class WorldBackdrop : IDisposable
     private async Task StartAsync()
     {
         try {
-            string data=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Facet","world-webview");
-            var environment=await CoreWebView2Environment.CreateAsync(userDataFolder:data);
+            string data=DataFolderForCheck ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Facet","world-webview");
+            var environment=await CoreWebView2Environment.CreateAsync(userDataFolder:data,options:new CoreWebView2EnvironmentOptions(additionalBrowserArguments:NoNetwork));
             if(disposed) return;
             await view.EnsureCoreWebView2Async(environment);
             if(disposed) return;
             var core=view.CoreWebView2;
             core.Settings.AreDevToolsEnabled=false;core.Settings.AreDefaultContextMenusEnabled=false;core.Settings.AreDefaultScriptDialogsEnabled=false;
             core.Settings.AreHostObjectsAllowed=false;core.Settings.IsStatusBarEnabled=false;core.Settings.IsZoomControlEnabled=false;core.Settings.AreBrowserAcceleratorKeysEnabled=false;
-            // The page is the app's own resource; nothing else may load.
+            // Only the skin's page may load.
             core.NavigationStarting+=(_,e) => { if(!e.Uri.StartsWith("data:",StringComparison.Ordinal) && !e.Uri.StartsWith("about:",StringComparison.Ordinal)) e.Cancel=true; };
             core.NewWindowRequested+=(_,e) => e.Handled=true;
             core.WebMessageReceived+=(_,e) => Receive(e.WebMessageAsJson);
             core.ProcessFailed+=(_,_) => Fail();
-            using var reader=new StreamReader(Application.GetResourceStream(new Uri("pack://application:,,,/Facet;component/Design/World/world.html")).Stream);
-            core.NavigateToString(reader.ReadToEnd());
+            core.NavigateToString(Lock+page);
         }
-        catch(Exception ex) when(ex is WebView2RuntimeNotFoundException or COMException or IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException) { Fail(); }
+        catch(Exception ex) when(ex is WebView2RuntimeNotFoundException or COMException or IOException or UnauthorizedAccessException or InvalidOperationException or ArgumentException) { FailureForCheck=ex;Fail(); }
     }
     private void Receive(string json)
     {
         string? type;
-        try { using var message=JsonDocument.Parse(json);type=message.RootElement.GetProperty("type").GetString(); }
+        try {
+            using var message=JsonDocument.Parse(json);type=message.RootElement.GetProperty("type").GetString();
+            if(type=="probe") { ProbeForCheck?.Invoke(message.RootElement.GetProperty("message").GetString() ?? "");return; }
+        }
         catch(Exception ex) when(ex is JsonException or KeyNotFoundException or InvalidOperationException) { return; }
         if(type=="loaded") view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { scenes }));
-        else if(type=="ready") { ready=true;Post(new { weather,visible=requestedVisible }); }
+        else if(type=="ready") { ready=true;Post(new { weather,visible=requestedVisible });ProbeForCheck?.Invoke("ready"); }
         else if(type=="failed") Fail();
     }
     private void Post(object message)

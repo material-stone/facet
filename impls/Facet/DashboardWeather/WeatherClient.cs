@@ -5,6 +5,8 @@ using System.Threading.Tasks;
 
 namespace Facet;
 
+internal enum WeatherIconKind { Unknown, Sunny, ClearNight, PartlyCloudy, PartlyCloudyNight, Cloudy, Fog, Rain, Snow, Thunder }
+
 internal sealed record WeatherLocation(double Latitude, double Longitude, string Area, string CountryCode = "", string RegionCode = "");
 
 internal sealed record WeatherSnapshot(WeatherLocation Location, double? Temperature, int? Humidity,

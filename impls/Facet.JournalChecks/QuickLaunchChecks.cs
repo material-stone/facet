@@ -13,6 +13,9 @@ internal static partial class Program
 {
     private static void CheckQuickLaunch(Controller controller, string qa)
     {
+        // The hidden extras still work behind their switch; the plain launcher only finds PATH programs.
+        Assert(!QuickLaunchCatalog.Extras && new QuickLaunchCatalog(Path.GetTempPath(),".exe").SearchAsync("@"+Path.GetTempPath(),new Dictionary<string,string>(),default).Result.All(c=>!c.Explore),"the plain launcher ignores path, alias and command prefixes");
+        QuickLaunchCatalog.Extras=true;
         string root = Path.Combine(qa, "quick-launch-fixture"), first = Path.Combine(root, "first"), second = Path.Combine(root, "second");
         Directory.CreateDirectory(first); Directory.CreateDirectory(second);
         foreach (string file in new[] { "stone.exe", "stonecode.exe", "otherstone.cmd", "ignored.txt" }) File.WriteAllText(Path.Combine(first, file), "fixture");
@@ -144,18 +147,15 @@ internal static partial class Program
         view.HandleKey(Key.Enter,ModifierKeys.None);
         Assert(launched?.FileName == webInfo.FileName && launched.UseShellExecute, "Enter dispatches only the encoded search URL without starting a browser command line directly");
         var originalEngine=controller.Data.Settings.LauncherSearchEngine;
-        // Keep the same query and view open while committing settings, as a live launcher does.
-        var engineSettings=new OverlaySettingsView();
-        engineSettings.Configure(()=>controller.Data.Settings,next=>controller.Commit(data=>data.Settings=next));
-        var settingsGroups=(StackPanel)engineSettings.FindName("Groups");
-        var engineEditor=settingsGroups.Children.OfType<StackPanel>().SelectMany(group=>group.Children.OfType<Grid>())
-            .Select(row=>(FrameworkElement)((StackPanel)row.Children[1]).Children[0])
-            .OfType<ComboBox>().Single(editor=>System.Windows.Automation.AutomationProperties.GetName(editor)=="검색 엔진");
-        engineEditor.SelectedValue=WebSearchEngine.Naver;
+        // The engine row is hidden with web search; a committed setting still reaches an already typed query.
+        void UseEngine(WebSearchEngine engine)=>controller.Commit(data=>data.Settings.LauncherSearchEngine=engine);
+
+
+        UseEngine(WebSearchEngine.Naver);
         view.HandleKey(Key.Enter,ModifierKeys.None);
-        Assert(new Uri(launched!.FileName).Host=="search.naver.com" && !engineSettings.HasChanges,
-            "changing the engine in settings immediately affects an already typed launcher query");
-        engineEditor.SelectedValue=WebSearchEngine.Bing;
+        Assert(new Uri(launched!.FileName).Host=="search.naver.com",
+            "changing the engine setting immediately affects an already typed launcher query");
+        UseEngine(WebSearchEngine.Bing);
         view.HandleKey(Key.Enter,ModifierKeys.None);
         Assert(new Uri(launched!.FileName).Host=="www.bing.com" && new Store(controller.Store.Root).Load().Settings.LauncherSearchEngine==WebSearchEngine.Bing,
             "the next launcher execution uses the latest persisted engine without reopening");
@@ -163,7 +163,7 @@ internal static partial class Program
         Assert(launched!.FileName=="https://example.com/path?q=one&x=two#part", "launcher opens a typed address independently of the engine");
         input.Text="https://example.com/direct"; view.HandleKey(Key.Enter,ModifierKeys.None);
         Assert(launched!.FileName=="https://example.com/direct", "full URL input opens directly without the search prefix");
-        engineEditor.SelectedValue=originalEngine;
+        UseEngine(originalEngine);
         launched = null;
         input.Text = "> "; input.CaretIndex = input.Text.Length;
         WaitFor(() => list.Items.Count == 1);
@@ -373,14 +373,14 @@ internal static partial class Program
         controller.Data.Settings.OverlayVisible = true; visibilityRequest.SetValue(overlay,true);
         Click(layers);
         Assert(controller.Data.Settings.OverlayVisible, "normal overlay background clicks keep it open");
-        overlay.CaptureToolVisibleProbe = () => true;
+        overlay.CaptureToolForegroundProbe = () => true;
         Deactivate();
         Assert(controller.Data.Settings.OverlayVisible, "capture tool focus keeps the normal overlay open");
-        overlay.CaptureToolVisibleProbe = () => false;
+        overlay.CaptureToolForegroundProbe = () => false;
         Deactivate();
         Assert(controller.Data.Settings.OverlayVisible && (bool)visibilityRequest.GetValue(overlay)!,
             "normal overlay deactivation keeps its visibility request after capture tool closes");
-        overlay.CaptureToolVisibleProbe = () => Native.IsCaptureToolVisible();
+        overlay.CaptureToolForegroundProbe = () => Native.IsCaptureToolForeground();
         controller.Data.Settings.OverlayVisible = false;
         overlay.Present(false,.8,18,280,0);
         controller.Data.Settings.OverlayHideMilliseconds = originalHideMilliseconds;

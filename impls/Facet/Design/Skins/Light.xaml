@@ -1,0 +1,26 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+ <!-- Light built-in skin over Tokens.xaml (the dark default). ADR 0100. -->
+ <SolidColorBrush x:Key="Bg" Color="#F3F5F7"/>
+ <SolidColorBrush x:Key="OverlayBackdrop" Color="#B3F3F5F7"/>
+ <SolidColorBrush x:Key="ModalBackdrop" Color="#8C2A3236"/>
+ <SolidColorBrush x:Key="DangerSoft" Color="#B23A3A"/>
+ <SolidColorBrush x:Key="Panel" Color="#FFFFFF"/>
+ <SolidColorBrush x:Key="Edge" Color="#C9D1D6"/>
+ <SolidColorBrush x:Key="Ink" Color="#1C2427"/>
+ <SolidColorBrush x:Key="Muted" Color="#5C6A70"/>
+ <SolidColorBrush x:Key="ScheduleNow" Color="#D99A00"/>
+ <SolidColorBrush x:Key="Mint" Color="#23825C"/>
+ <SolidColorBrush x:Key="Danger" Color="#D24545"/>
+ <SolidColorBrush x:Key="CalendarSunday" Color="#D24545"/>
+ <SolidColorBrush x:Key="CalendarSaturday" Color="#2F6FD6"/>
+ <SolidColorBrush x:Key="Input" Color="#F7F9FA"/>
+ <SolidColorBrush x:Key="Selected" Color="#D3ECE1"/>
+ <SolidColorBrush x:Key="Hover" Color="#E6ECEF"/>
+ <SolidColorBrush x:Key="OnAccent" Color="#FFFFFF"/>
+ <SolidColorBrush x:Key="{x:Static SystemColors.WindowBrushKey}" Color="#F7F9FA"/>
+ <SolidColorBrush x:Key="{x:Static SystemColors.WindowTextBrushKey}" Color="#1C2427"/>
+ <SolidColorBrush x:Key="{x:Static SystemColors.ControlBrushKey}" Color="#FFFFFF"/>
+ <SolidColorBrush x:Key="{x:Static SystemColors.ControlTextBrushKey}" Color="#1C2427"/>
+ <SolidColorBrush x:Key="{x:Static SystemColors.HighlightBrushKey}" Color="#D3ECE1"/>
+ <SolidColorBrush x:Key="{x:Static SystemColors.HighlightTextBrushKey}" Color="#1C2427"/>
+</ResourceDictionary>

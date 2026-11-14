@@ -1,5 +1,7 @@
 # Architecture Decisions
 
+- [0092 — 캡처 도구가 전경일 때만 오버레이가 양보](0092-capture-tool-foreground-yield.md)
+- [0091 — 3D 월드 페이지와 글꼴을 스킨에 포함](0091-world-page-in-skin.md)
 - [0090 — 복셀 월드 스킨과 WebView2 배경](0090-voxel-world-webview.md)
 - [0089 — 앱 이름을 Facet으로 변경](0089-rename-to-facet.md)
 - [0088 — 패키지 설치와 GitHub 레지스트리](0088-packages-and-registry.md)
@@ -125,6 +127,10 @@
 
 - [0051 — 이름 없이 내용만 작성한 일정](0051-content-only-schedules.md)
 
+- [0093 — 우주 항해 디버그 패널](0093-voyage-debug-panel.md)
+
+- [0094 — 음악 폴더의 파일을 재생 목록에 추가](0094-music-folder-tracks.md)
+
 - [0095 — 받은 M4A의 편집 목록 제거](0095-fragmented-m4a-edit-list.md)
 
 - [0096 — 남은 옛 이름 식별자 이전](0096-rename-remaining-identifiers.md)
@@ -132,3 +138,9 @@
 - [0097 — 플러그인 삭제와 저장소 안 레지스트리](0097-plugin-uninstall-and-in-repo-registry.md)
 
 - [0098 — 설치 프로그램, winget, 플러그인 없는 공개 빌드](0098-installer-winget-plain-build.md)
+
+- [0099 — Facet 데이터 폴더, 백업·복원, 단축키 설정, 순정 화면 정리](0099-data-folder-backup-shortcuts.md)
+
+- [0100 — 다크·라이트 내장 스킨과 스킨 패키지](0100-light-dark-and-skin-packages.md)
+
+- [0101 — 시계·날씨·일정을 플러그인으로](0101-schedule-clock-weather-plugins.md)

@@ -87,7 +87,8 @@ public partial class OverlaySettingsView : UserControl
 
     internal WorkspaceSettingsPanel WorkspacePanel { get; } = new();
     internal PluginSettingsPanel PluginPanel { get; } = new();
-    internal PackagesPanel PackagesPanel { get; } = new();
+    internal PackagesPanel PluginPackages { get; } = new(PackageKind.Plugin);
+    internal PackagesPanel SkinPackages { get; } = new(PackageKind.Skin);
     // After a package install, so the skin list shows it without reopening the tab.
     internal void ReloadSkins() { if (loadSettings != null && !HasChanges) Reload(loadSettings()); }
 
@@ -100,13 +101,9 @@ public partial class OverlaySettingsView : UserControl
         Group("탭");
         Add("탭 구성", "설정 외의 탭을 추가·삭제하고 순서·표시·이름을 바꿉니다. 위젯 배치는 각 탭의 위젯 편집 버튼에서 바꿉니다. 변경은 바로 저장됩니다.", WorkspacePanel, ()=>"", _=>{}, _=>{});
 
-        Group("플러그인");
-        Add("플러그인 구성", "플러그인을 켜거나 끄고 플러그인별 설정을 바꿉니다. 날씨 지역은 날씨 플러그인에서 설정합니다. 변경은 바로 저장됩니다.", PluginPanel, ()=>"", _=>{}, _=>{});
-        Add("스킨·플러그인 받기", "온라인 목록이나 zip 파일로 스킨과 플러그인을 설치하고, 직접 만든 것을 올립니다. skins·plugins 폴더에 직접 넣어도 인식합니다.", PackagesPanel, ()=>"", _=>{}, _=>{});
-
-        Group("오버레이 모양");
+        Group("스킨");
         var skins = new ComboBox { ItemsSource=Design.Skins.Options, DisplayMemberPath="Name", SelectedValuePath="Id" };
-        Add("스킨", "앱의 색과 배경·위젯 틀을 함께 바꾸는 테마입니다. 선택하면 바로 적용됩니다. 오버레이 배경색은 별도 설정을 따릅니다.", skins,
+        Add("사용할 스킨", "앱의 색, 배경, 위젯 틀을 함께 바꿉니다. 고르면 바로 적용됩니다. 다크와 라이트가 기본으로 들어 있고, 다른 스킨은 아래 \"스킨 받기\"에서 설치합니다.", skins,
             ()=>(skins.SelectedItem as Design.SkinOption)?.Name ?? "",
             s=>{ skins.ItemsSource=Design.Skins.Rescan();skins.SelectedValue=Design.Skins.Resolve(s.Skin); },
             s=>s.Skin=skins.SelectedValue as string ?? Design.Skins.DefaultId);
@@ -124,7 +121,7 @@ public partial class OverlaySettingsView : UserControl
                 skinBoxes.Add((option,box));skinArea.Children.Add(box);
             }
         }
-        Add("스킨 설정", "선택한 스킨에 설정할 항목이 있을 때 나타납니다. 변경하면 바로 적용됩니다.", skinArea,
+        Add("스킨 옵션", "고른 스킨이 제공하는 옵션입니다. 옵션이 있는 스킨에서만 나타나고, 바꾸면 바로 적용됩니다.", skinArea,
             ()=>string.Join(" · ",skinBoxes.Select(item=>item.Option.Name+(item.Box.IsChecked==true ? " 켬" : " 끔"))),
             ShowSkinOptions,
             s=>{
@@ -138,30 +135,71 @@ public partial class OverlaySettingsView : UserControl
             if(!loading) { ShowSkinOptions(loadSettings?.Invoke() ?? new Settings());skinOptionsRow.Baseline=skinOptionsRow.Read(); }
             Changed();
         };
+        Add("스킨 받기", "공개 목록에서 스킨을 골라 설치하거나 zip 파일로 설치합니다. 직접 만든 스킨을 올릴 수도 있습니다.", SkinPackages, ()=>"", _=>{}, _=>{});
+
+        Group("오버레이");
         Range("투명도", "오버레이 배경의 투명도입니다. 0%는 완전 불투명, 100%는 완전 투명입니다. 글자와 입력창은 유지합니다.", 0, 100, 1, OverlayAppearance.Transparency, (s,v)=>s.OverlayTransparencyPercent=v, v=>$"{v:0}%");
         var colors = new OverlayColorPalette();
         Add("배경색", "오버레이 배경색을 색상 팔레트에서 선택합니다. 투명도와 별도로 저장됩니다.", colors,
             ()=>colors.SelectedColor, s=>colors.SelectedColor=s.OverlayBackgroundColor, s=>s.OverlayBackgroundColor=colors.SelectedColor);
         colors.SelectionChanged += (_,_)=>Changed();
-        Range("블러 강도", "오버레이 뒤 화면을 흐리게 만드는 강도입니다. 0으로 설정하면 블러를 끕니다.", 0, 40, 1, s=>s.OverlayBlurRadius, (s,v)=>s.OverlayBlurRadius=v, v=>$"{v:0}");
         Range("나타나는 시간", "오버레이가 나타나는 데 걸리는 시간입니다. 0ms는 즉시 표시합니다.", 0, 2000, 20, s=>s.OverlayShowMilliseconds, (s,v)=>s.OverlayShowMilliseconds=(int)v, v=>$"{v:0} ms");
         Range("사라지는 시간", "오버레이가 사라지는 데 걸리는 시간입니다. 0ms는 즉시 숨깁니다.", 0, 2000, 20, s=>s.OverlayHideMilliseconds, (s,v)=>s.OverlayHideMilliseconds=(int)v, v=>$"{v:0} ms");
 
-        Group("단축키·빠른 실행");
-        var engines = new ComboBox { ItemsSource=QuickLaunchWebSearch.Engines, DisplayMemberPath="Name", SelectedValuePath="Id" };
-        Add("검색 엔진", "런처의 ? 검색어에 사용할 검색 엔진입니다. 선택하면 바로 적용됩니다. ? 웹 주소는 검색 대신 해당 페이지를 엽니다.", engines,
-            ()=>(engines.SelectedItem as QuickLaunchWebSearch.EngineOption)?.Name ?? "",
-            s=>engines.SelectedValue=s.LauncherSearchEngine,
-            s=>s.LauncherSearchEngine=engines.SelectedValue is WebSearchEngine engine ? engine : throw new ArgumentException("검색 엔진을 선택해 주세요."));
-        engines.SelectionChanged += (_,_)=>Changed();
-        Text("오버레이 단축키", "전체 화면 오버레이를 열고 닫는 전역 단축키입니다. Win+Alt+Space는 빠른 실행, Win+Alt+End는 종료 전용입니다.", s=>s.OverlayHotkey, (s,v)=>s.OverlayHotkey=v.Trim());
-        Text("탐색기 alias", "한 줄에 이름=절대경로를 입력합니다. 빠른 실행에서 @@이름으로 폴더를 엽니다.", s=>string.Join(Environment.NewLine,(s.LaunchAliases ?? []).Select(x=>x.Key+"="+x.Value)), (s,v)=>s.LaunchAliases=QuickLaunchCatalog.ParseAliases(v), multiline:true);
+        Group("플러그인");
+        Add("설치된 플러그인", "켜고 끄기, 플러그인별 설정, 다시 불러오기, 삭제를 합니다. 켠 플러그인의 위젯은 각 탭의 위젯 편집에서 배치합니다. 바뀐 내용은 바로 저장됩니다.", PluginPanel, ()=>"", _=>{}, _=>{});
+        Add("플러그인 받기", "공개 목록에서 플러그인을 골라 설치하거나 zip 파일로 설치합니다. 플러그인은 Facet과 같은 권한으로 실행되니 믿을 수 있는 것만 설치하세요.", PluginPackages, ()=>"", _=>{}, _=>{});
 
-        Group("알림");
-        Toggle("사용자 알림 사용", "로컬 알림 CLI로 등록한 사용자 알림을 표시합니다.", s=>s.Notifications, (s,v)=>s.Notifications=v);
-        Toggle("전체 화면에서는 알림 숨김", "다른 앱이 전체 화면인 동안 예정 알림을 숨깁니다.", s=>s.HideFullscreen,(s,v)=>s.HideFullscreen=v);
-        Toggle("화면 공유 모드", "알림에 구체적인 기록 대신 일반 안내만 표시합니다.", s=>s.Privacy,(s,v)=>s.Privacy=v);
+        Group("단축키");
+        Text("오버레이 열기·닫기", "오버레이를 열고 닫는 전역 단축키입니다. 예: Win+Alt+O", s=>s.OverlayHotkey, (s,v)=>s.OverlayHotkey=v.Trim());
+        Text("빠른 실행", "프로그램 이름을 입력해 바로 실행하는 창을 여는 단축키입니다. 예: Win+Alt+Space", s=>s.QuickLaunchHotkey, (s,v)=>s.QuickLaunchHotkey=v.Trim());
+        Text("Facet 종료", "Facet을 완전히 종료하는 단축키입니다. 예: Win+Alt+End", s=>s.ExitHotkey, (s,v)=>s.ExitHotkey=v.Trim());
 
+        Group("데이터");
+        Add("백업", "일정·설정·플러그인 기록을 zip 파일 하나로 저장합니다. 같은 Windows 계정에서만 복원할 수 있습니다.", BackupEditor(), ()=>"", _=>{}, _=>{});
+        Add("복원", "백업 파일을 고르면 Facet을 다시 시작할 때 그 시점으로 되돌립니다. 지금 기록은 옆 폴더에 남겨 둡니다.", RestoreEditor(), ()=>"", _=>{}, _=>{});
+
+
+    }
+
+    private FrameworkElement BackupEditor()
+    {
+        var status=new TextBlock { FontSize=12,Foreground=Brush("Muted"),TextWrapping=TextWrapping.Wrap,Margin=new(0,6,0,0) };
+        var make=new Button { Content="지금 백업하기",Margin=new(0,0,8,0) };
+        var open=new Button { Content="백업 폴더 열기" };
+        make.Click+=(_,_)=>{
+            if(app==null) return;
+            try {
+                var (zip,skipped)=DataBackup.Create(app.Store.Root,DataBackup.DefaultFolder);
+                status.Text="저장했습니다: "+zip+(skipped>0 ? $" (사용 중인 파일 {skipped}개 제외)" : "");
+            }
+            catch(Exception ex) when (ex is IOException or UnauthorizedAccessException) { status.Text="백업하지 못했습니다: "+ex.Message; }
+        };
+        open.Click+=(_,_)=>{ Directory.CreateDirectory(DataBackup.DefaultFolder); Process.Start(new ProcessStartInfo(DataBackup.DefaultFolder){ UseShellExecute=true })?.Dispose(); };
+        var buttons=new WrapPanel();buttons.Children.Add(make);buttons.Children.Add(open);
+        var panel=new StackPanel();panel.Children.Add(buttons);panel.Children.Add(status);
+        return panel;
+    }
+
+    private FrameworkElement RestoreEditor()
+    {
+        var status=new TextBlock { FontSize=12,Foreground=Brush("Muted"),TextWrapping=TextWrapping.Wrap,Margin=new(0,6,0,0) };
+        var pick=new Button { Content="백업 파일 고르기…",Margin=new(0,0,8,0) };
+        var quit=new Button { Content="Facet 종료",Visibility=Visibility.Collapsed };
+        pick.Click+=(_,_)=>{
+            if(app==null) return;
+            var dialog=new Microsoft.Win32.OpenFileDialog { Filter="Facet 백업 (*.zip)|*.zip",InitialDirectory=Directory.Exists(DataBackup.DefaultFolder) ? DataBackup.DefaultFolder : "" };
+            if(dialog.ShowDialog()!=true) return;
+            try {
+                DataBackup.Stage(app.Store.Root,dialog.FileName);
+                status.Text="준비했습니다. Facet을 종료하고 다시 실행하면 이 백업으로 복원됩니다.";quit.Visibility=Visibility.Visible;
+            }
+            catch(Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException) { status.Text="복원할 수 없습니다: "+ex.Message; }
+        };
+        quit.Click+=(_,_)=>app?.Exit();
+        var buttons=new WrapPanel();buttons.Children.Add(pick);buttons.Children.Add(quit);
+        var panel=new StackPanel();panel.Children.Add(buttons);panel.Children.Add(status);
+        return panel;
     }
 
     private void Group(string name)

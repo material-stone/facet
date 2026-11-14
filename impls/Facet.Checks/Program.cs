@@ -176,9 +176,11 @@ Check("schedule color/label presets derive from used schedules then persist expl
 Check("workspace layout rejects overlaps and keeps built-in tab rules",()=>{
     void That(bool ok,string _="")=>Assert(ok);
     bool Rejects(Action action){try{action();return false;}catch(ArgumentException){return true;}}
-    var data=new AppData();
-    That(data.Workspace==null && WorkspaceLayouts.Current(data).Tabs.Select(t=>t.Id).SequenceEqual(new[]{"dashboard","schedule","sleep","chat","settings"}));
-    var defaults=WorkspaceLayouts.Default().Tabs[0];
+    That(new AppData().Workspace==null && WorkspaceLayouts.Current(new AppData()).Tabs.Select(t=>t.Id).SequenceEqual(new[]{"dashboard","settings"}) && WorkspaceLayouts.Default().Tabs.All(t=>t.Widgets.Count==0),"a fresh install has an empty dashboard and settings (ADR 0101)");
+    // The rules below run on the layout a never-edited install had before its widgets became plugins.
+    var data=new AppData{Workspace=WorkspaceLayouts.LegacyDefault()};
+    That(WorkspaceLayouts.Current(data).Tabs.Select(t=>t.Id).SequenceEqual(new[]{"dashboard","schedule","sleep","chat","settings"}));
+    var defaults=WorkspaceLayouts.LegacyDefault().Tabs[0];
     That(defaults.Widgets.All(w=>WorkspaceLayouts.CanPlace(defaults,w.Id,w.X,w.Y,w.Width,w.Height)),"default layout is valid");
     var tab=WorkspaceLayouts.AddTab(data,"  업무  ");
     That(tab.Title=="업무" && data.Workspace!.Tabs[^1].Id=="settings" && data.Workspace!.Tabs[^2].Id==tab.Id,"new tabs stay before settings");
@@ -188,10 +190,10 @@ Check("workspace layout rejects overlaps and keeps built-in tab rules",()=>{
     WorkspaceLayouts.MoveWidget(data,tab.Id,second.Id,500,-300,6,3);That(second.X==500 && second.Y==-300 && second.Width==6,"the board has no practical edge");
     That(Rejects(()=>WorkspaceLayouts.MoveWidget(data,tab.Id,second.Id,WorkspaceLayouts.MaxCell+1,0,4,2)),"coordinates stay in the supported range");
     WorkspaceLayouts.MoveWidget(data,tab.Id,second.Id,-2,-3,6,3);That(second.Y==-3);
-    That(Rejects(()=>WorkspaceLayouts.AddWidget(data,"dashboard",WorkspaceLayouts.ClockWidget,3,2,true)),"single built-in widgets cannot be placed twice");
-    var rule=WorkspaceLayouts.Default();
-    That(WorkspaceLayouts.PlacementProblem(rule,"dashboard",WorkspaceLayouts.ClockWidget,true,false)!=null && WorkspaceLayouts.PlacementProblem(rule,"chat",WorkspaceLayouts.ClockWidget,true,false)==null,"one per tab allows other tabs");
-    That(WorkspaceLayouts.PlacementProblem(rule,"chat",WorkspaceLayouts.ClockWidget,false,true)!=null && WorkspaceLayouts.PlacementProblem(rule,"dashboard",WorkspaceLayouts.ClockWidget,false,true)==null,"one tab only allows more on that tab");
+    That(Rejects(()=>WorkspaceLayouts.AddWidget(data,"dashboard",WorkspaceLayouts.PluginClockWidget,3,2,true)),"single widgets cannot be placed twice");
+    var rule=WorkspaceLayouts.LegacyDefault();
+    That(WorkspaceLayouts.PlacementProblem(rule,"dashboard",WorkspaceLayouts.PluginClockWidget,true,false)!=null && WorkspaceLayouts.PlacementProblem(rule,"chat",WorkspaceLayouts.PluginClockWidget,true,false)==null,"one per tab allows other tabs");
+    That(WorkspaceLayouts.PlacementProblem(rule,"chat",WorkspaceLayouts.PluginClockWidget,false,true)!=null && WorkspaceLayouts.PlacementProblem(rule,"dashboard",WorkspaceLayouts.PluginClockWidget,false,true)==null,"one tab only allows more on that tab");
     That(Rejects(()=>WorkspaceLayouts.AddWidget(data,"settings","plugin.a",1,1,false)) && Rejects(()=>WorkspaceLayouts.SetView(data,"settings",0,0,1)),"settings holds no board");
     var onChat=WorkspaceLayouts.AddWidget(data,"chat","plugin.a",1,1,false);That(onChat.X==-6,"fixed pages hold widgets on a board");WorkspaceLayouts.RemoveWidget(data,"chat",onChat.Id);
     var big=WorkspaceLayouts.AddWidget(data,tab.Id,"plugin.a",12,8,false);That(big.Y>=-1,"a large widget goes below the others instead of failing");WorkspaceLayouts.RemoveWidget(data,tab.Id,big.Id);
@@ -213,9 +215,9 @@ Check("workspace layout rejects overlaps and keeps built-in tab rules",()=>{
     That(WorkspaceLayouts.Normalize(fixedUp).Tabs.Single(t=>t.Id=="tab-a").Widgets.Single().X==-6,"a current grid does not move again");
     That(WorkspaceLayouts.Normalize(new WorkspaceLayout{GridVersion=2,Tabs=[new(){Id="chat",View=new(){X=double.NaN}}]}).Tabs.Single(t=>t.Id=="chat").View==null,"an invalid view falls back to the default");
     That(WorkspaceLayouts.Normalize(null).Tabs.Count==5);
-    var iconed=new AppData();WorkspaceLayouts.SetIcon(iconed,"chat","Music");
+    var iconed=new AppData{Workspace=WorkspaceLayouts.LegacyDefault()};WorkspaceLayouts.SetIcon(iconed,"chat","Music");
     That(WorkspaceLayouts.Normalize(JsonSerializer.Deserialize<AppData>(JsonSerializer.Serialize(iconed))!.Workspace).Tabs.Single(t=>t.Id=="chat").Icon=="Music" && Rejects(()=>WorkspaceLayouts.SetIcon(iconed,"settings","Music")),"a tab keeps its icon and settings keeps its own");
-    var ordinary=new AppData();WorkspaceLayouts.RemoveTab(ordinary,"sleep");WorkspaceLayouts.RenameTab(ordinary,"chat","대화");
+    var ordinary=new AppData{Workspace=WorkspaceLayouts.LegacyDefault()};WorkspaceLayouts.RemoveTab(ordinary,"sleep");WorkspaceLayouts.RenameTab(ordinary,"chat","대화");
     var ordinaryLoaded=WorkspaceLayouts.Normalize(JsonSerializer.Deserialize<AppData>(JsonSerializer.Serialize(ordinary))!.Workspace);
     That(ordinaryLoaded.Tabs.All(t=>t.Id!="sleep") && ordinaryLoaded.Tabs.Single(t=>t.Id=="chat").Title=="대화","a removed first tab stays removed and a new name stays");
     That(WorkspaceLayouts.Normalize(new WorkspaceLayout{GridVersion=5,Tabs=[new(){Id="settings",Title="설정"}]}).Tabs.Count==5,"an older layout gets its first tabs once");
@@ -309,9 +311,27 @@ Check("old chat settings move to the chat plugin once and leave the app settings
     PluginData.SetSetting(old,LegacyChat.Plugin,"agent","codex");old.Settings.ChatAgent="claude";PluginData.Normalize(old);
     Assert(Moved("agent")=="codex");
     var unused=new AppData();PluginData.Normalize(unused);
-    Assert(unused.Workspace==null && WorkspaceLayouts.Default().Tabs.Single(t=>t.Id==WorkspaceLayouts.ChatTab).Widgets.Count==0);
+    Assert(unused.Workspace==null && WorkspaceLayouts.Default().Tabs.All(t=>t.Id!=WorkspaceLayouts.ChatTab && t.Widgets.Count==0));
 });
-Check("chat references merge into the plugin's store and the store wins per chat", () => {
+Check("the former built-in widgets move to the plugin widgets once and keep their place and store", () => {
+    var data=JsonSerializer.Deserialize<AppData>("{\"Workspace\":{\"GridVersion\":6,\"Tabs\":[{\"Id\":\"dashboard\",\"Title\":\"대시보드\",\"Widgets\":[{\"Id\":\"builtin.clock\",\"WidgetId\":\"builtin.clock\",\"X\":-6,\"Y\":-4,\"Width\":3,\"Height\":1},{\"Id\":\"builtin.weather\",\"WidgetId\":\"builtin.weather\",\"X\":-3,\"Y\":-4,\"Width\":4,\"Height\":1},{\"Id\":\"builtin.agenda\",\"WidgetId\":\"builtin.agenda\",\"X\":-6,\"Y\":2,\"Width\":9,\"Height\":2}]},{\"Id\":\"schedule\",\"Title\":\"일정\",\"Widgets\":[{\"Id\":\"builtin.calendar\",\"WidgetId\":\"builtin.calendar\",\"X\":-7,\"Y\":-4,\"Width\":14,\"Height\":8}]},{\"Id\":\"settings\",\"Title\":\"설정\"}]},\"WidgetStores\":{\"builtin.clock\":{\"PluginId\":\"\",\"WidgetId\":\"builtin.clock\",\"Values\":{\"alignment\":\"center-left\"}}}}")!;
+    PluginData.Normalize(data);
+    var widgets=data.Workspace!.Tabs.SelectMany(t=>t.Widgets).ToArray();
+    Assert(widgets.Select(w=>w.WidgetId).SequenceEqual([WorkspaceLayouts.PluginClockWidget,WorkspaceLayouts.PluginWeatherWidget,WorkspaceLayouts.PluginAgendaWidget,WorkspaceLayouts.PluginCalendarWidget]) && widgets[0].X==-6 && widgets[3].Width==14);
+    Assert(PluginData.Store(data,"builtin.clock") is {PluginId:"facet.clock",WidgetId:WorkspaceLayouts.PluginClockWidget} store && store.Values["alignment"]=="center-left");
+    PluginData.Normalize(data);Assert(data.Workspace.Tabs.SelectMany(t=>t.Widgets).Select(w=>w.WidgetId).SequenceEqual(widgets.Select(w=>w.WidgetId)));
+    Assert(WorkspaceLayouts.LegacyDefault().Tabs.SelectMany(t=>t.Widgets).All(w=>w.WidgetId.StartsWith("plugin.facet.")));
+});
+Check("calendar records merge into the schedule plugin's store and the store wins per date", () => {
+    var date=new DateOnly(2026,11,14);
+    string stored=JsonSerializer.Serialize(new CalendarStoreFile{Days=[new(){Date=date,Note="저장소"}]});
+    var calendar=new CalendarStoreFile{Days=[new(){Date=date,Note="달력"},new(){Date=date.AddDays(1),Note="달력만"}],SchedulePresets=[new(){Label="업무",Color="#91BFFF"}]};
+    var merged=JsonSerializer.Deserialize<CalendarStoreFile>(LegacySchedule.Merge(stored,calendar,[new(){Date=date.AddDays(2),Note="기록"}],null))!;
+    Assert(merged.Days.Select(d=>d.Note).SequenceEqual(["저장소","달력만","기록"]) && merged.SchedulePresets!.Single().Label=="업무");
+    var fresh=JsonSerializer.Deserialize<CalendarStoreFile>(LegacySchedule.Merge(null,null,[new(){Date=date,Note="기록"}],null))!;
+    Assert(fresh.Days.Single().Note=="기록" && fresh.SchedulePresets==null);
+    bool rejected=false;try{LegacySchedule.Merge("{\"SchemaVersion\":9}",null,[],null);}catch(InvalidDataException){rejected=true;}Assert(rejected);
+});Check("chat references merge into the plugin's store and the store wins per chat", () => {
     string id=Guid.NewGuid().ToString(),other=Guid.NewGuid().ToString();
     string text=LegacyChat.Merge("{\"SchemaVersion\":1,\"Extra\":7,\"Chats\":[{\"ThreadId\":\""+id+"\",\"Title\":\"저장소\"}]}",[new(){ThreadId=id,Title="기록"},new(){ThreadId=other,Title="추가"}]);
     var chats=JsonDocument.Parse(text).RootElement;

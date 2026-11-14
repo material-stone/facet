@@ -66,6 +66,20 @@ public static class PluginData
         MoveConditionWidgets(data);
         MoveSleep(data);
         MoveChat(data);
+        MoveBuiltInWidgets(data);
+    }
+
+    // Placements of the app's former clock, weather, agenda and calendar become the plugins' widgets, keeping their place and store (ADR 0101).
+    private static void MoveBuiltInWidgets(AppData data)
+    {
+        // A never-edited layout used to show these widgets; someone with schedules keeps the layout they saw.
+        if (data.Workspace == null && (data.CalendarDays.Count > 0 || data.SchedulePresets != null)) data.Workspace = WorkspaceLayouts.LegacyDefault();
+        foreach (var item in data.Workspace?.Tabs.SelectMany(t => t.Widgets) ?? []) {
+            string current = WorkspaceLayouts.CurrentWidget(item.WidgetId);
+            if (current == item.WidgetId) continue;
+            item.WidgetId = current;
+            if (Store(data, item.Id) is { } store) { store.WidgetId = current; store.PluginId = current.Split('.')[1] + "." + current.Split('.')[2]; }
+        }
     }
 
     // One-time move for records from when the music player was built in. Delete once no such records remain (ADR 0080).

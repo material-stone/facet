@@ -84,6 +84,9 @@ try {
     # The condition plugin ships the same way, to <data>/plugins/condition (ADR 0081).
     dotnet publish impls/Facet.ConditionPlugin/Facet.ConditionPlugin.csproj -c Release -o (Join-Path $deployRoot 'plugins/condition') --nologo -m:1 /nodeReuse:false
     if ($LASTEXITCODE -ne 0) { throw 'Condition plugin publish failed. The previous release remains selected.' }
+    # The schedule plugin ships the same way, to <data>/plugins/schedule (ADR 0101).
+    dotnet publish impls/Facet.SchedulePlugin/Facet.SchedulePlugin.csproj -c Release -o (Join-Path $deployRoot 'plugins/schedule') --nologo -m:1 /nodeReuse:false
+    if ($LASTEXITCODE -ne 0) { throw 'Schedule plugin publish failed. The previous release remains selected.' }
     # The sleep plugin ships the same way, to <data>/plugins/sleep (ADR 0083).
     dotnet publish impls/Facet.SleepPlugin/Facet.SleepPlugin.csproj -c Release -o (Join-Path $deployRoot 'plugins/sleep') --nologo -m:1 /nodeReuse:false
     if ($LASTEXITCODE -ne 0) { throw 'Sleep plugin publish failed. The previous release remains selected.' }

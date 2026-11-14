@@ -40,7 +40,7 @@ internal static partial class Program
         Assert(Skins.Resolve("aurora")=="aurora" && Skins.Load("aurora")["Bg"] is SolidColorBrush { Color:var bg } && bg==Color.FromRgb(0x10,0x20,0x30) && Skins.LoadVisuals("aurora")==null,"an installed skin is selectable and supplies its tokens");
         Assert(Skins.Load("aurora").Contains(SystemColors.WindowTextBrushKey) && !Skins.Load("aurora").Contains("Panel"),"a skin overrides only what it sets, plus the matching system colors");
         Directory.CreateDirectory(Path.Combine(data,"skins","broken"));File.WriteAllText(Path.Combine(data,"skins","broken","skin.json"),"nope");
-        Directory.CreateDirectory(Path.Combine(data,"skins","clash"));File.WriteAllText(Path.Combine(data,"skins","clash","skin.json"),"{\"id\":\"space\",\"name\":\"가짜\"}");
+        Directory.CreateDirectory(Path.Combine(data,"skins","clash"));File.WriteAllText(Path.Combine(data,"skins","clash","skin.json"),"{\"id\":\"light\",\"name\":\"가짜\"}");
         Assert(Skins.Rescan().Count(option=>option.Id=="aurora")==1 && Skins.Options.All(option=>option.Name!="가짜") && Skins.Options.All(option=>option.Id!="broken"),"a broken folder is skipped and a built-in id cannot be replaced");
 
         // A theme with an image, written the way an author would.
@@ -56,21 +56,20 @@ internal static partial class Program
         File.Delete(Path.Combine(imageFolder,"frame.png"));
         Assert(Skins.LoadVisuals("framed")==null,"a missing image keeps tokens only");
 
-        // The published conversion of the built-in space skin must match it.
+        // The packaged skins in registry/skins: every former built-in skin is now data the app validates (ADR 0100).
         string repository=AppContext.BaseDirectory;
-        while(!Directory.Exists(Path.Combine(repository,"registry","samples"))) repository=Path.GetDirectoryName(repository) ?? throw new DirectoryNotFoundException("registry/samples");
-        var voyageSource=ExternalSkins.Read(Path.Combine(repository,"registry","samples","space-voyage"));
-        var builtInSpace=new ResourceDictionary { Source=new Uri("pack://application:,,,/Facet;component/Design/Skins/Space.xaml") };
-        Assert(voyageSource!=null && voyageSource.Colors.Count==ExternalSkins.ColorTokens.Count && voyageSource.Colors.All(pair=>builtInSpace[pair.Key] is SolidColorBrush brush && brush.Color==pair.Value),"the published voyage skin carries the space skin's colors");
-        var voyageVisuals=ExternalSkins.Visuals(voyageSource!);var spaceVisuals=ThemeVisuals.Load("Space");
-        Assert(voyageVisuals is { Voyage:true,HudWidgets:true,Stars:500,PanelMarkLength:12,TabCornerRadius:0 } && voyageVisuals.NebulaSpeed==spaceVisuals!.NebulaSpeed && voyageVisuals.Options.Single().Id==ThemeVisuals.ReticleOption,"the published voyage skin keeps the space skin's visual slots");
+        while(!Directory.Exists(Path.Combine(repository,"registry","skins"))) repository=Path.GetDirectoryName(repository) ?? throw new DirectoryNotFoundException("registry/skins");
+        ExternalSkin Packaged(string id)=>ExternalSkins.Read(Path.Combine(repository,"registry","skins",id)) ?? throw new InvalidDataException(id);
+        Assert(new[]{"space","voxel","midnight"}.All(id=>Packaged(id).Id==id && Packaged(id).Colors.Count==ExternalSkins.ColorTokens.Count),"each packaged skin parses with its folder id and sets every color token");
+        Assert(ExternalSkins.Visuals(Packaged("space")) is { Voyage:true,HudWidgets:true,Stars:500,PanelMarkLength:12,TabCornerRadius:0 } spaceVisuals && spaceVisuals.NebulaSpeed>0 && spaceVisuals.Options.Single().Id==ThemeVisuals.ReticleOption,"the space package keeps the voyage, nebula, stars, frame marks and reticle");
+        Assert(ExternalSkins.Visuals(Packaged("voxel")) is { WorldPageHtml:{ Length:>1000 },SoftHud:true } && Packaged("voxel").Theme is { BodyFont:not null,HeadingFont:not null } && ExternalSkins.Visuals(Packaged("midnight"))==null,"the voxel package carries its world page and fonts and midnight only colors");
 
         // Unsafe packages leave nothing behind.
         Assert(Refused(Zip("slip.zip",("skin.json",skinJson),("../../evil.txt","x")),"안전하지 않은") && !File.Exists(Path.Combine(root,"evil.txt")),"a path leaving the package is refused");
         Assert(Refused(Zip("device.zip",("skin.json",skinJson),("con.txt","x")),"안전하지 않은") && Refused(Zip("stream.zip",("skin.json",skinJson),("a.txt:b","x")),"안전하지 않은"),"device names and alternate streams are refused");
         Assert(Refused(Zip("code.zip",("skin.json",skinJson),("run.dll","x")),"넣을 수 없는"),"a skin cannot carry code");
         Assert(Refused(Zip("none.zip",("readme.txt","x"))) && Refused(Zip("both.zip",("skin.json",skinJson),("plugin.json","{}"))),"a package has exactly one valid manifest");
-        Assert(Refused(Zip("noimage.zip",("skin.json","{\"id\":\"m\",\"name\":\"M\",\"theme\":{\"background\":\"gone.png\"}}")),"이미지가 없습니다"),"a skin must carry the images it names");
+        Assert(Refused(Zip("noimage.zip",("skin.json","{\"id\":\"m\",\"name\":\"M\",\"theme\":{\"background\":\"gone.png\"}}")),"파일이 없습니다"),"a skin must carry the images it names");
         string garbage=Path.Combine(work,"garbage.zip");File.WriteAllText(garbage,"not a zip");
         Assert(Refused(garbage,"손상"),"a broken zip reports a message");
         Assert(!Directory.GetDirectories(data,".package-staging-*").Any(),"staging is cleaned up after failures");

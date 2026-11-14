@@ -48,7 +48,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [InstallDelete]
-; A new version replaces the whole program folder; records live in %LOCALAPPDATA%\MaterialStone\DailyDock.
+; A new version replaces the whole program folder; records live in %LOCALAPPDATA%\MaterialStone\Facet.
 Type: filesandordirs; Name: "{app}\releases"
 Type: filesandordirs; Name: "{app}\runtime"
 

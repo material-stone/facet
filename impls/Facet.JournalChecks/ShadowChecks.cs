@@ -7,21 +7,23 @@ using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
 using Facet;
+using Facet.SchedulePlugin;
+using Facet.Widgets;
 
 internal static partial class Program
 {
     private static void CheckCachedShadows(string qa)
     {
-        var hud=new OverlayTabs {Opacity=1};var tabs=(TabControl)hud.FindName("Tabs");tabs.SelectedItem=hud.FindName("ManagementTab");
-        var carousel=(OverlayCarousel)hud.FindName("ManagementCarousel");carousel.AnimateTransitions=false;
-        var comparisons=new List<object>();hud.AnimateDayTransitions=false;
+        var hud=new OverlayTabs {Opacity=1};var tabs=(TabControl)hud.FindName("Tabs");tabs.SelectedItem=hud.FindName("DashboardTab");
+        var board=ScheduleBoardFor(hud,Path.Combine(qa,"shadows-"+Guid.NewGuid().ToString("N")));
+        var comparisons=new List<object>();board.AnimateDayTransitions=false;
         // Sizes where the default tile clears the tab strip; a smaller window puts the strip's shadow over the tile.
         foreach(var size in new[]{new Size(1440,900),new Size(1920,1080)}) {
             hud.Measure(size);hud.Arrange(new Rect(size));hud.UpdateLayout();
             var shadows=VisualElements(hud).OfType<CachedShadow>().ToArray();
             Assert(shadows.Length==5 && shadows.All(s=>s.Child==null && !s.IsHitTestVisible && s.CacheMode==null),"five cached shadows contain only noninteractive empty background siblings at "+size+" (found "+string.Join(",",shadows.Select(s=>s.Name))+"; selected "+tabs.SelectedIndex+")");
             foreach(int selected in new[]{0,1}) {
-                if(selected==0)hud.ReturnToCalendar();else hud.OpenDay(DateOnly.FromDateTime(DateTime.Now));
+                if(selected==0)board.ReturnToCalendar();else board.OpenDay(DateOnly.FromDateTime(DateTime.Now));
                 hud.UpdateLayout();
                 BitmapSource Render() {hud.UpdateLayout();var result=new RenderTargetBitmap((int)size.Width,(int)size.Height,96,96,PixelFormats.Pbgra32);result.Render(hud);return result;}
                 foreach(var shadow in shadows)shadow.UseLiveEffect=true;
@@ -39,7 +41,7 @@ internal static partial class Program
                     shadowPixels=shadowDeltas.Count,shadowMeanAlphaDelta=shadowDeltas.DefaultIfEmpty().Average(),shadowMaxAlphaDelta=shadowDeltas.DefaultIfEmpty().Max()});
                 Assert((double)delta/a.Length<.2 && shadowDeltas.Count>0 && shadowDeltas.Average()<2 && shadowDeltas.Max()<=20,
                     "shadow appearance stays within subpixel resampling tolerance at "+size+" item "+selected);
-                foreach(var content in new FrameworkElement[]{(FrameworkElement)hud.FindName("Calendar"),(FrameworkElement)hud.FindName("DayEditor"),(FrameworkElement)tabs.Template.FindName("TabStrip",tabs)}) {
+                foreach(var content in new FrameworkElement[]{(FrameworkElement)board.FindName("Calendar"),(FrameworkElement)board.FindName("DayEditor"),(FrameworkElement)tabs.Template.FindName("TabStrip",tabs)}) {
                     bool visible=true;
                     for(DependencyObject? node=content;node!=null && !ReferenceEquals(node,hud);node=VisualTreeHelper.GetParent(node))
                         if(node is UIElement element && element.Visibility!=Visibility.Visible) {visible=false;break;}
@@ -90,8 +92,8 @@ internal static partial class Program
 
     private static void ProfileShadows(string qa)
     {
-        var hud=new OverlayTabs {Opacity=1};((TabControl)hud.FindName("Tabs")).SelectedItem=hud.FindName("ManagementTab");
-        var carousel=(OverlayCarousel)hud.FindName("ManagementCarousel");carousel.AnimateTransitions=false;
+        var hud=new OverlayTabs {Opacity=1};((TabControl)hud.FindName("Tabs")).SelectedItem=hud.FindName("DashboardTab");
+        ScheduleBoardFor(hud,Path.Combine(qa,"shadow-profile-"+Guid.NewGuid().ToString("N")));
         var watch=Stopwatch.StartNew();hud.Measure(new Size(1440,900));hud.Arrange(new Rect(0,0,1440,900));hud.UpdateLayout();
         var shadows=VisualElements(hud).OfType<CachedShadow>().ToArray();
         var bitmap=new RenderTargetBitmap(1440,900,96,96,PixelFormats.Pbgra32);var pixel=new byte[4];

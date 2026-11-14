@@ -11,7 +11,6 @@ public partial class OverlayTabs
     private sealed record WidgetEntry(string Id, WidgetDescriptor Descriptor, string? PluginId, bool Fill);
 
     private readonly Dictionary<string, WidgetEntry> catalog = [];
-    private readonly Dictionary<string, FrameworkElement> builtInViews = [];
     private readonly Dictionary<string, FrameworkElement> pluginViews = [];
     private readonly Dictionary<string, TabItem> addedTabs = [];
     private readonly Dictionary<string, OverlayWorkspaceView> workspaces = [];
@@ -29,18 +28,7 @@ public partial class OverlayTabs
 
     private void InitializeWorkspace()
     {
-        var sections = Dashboard.DetachSections();
-        void BuiltIn(string id, string title, string description, FrameworkElement view, int columns, int rows, int minColumns, int minRows, bool fill = false, bool panel = false, bool hudPanel = false)
-        {
-            builtInViews[id] = view;
-            catalog[id] = new(id, new(id, title, _ => view) { Description = description, DefaultColumns = columns, DefaultRows = rows, MinColumns = minColumns, MinRows = minRows, AllowMultiple = false, AllowMultipleTabs = false, HasPanel = panel, HasHudPanel = hudPanel }, null, fill);
-        }
-        clockButton = new Facet.Widgets.ClockFitButton(sections[WorkspaceLayouts.ClockWidget], () => WidgetModalFor(WorkspaceLayouts.ClockWidget), SaveClockAlignment);
-        BuiltIn(WorkspaceLayouts.ClockWidget, "시계", "날짜와 현재 시각", clockButton, 3, 1, 2, 1, fill: true, hudPanel: true);
-        BuiltIn(WorkspaceLayouts.WeatherWidget, "날씨", "현재 날씨와 습도", sections[WorkspaceLayouts.WeatherWidget], 4, 1, 3, 1, hudPanel: true);
-        BuiltIn(WorkspaceLayouts.AgendaWidget, "오늘 일정", "오늘 주요 일정과 알림", sections[WorkspaceLayouts.AgendaWidget], 9, 2, 3, 2, hudPanel: true);
-        ManagementPage.Children.Remove(CalendarWidgetView);
-        BuiltIn(WorkspaceLayouts.CalendarWidget, "달력·일정", "달력과 날짜별 일정·할 일·기록", CalendarWidgetView, WorkspaceLayouts.CalendarColumns, WorkspaceLayouts.CalendarRows, 8, 5, fill: true);
+        // The app has no widgets of its own; clock, weather and schedule come from plugins (ADR 0101).
         workspaces[WorkspaceLayouts.DashboardTab] = NewWorkspace(WorkspaceLayouts.DashboardTab);
         DashboardViewport.Children.Insert(0, workspaces[WorkspaceLayouts.DashboardTab]);
         // Fixed pages stay as they are; their boards lie on top.
@@ -49,17 +37,6 @@ public partial class OverlayTabs
             host.Children.Add(workspaces[id]);
         }
         ApplyWorkspace();
-    }
-
-    private Facet.Widgets.ClockFitButton? clockButton;
-    internal Facet.Widgets.ClockFitButton? ClockButton => clockButton;
-
-    // The placement's own store, so removing the clock forgets its alignment like any other widget's data.
-    private bool SaveClockAlignment(string value)
-    {
-        const string id = WorkspaceLayouts.ClockWidget;
-        if (app == null) { PluginData.SetValue(previewData, id, "", id, Facet.Widgets.ClockFitButton.AlignmentKey, value); return true; }
-        return app.Commit(data => PluginData.SetValue(data, id, "", id, Facet.Widgets.ClockFitButton.AlignmentKey, value));
     }
 
     private OverlayWorkspaceView NewWorkspace(string tabId)
@@ -86,14 +63,11 @@ public partial class OverlayTabs
     private FrameworkElement CreateWidgetView(string tabId, WidgetPlacement item)
     {
         if (!catalog.TryGetValue(item.WidgetId, out var entry)) return Placeholder("플러그인을 찾을 수 없습니다", item.WidgetId);
-        if (item.WidgetId == WorkspaceLayouts.ClockWidget && clockButton != null)
-            clockButton.Alignment = PluginData.Store(Workspace, item.Id)?.Values.GetValueOrDefault(Facet.Widgets.ClockFitButton.AlignmentKey) ?? Facet.Widgets.ClockFitButton.DefaultAlignment;
-        if (entry.PluginId == null) return builtInViews[item.WidgetId];
         if (pluginViews.TryGetValue(item.Id, out var existing)) return existing;
         try {
             string storage = Path.Combine(plugins!.Root, entry.PluginId);
             var view = entry.Descriptor.Create(new(item.Id, plugins.Discover().FirstOrDefault(p => p.Id == entry.PluginId)?.Directory ?? storage) {
-                TabId = tabId, Settings = runtime!.SettingsFor(entry.PluginId), Workspace = runtime, Modal = modals.For(item.Id),
+                TabId = tabId, Settings = runtime!.SettingsFor(entry.PluginId), Workspace = runtime, Modal = modals.For(item.Id), Layer = this,
                 Data = entry.Descriptor.UsesData ? runtime.DataFor(item.Id, entry.PluginId, item.WidgetId) : null
             });
             if (view == null || view.Parent != null) throw new InvalidOperationException("위젯 뷰가 올바르지 않습니다.");
@@ -192,11 +166,6 @@ public partial class OverlayTabs
         _ => addedTabs.GetValueOrDefault(view.TabId)
     };
 
-    private bool IsWidgetTabSelected(string widgetId) =>
-        WorkspaceLayouts.Current(Workspace).Tabs.FirstOrDefault(t => t.Widgets.Any(w => w.WidgetId == widgetId)) is { } tab
-        && workspaces.TryGetValue(tab.Id, out var view) && ReferenceEquals(TabOf(view), Tabs.SelectedItem);
-
-    private bool IsCalendarTabSelected => IsWidgetTabSelected(WorkspaceLayouts.CalendarWidget);
 
     internal void SetWorkspaceEditing(bool editing)
     {
@@ -280,7 +249,6 @@ public partial class OverlayTabs
         plugins = controller.Plugins;
         runtime = controller.PluginRuntime;
         runtime.PluginOf = id => catalog.GetValueOrDefault(id)?.PluginId;
-        runtime.SettingChanged = (plugin, key) => { if (plugin == PluginData.WeatherPlugin && key == PluginData.WeatherRegionKey) Dashboard.ReloadWeatherLocation(); };
         foreach (var plugin in plugins.Discover()) {
             var grant = controller.Data.EnabledPlugins?.FirstOrDefault(g => g.Id == plugin.Id);
             if (grant == null) continue;

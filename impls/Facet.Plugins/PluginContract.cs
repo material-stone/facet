@@ -117,6 +117,24 @@ public sealed record WidgetContext(string InstanceId, string StorageDirectory)
     public IPluginSettings Settings { get; init; } = EmptyHost.Instance;
     public IFacetWorkspace Workspace { get; init; } = EmptyHost.Instance;
     public IWidgetModal Modal { get; init; } = EmptyHost.Instance;
+    public IWidgetLayer Layer { get; init; } = EmptyHost.Instance;
+}
+
+// A full-overlay layer a widget owns, such as an editor with its own pickers: above the boards and below widget modals.
+// The plugin draws the backdrop and closes it; the app only places it (ADR 0101).
+public interface IWidgetLayer
+{
+    void Add(FrameworkElement layer);
+    void Remove(FrameworkElement layer);
+}
+
+// Optional on a widget view. The app asks the views of the selected tab about Escape and keys, and every view before
+// it hides the overlay, switches tabs or saves with Ctrl+S; false from TrySave keeps the overlay where it is.
+public interface IWidgetInput
+{
+    bool HandleEscape();
+    bool TrySave();
+    bool HandleKey(System.Windows.Input.Key key, System.Windows.Input.ModifierKeys modifiers);
 }
 
 // The app shows the view over the whole overlay; the plugin owns its content and state.
@@ -229,8 +247,10 @@ public sealed record ChoiceSetting(string Key, string Label, IReadOnlyList<Setti
 // A button; the returned text is shown beside it. Stores nothing.
 public sealed record ActionSetting(string Key, string Label, string ButtonText, Func<Task<string>> Run) : SettingField(Key, Label);
 
-internal sealed class EmptyHost : IPluginSettings, IFacetWorkspace, IWidgetModal
+internal sealed class EmptyHost : IPluginSettings, IFacetWorkspace, IWidgetModal, IWidgetLayer
 {
+    public void Add(FrameworkElement layer) { }
+    public void Remove(FrameworkElement layer) { }
     internal static readonly EmptyHost Instance = new();
     public IModalHandle? Show(FrameworkElement content, ModalOptions? options = null) => null;
     public string Get(string key) => "";

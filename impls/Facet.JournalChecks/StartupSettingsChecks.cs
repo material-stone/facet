@@ -12,8 +12,16 @@ internal static partial class Program
         Assert(typeof(Store).Assembly.GetName().Name == "Facet" && typeof(AppData).Assembly.GetName().Name == "Facet.Core"
             && LaunchProtocol.DisplayName == "Facet" && LaunchProtocol.LauncherName == "Facet.Launcher.exe",
             "renamed app, core and fixed launcher use Facet identities");
-        string previousRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MaterialStone", "DailyDock");
-        Assert(LaunchProtocol.DataRoot([]) == previousRoot && LaunchProtocol.AppId == "MaterialStone.DailyDock"
+        string local = Path.Combine(Path.GetTempPath(), "facet-root-" + Guid.NewGuid().ToString("N")), oldRoot = Path.Combine(local, "MaterialStone", "DailyDock"), newRoot = Path.Combine(local, "MaterialStone", "Facet");
+        Assert(LaunchProtocol.DefaultRoot(local) == newRoot, "a fresh PC keeps records in MaterialStone/Facet");
+        Directory.CreateDirectory(oldRoot); File.WriteAllText(Path.Combine(oldRoot, "records.dat"), "x");
+        Assert(LaunchProtocol.DefaultRoot(local) == oldRoot, "records from before the rename stay in use until moved");
+        using (new Mutex(true, LaunchProtocol.Instance(oldRoot))) Assert(!LaunchProtocol.MoveRenamedRoot(local) && Directory.Exists(oldRoot), "a running app keeps its folder");
+        Assert(LaunchProtocol.MoveRenamedRoot(local) && File.Exists(Path.Combine(newRoot, "records.dat")) && !Directory.Exists(oldRoot) && LaunchProtocol.DefaultRoot(local) == newRoot, "the old folder moves once to MaterialStone/Facet");
+        Directory.CreateDirectory(oldRoot);
+        Assert(!LaunchProtocol.MoveRenamedRoot(local) && LaunchProtocol.DefaultRoot(local) == newRoot, "an existing Facet folder wins over a stray old one");
+        Directory.Delete(local, true);
+        Assert(LaunchProtocol.AppId == "MaterialStone.DailyDock"
             && LaunchProtocol.LauncherEnvironment == "DAILYDOCK_LAUNCHER",
             "Facet continues the existing data store and persistent Windows identities");
         const string value = "MaterialStoneDailyDock";

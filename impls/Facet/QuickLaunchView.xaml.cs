@@ -95,7 +95,7 @@ public partial class QuickLaunchView : UserControl
         cancellation?.Cancel(); cancellation?.Dispose(); cancellation = new();
         int version = ++generation; string text = Input.Text;
         if (RefreshMode()) { ClearResults(); HelpPanel.Visibility=Visibility.Collapsed; resultGeneration=version; search=Task.CompletedTask; return; }
-        if (QuickLaunchWebSearch.IsInput(text)) {
+        if (QuickLaunchCatalog.Extras && QuickLaunchWebSearch.IsInput(text)) {
             ClearResults(keepIcon: true); Candidates.IsHitTestVisible = true; resultGeneration = version;
             search = active ? UpdateBrowserIconAsync(version, cancellation.Token) : Task.CompletedTask;
             return;
@@ -237,7 +237,7 @@ public partial class QuickLaunchView : UserControl
         launching = true;
         int version = generation;
         try {
-            if (clicked == null && active && QuickLaunchWebSearch.IsInput(Input.Text)) {
+            if (clicked == null && active && QuickLaunchCatalog.Extras && QuickLaunchWebSearch.IsInput(Input.Text)) {
                 start(QuickLaunchWebSearch.StartInfo(Input.Text, app.Data.Settings.LauncherSearchEngine));
                 app.HideOverlay(restore: false); return;
             }

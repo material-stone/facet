@@ -20,6 +20,23 @@ internal sealed record Encounter(PlanetKind Kind,int Seed,double Radius,double X
     internal double Duration=>(Extent*2-StartZ)/Speed;
     // Both planets may be anywhere along Z at any time, so only their side-on separation keeps them apart.
     internal bool ClearOf(Encounter other)=>Math.Sqrt((X-other.X)*(X-other.X)+(Y-other.Y)*(Y-other.Y))>=(Extent+other.Extent)*1.1;
+    // Moves its line so the centre shows at the spot. WPF's field of view is horizontal, so the frame's height
+    // follows from the aspect ratio. A spot too near the middle is pushed out: the pass must still miss the camera.
+    internal Encounter PlacedAt(VoyageSpot spot,double aspect)
+    {
+        double halfWidth=Math.Tan(27.5*Math.PI/180),halfHeight=halfWidth/aspect,range=Extent*spot.Reach;
+        double x=spot.Across*halfWidth*range,y=spot.Up*halfHeight*range,axis=Math.Sqrt(x*x+y*y),least=VoyagePlan.MinClearance*Extent;
+        if(axis<1e-6) return this with { X=least,Y=0 };
+        double scale=Math.Max(1,least/axis);
+        return this with { X=x*scale,Y=y*scale };
+    }
+}
+
+// Where a debug planet appears: -1 to 1 across the frame (right and up are positive), and how many extents away.
+internal readonly record struct VoyageSpot(double Across,double Up,double Reach)
+{
+    internal const double MinReach=2,MaxReach=60;
+    internal static readonly VoyageSpot Default=new(.5,0,12);
 }
 
 // Pure and deterministic. Keeping the axis distance beyond the extent is what makes a collision impossible.
@@ -226,8 +243,13 @@ internal sealed class SpaceVoyage : Viewport3D
     private TimeSpan last;
     private Task<Flight>? baking;
     private double gap,scanSeconds;
-    private bool first=true;
+    private bool first=true,spawning;
+    private double timeScale=1;
 
+    internal const double MaxTimeScale=10;
+    // Speeds the flight only; a scan keeps its real timing.
+    internal double TimeScale { get=>timeScale;set=>timeScale=Math.Clamp(value,1,MaxTimeScale); }
+    internal VoyageSpot SpawnSpot { get;set; }=VoyageSpot.Default;
     internal bool IsSailing=>timer.IsEnabled;
     internal bool IsScanning=>flights.Any(flight=>flight.ScanGlow!=null);
     internal int PlanetCount=>flights.Count;
@@ -258,7 +280,7 @@ internal sealed class SpaceVoyage : Viewport3D
 
     private void Advance()
     {
-        var now=clock.Elapsed;double step=(now-last).TotalSeconds;last=now;
+        var now=clock.Elapsed;double real=(now-last).TotalSeconds,step=real*timeScale;last=now;
         gap-=step;
         if(flights.Count<MaxPlanets) {
             baking ??=StartBake();
@@ -274,7 +296,7 @@ internal sealed class SpaceVoyage : Viewport3D
             if(!flight.Encounter.IsPast(flight.Elapsed)) continue;
             Remove(flight);Passes++;
         }
-        if(IsScanning) SetScanTime(scanSeconds+step);
+        if(IsScanning) SetScanTime(scanSeconds+real);
         DrawFarthestFirst();
     }
 
@@ -350,10 +372,34 @@ internal sealed class SpaceVoyage : Viewport3D
     {
         if(!add) foreach(var flight in flights.ToArray()) Remove(flight);
         var (diffuse,emissive)=PlanetSurface.Bake(item.Kind,item.Seed);
+        ShowAt(item,diffuse,emissive,z);
+    }
+
+    private void ShowAt(Encounter item,byte[] diffuse,byte[]? emissive,double z)
+    {
         var shown=Build(item,diffuse,emissive);
         shown.Elapsed=(z-item.StartZ)/item.Speed;shown.Age=FadeInSeconds;first=false;
         flights.Add(shown);Children.Insert(1,shown.Visual);
         Place(shown);Fade(shown);DrawFarthestFirst();
+    }
+
+    // Debug: replaces the sky with one planet at SpawnSpot, for staging a shot. False while one is still baking.
+    internal async Task<bool> SpawnNear()
+    {
+        if(spawning) return false;
+        spawning=true;
+        try {
+            double aspect=ActualWidth>0 && ActualHeight>0 ? ActualWidth/ActualHeight : 16d/9;
+            var spot=SpawnSpot;
+            var item=plan.NextClear().PlacedAt(spot,aspect);
+            var (diffuse,emissive)=await Task.Run(()=>PlanetSurface.Bake(item.Kind,item.Seed));
+            foreach(var flight in flights.ToArray()) Remove(flight);
+            // A planet baked for the old sky was not checked against this one, so it is dropped.
+            baking=null;gap=Math.Max(gap,60);
+            ShowAt(item,diffuse,emissive,-item.Extent*spot.Reach);
+            return true;
+        }
+        finally { spawning=false; }
     }
 
     // One sweep at a time; a press while one is running, or with nothing out there, does nothing.

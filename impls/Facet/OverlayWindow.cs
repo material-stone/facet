@@ -16,13 +16,14 @@ public sealed class OverlayWindow : Window
     private OverlayTabs tabs = new() { Opacity = 0 };
     private QuickLaunchView quickLaunch;
     private FrameworkElement? themeBackdrop;
+    private Design.VoyageDebugPanel? voyageDebug;
     private Design.WorldBackdrop? world;
     internal bool HasWorldForCheck => world != null;
     internal bool IsQuickLaunch { get; private set; }
     private readonly Image behind = new() { Stretch = Stretch.Fill, IsHitTestVisible = false, Opacity = 0 };
     private readonly BlurEffect blur = new() { Radius = 0, KernelType = KernelType.Gaussian, RenderingBias = RenderingBias.Performance };
     private readonly DispatcherTimer captureToolTimer = new() { Interval = TimeSpan.FromMilliseconds(150) };
-    internal Func<bool> CaptureToolVisibleProbe { get; set; } = () => Native.IsCaptureToolVisible();
+    internal Func<bool> CaptureToolForegroundProbe { get; set; } = () => Native.IsCaptureToolForeground();
     private BackdropCaptureSession? capture;
     private WriteableBitmap? captureBitmap;
     private bool awaitingReveal;
@@ -71,18 +72,10 @@ public sealed class OverlayWindow : Window
         PreviewKeyDown += (_, e) =>
         {
             if (IsQuickLaunch) { if (quickLaunch.HandleKey(e.Key, Keyboard.Modifiers)) e.Handled = true; return; }
-            if (tabs.HandleDebugKey(e.Key, Keyboard.Modifiers)) { e.Handled = true; return; }
+            if (tabs.HandleDebugKey(e.Key, Keyboard.Modifiers)) { UpdateVoyageDebug(); e.Handled = true; return; }
             if (Keyboard.Modifiers == ModifierKeys.None && e.Key == Key.Escape && tabs.HandleEscape()) { e.Handled = true; return; }
-            if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.S && !tabs.IsWidgetModalOpen && (tabs.IsEditingDay || tabs.IsSettingsActive)) { e.Handled = true; tabs.SaveShortcut(); return; }
-            if (Keyboard.Modifiers == ModifierKeys.None && e.Key == Key.Home && tabs.GoToCalendarToday())
-            {
-                e.Handled = true; return;
-            }
-            if (Keyboard.Modifiers == ModifierKeys.None && e.Key is Key.PageUp or Key.PageDown &&
-                tabs.MoveCalendarMonth(e.Key == Key.PageUp ? -1 : 1))
-            {
-                e.Handled = true; return;
-            }
+            if (Keyboard.Modifiers == ModifierKeys.Control && e.Key == Key.S && !tabs.IsWidgetModalOpen && (tabs.HasSelectedInput || tabs.IsSettingsActive)) { e.Handled = true; tabs.SaveShortcut(); return; }
+            if (tabs.HandleWidgetKey(e.Key, Keyboard.Modifiers)) { e.Handled = true; return; }
             if (Keyboard.Modifiers == ModifierKeys.Control && e.Key is Key.OemOpenBrackets or Key.OemCloseBrackets)
             {
                 e.Handled = true; tabs.MoveTab(e.Key == Key.OemOpenBrackets ? -1 : 1); return;
@@ -102,11 +95,22 @@ public sealed class OverlayWindow : Window
         layers.Children.Add(themeBackdrop);
         ApplyThemeOptions();
     }
+    // Made on the first F8, so an ordinary session never carries it.
+    private void UpdateVoyageDebug()
+    {
+        bool show = tabs.DebugEnabled && !IsQuickLaunch;
+        if (show && voyageDebug == null && Content is Grid layers && (themeBackdrop as Panel)?.Children.OfType<Design.SpaceVoyage>().FirstOrDefault() is { } voyage) {
+            voyageDebug = new(voyage);
+            Panel.SetZIndex(voyageDebug, 3);
+            layers.Children.Add(voyageDebug);
+        }
+        if (voyageDebug != null) voyageDebug.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+    }
     private void AddWorld()
     {
-        if (Design.Skins.Visuals?.WorldScenes is not { } scenes) return;
+        if (Design.Skins.Visuals is not { WorldScenes: { } scenes, WorldPageHtml: { } page }) return;
         var weather = new WeatherClient(locate: token => WeatherRegions.ResolveAsync(PluginData.WeatherRegion(app.Data), token));
-        world = new Design.WorldBackdrop(scenes, weather.FetchAsync);
+        world = new Design.WorldBackdrop(page, scenes, weather.FetchAsync);
         world.Failed += () => { world = null; Background = Brushes.Transparent; ApplyProgress((double)GetValue(TransitionProgressProperty)); };
         // Nearly invisible, but it makes every pixel of this layered window take the click instead of the app behind.
         Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
@@ -125,12 +129,14 @@ public sealed class OverlayWindow : Window
     // Follows the same transparency as the tint; a fully transparent backdrop is collapsed so its animations stop too.
     private void UpdateThemeBackdrop(double progress)
     {
+        UpdateVoyageDebug();
         if (themeBackdrop == null) return;
         themeBackdrop.Opacity = requestedStrength * progress;
         themeBackdrop.Visibility = !IsQuickLaunch && requestedStrength > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
     internal FrameworkElement? ThemeBackdropForCheck => themeBackdrop;
     internal void ApplyProgressForCheck(double progress) => ApplyProgress(progress);
+    internal double TintOpacityForCheck => backdrop.Opacity;
     // Views hold the brushes they resolved, so a new skin needs new views; data, music and chat sessions live in the Controller.
     internal void SwitchSkin(string? skin)
     {
@@ -140,6 +146,7 @@ public sealed class OverlayWindow : Window
         bool settings = tabs.IsSettingsActive;
         double scroll = tabs.SettingsScrollOffset;
         if (themeBackdrop != null) layers.Children.Remove(themeBackdrop);
+        if (voyageDebug != null) { layers.Children.Remove(voyageDebug); voyageDebug = null; }
         RemoveWorld();
         tabs.Retire();
         Design.Skins.Switch(Application.Current, skin);
@@ -151,15 +158,15 @@ public sealed class OverlayWindow : Window
         layers.Children.Insert(tabsIndex, tabs); layers.Children.Insert(launchIndex, quickLaunch);
         AddThemeBackdrop(layers, progress);
         UpdateWorld();
-        _ = tabs.RefreshWeatherOnLaunchAsync();
+        // Whether a world exists decides the blur and the tint, and Present returns early when its inputs are unchanged.
+        app.ApplyDisplay();
+        ApplyProgress((double)GetValue(TransitionProgressProperty));
         if (settings) tabs.OpenSettings();
         tabs.SettingsScrollOffset = scroll;
         if (IsQuickLaunch) quickLaunch.Begin();
     }
     public bool TrySaveEdits() => tabs.TrySaveEdits();
-    internal Task RefreshWeatherOnLaunchAsync() => tabs.RefreshWeatherOnLaunchAsync();
-    internal void StopWeatherUpdates() { tabs.StopWeatherUpdates(); tabs.StopWidgets(); }
-    internal void ReloadWeatherLocation() => tabs.ReloadWeatherLocation();
+    internal void StopWidgets() => tabs.StopWidgets();
     internal bool ShowWidget(string widgetId) => tabs.ShowWidget(widgetId);
     internal void OpenPluginSettings(string pluginId) => tabs.OpenPluginSettings(pluginId);
     internal void SetQuickLaunch(bool value)
@@ -178,9 +185,9 @@ public sealed class OverlayWindow : Window
         if (value) quickLaunch.Begin(); else quickLaunch.End();
     }
     internal void FocusQuickLaunch() => quickLaunch.FocusInput();
-    private void UpdateCaptureToolState()
+    private void UpdateCaptureToolState() => SetTopmost(!CaptureToolForegroundProbe());
+    private void SetTopmost(bool topmost)
     {
-        bool topmost = !CaptureToolVisibleProbe();
         if (Topmost != topmost) { Topmost = topmost; world?.Place(this); }
     }
     private void DismissOverlay()
@@ -195,7 +202,6 @@ public sealed class OverlayWindow : Window
     public void Present(bool visible, double strength, double blurRadius, int showMilliseconds, int hideMilliseconds, Color? backgroundColor = null)
     {
         if (backgroundColor is Color color) backdrop.Color = Color.FromRgb(color.R, color.G, color.B);
-        if (visible && !IsQuickLaunch) tabs.RefreshToday();
         strength = IsQuickLaunch ? 0 : Math.Clamp(double.IsFinite(strength) ? strength : .57, 0, 1);
         blurRadius = IsQuickLaunch ? 0 : Math.Clamp(double.IsFinite(blurRadius) ? blurRadius : 18, 0, 40);
         if (strength == 0 || world != null) blurRadius = 0;
@@ -232,12 +238,11 @@ public sealed class OverlayWindow : Window
         {
             if (!visible) return;
             BeginAnimation(TransitionProgressProperty,null);SetValue(TransitionProgressProperty,0d);
-            UpdateCaptureToolState();
-            ShowActivated = Topmost;
             Show();
         }
         UpdateWorld();
-        if (opening && Topmost) { Activate(); if (IsQuickLaunch) quickLaunch.FocusInput(); else if (!tabs.FocusSettingsSearch()) ((Grid)Content).Focus(); }
+        // An explicit open wins over a capture tool, so the overlay can be recorded; the tool regains priority when it next takes the foreground.
+        if (opening) { SetTopmost(true); Activate(); if (IsQuickLaunch) quickLaunch.FocusInput(); else if (!tabs.FocusSettingsSearch()) ((Grid)Content).Focus(); }
         double from = (double)GetValue(TransitionProgressProperty), target = visible ? 1 : 0;
         double fromBlur = blur.Radius, targetBlur = visible ? blurRadius : 0;
         double fromImage = behind.Opacity, targetImage = visible && blurRadius > 0 ? 1 : 0;

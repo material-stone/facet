@@ -1,5 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0-windows10.0.19041.0</TargetFramework><UseWPF>true</UseWPF><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <!-- The public repository has no first-party plugin sources; their checks build only where the plugins are (ADR 0101). -->
+  <PropertyGroup Condition="Exists('../Facet.SchedulePlugin')"><DefineConstants>$(DefineConstants);PLUGIN_CHECKS</DefineConstants></PropertyGroup>
   <ItemGroup><ProjectReference Include="../Facet/Facet.csproj" /><ProjectReference Include="../Facet.SamplePlugin/Facet.SamplePlugin.csproj" /></ItemGroup>
+  <ItemGroup Condition="Exists('../Facet.SchedulePlugin')"><ProjectReference Include="../Facet.ClockPlugin/Facet.ClockPlugin.csproj" /><ProjectReference Include="../Facet.WeatherPlugin/Facet.WeatherPlugin.csproj" /><ProjectReference Include="../Facet.MusicPlugin/Facet.MusicPlugin.csproj" /><ProjectReference Include="../Facet.ConditionPlugin/Facet.ConditionPlugin.csproj" /><ProjectReference Include="../Facet.SleepPlugin/Facet.SleepPlugin.csproj" /><ProjectReference Include="../Facet.ChatPlugin/Facet.ChatPlugin.csproj" /><ProjectReference Include="../Facet.SchedulePlugin/Facet.SchedulePlugin.csproj" /></ItemGroup>
+  <ItemGroup Condition="!Exists('../Facet.SchedulePlugin')"><Compile Remove="AgentChatChecks.cs;CalendarDayChecks.cs;CalendarStoreChecks.cs;ChatChecks.cs;ChatTabChecks.cs;ConditionChecks.cs;ConditionInputChecks.cs;CrossDateScheduleChecks.cs;DisplayCursorChecks.cs;LocalMusicChecks.cs;MusicChecks.cs;MusicPlaylistHoverChecks.cs;PlannerEditModeChecks.cs;ScheduleClockChecks.cs;ScheduleDragChecks.cs;ScheduleFixture.cs;SleepChecks.cs;VoiceChecks.cs;HudPreview.cs;ShadowChecks.cs;OverlayProfile.cs;ReminderChecks.cs;TypographyChecks.cs" /></ItemGroup>
   <ItemGroup><ProjectReference Include="../Facet.Launcher/Facet.Launcher.csproj" Aliases="Launcher" /></ItemGroup>
+  <!-- The packaged skins (registry/skins) are read from the output folder like an installed skins folder. -->
+  <ItemGroup><None Include="../../registry/skins/**" LinkBase="registry-skins" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 </Project>

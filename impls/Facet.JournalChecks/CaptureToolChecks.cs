@@ -25,24 +25,24 @@ internal static partial class Program
     private static void CheckCaptureToolPriority(Controller controller)
     {
         var overlay=controller.Overlay;
-        var priorProbe=overlay.CaptureToolVisibleProbe;
+        var priorProbe=overlay.CaptureToolForegroundProbe;
         var settings=controller.Data.Settings;
         double priorBlur=settings.OverlayBlurRadius;
         int priorShow=settings.OverlayShowMilliseconds,priorHide=settings.OverlayHideMilliseconds;
         var tool=new Window {Title="Synthetic capture tool",Width=220,Height=120,ShowInTaskbar=false};
         var focusTarget=new Window {Title="Synthetic focus target",Width=220,Height=120,ShowInTaskbar=false};
         var hwnd=new WindowInteropHelper(tool).EnsureHandle();int probes=0;
-        bool Visible()=>Native.IsCaptureToolVisible((candidate,_)=>candidate==hwnd);
+        bool Visible()=>Native.IsCaptureToolForeground((candidate,_)=>candidate==hwnd);
         bool NativeTopmost()=>System.Text.Json.JsonSerializer.SerializeToElement(Native.WindowState(overlay)).GetProperty("topmost").GetBoolean();
         try {
             controller.HideOverlay();
             controller.Commit(d=>{d.Settings.OverlayBlurRadius=0;d.Settings.OverlayShowMilliseconds=0;d.Settings.OverlayHideMilliseconds=0;});
-            overlay.CaptureToolVisibleProbe=()=>{probes++;return Visible();};
-            Assert(!Visible(),"native capture-tool detection ignores a hidden synthetic window");
+            overlay.CaptureToolForegroundProbe=()=>{probes++;return Visible();};
+            Assert(!Visible(),"native capture-tool detection ignores a window that is not foreground");
             controller.ToggleOverlay();Pump(180);
             Assert(overlay.Topmost,"overlay remains topmost before capture UI appears");
             tool.Show();tool.Activate();Pump(220);
-            Assert(Visible() && !overlay.Topmost && !NativeTopmost() && tool.IsActive,"visible capture UI lowers overlay without stealing tool focus");
+            Assert(Visible() && !overlay.Topmost && !NativeTopmost() && tool.IsActive,"foreground capture UI lowers overlay without stealing tool focus");
             Native.CoverScreen(overlay);Pump(30);
             Assert(!overlay.Topmost && !NativeTopmost() && tool.IsActive,"monitor resize preserves yielded topmost and capture-tool focus");
             tool.WindowState=WindowState.Minimized;Pump(220);
@@ -54,13 +54,16 @@ internal static partial class Program
             controller.HideOverlay();Pump(30);int hiddenProbes=probes;Pump(220);
             Assert(probes==hiddenProbes,"hidden overlay stops polling for capture tools");
             tool.Show();tool.Activate();Pump(30);controller.ToggleOverlay();Pump(220);
-            Assert(overlay.IsVisible && !overlay.Topmost && tool.IsActive,"opening overlay with capture tool present preserves tool focus");
-            focusTarget.Show();focusTarget.Activate();Pump(30);
+            Assert(overlay.IsVisible && overlay.Topmost && NativeTopmost() && overlay.IsActive && tool.IsVisible,"explicit open comes above a visible capture tool and stays there, so it can be recorded");
+            tool.Activate();Pump(220);
+            Assert(!overlay.Topmost && tool.IsActive,"capture tool taking the foreground lowers the opened overlay");
+            focusTarget.Show();focusTarget.Activate();Pump(220);
+            Assert(overlay.Topmost && focusTarget.IsActive && tool.IsVisible,"a visible background capture tool does not hold the overlay down");
             tool.Close();Pump(220);
             Assert(overlay.Topmost && focusTarget.IsActive,"closing capture tool restores topmost without activating overlay");
         }
         finally {
-            controller.HideOverlay();tool.Close();focusTarget.Close();overlay.CaptureToolVisibleProbe=priorProbe;
+            controller.HideOverlay();tool.Close();focusTarget.Close();overlay.CaptureToolForegroundProbe=priorProbe;
             controller.Commit(d=>{d.Settings.OverlayBlurRadius=priorBlur;d.Settings.OverlayShowMilliseconds=priorShow;d.Settings.OverlayHideMilliseconds=priorHide;});
         }
     }

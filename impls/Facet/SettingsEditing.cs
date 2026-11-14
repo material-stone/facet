@@ -13,7 +13,7 @@ internal static class SettingsEditing
     {
         OverlayAppearance.Validate(settings);
         if (!Enum.IsDefined(settings.LauncherSearchEngine)) throw new ArgumentException("검색 엔진을 선택해 주세요.");
-        Native.ParseHotkey(settings.OverlayHotkey);
+        foreach (string key in new[] { settings.OverlayHotkey, settings.QuickLaunchHotkey, settings.ExitHotkey }) Native.ParseHotkey(key);
     }
 
     internal static bool? StartupEnabled()

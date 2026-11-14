@@ -245,7 +245,7 @@ internal static partial class Program
                     File.Delete(Path.Combine(reports,"prepare-cancel"));
                     try {
                         cancel=true;
-                        SettingEditor<TextBox>(settings,"오버레이 단축키").Text="invalid shortcut";
+                        SettingEditor<TextBox>(settings,"오버레이 열기·닫기").Text="invalid shortcut";
                         File.WriteAllText(Path.Combine(reports,"cancel-ready"),"");
                     } catch(Exception ex) { File.WriteAllText(Path.Combine(reports,"cancel-error.txt"),ex.ToString()); }
                 }

@@ -49,6 +49,10 @@ internal sealed class OverlayWorkspaceView : UserControl
     private double viewX, viewY, zoom = 1;
     private bool hasView;
     private (Point Start, double X, double Y)? pan;
+    private const double GridSweepMs = 420, GridCellFadeMs = 200, GridSlotLine = .5, GridSlotFill = .1;
+    private readonly System.Diagnostics.Stopwatch gridClock = new();
+    private bool gridFading;
+    private double? gridInterruptedAt;
 
     internal string TabId { get; }
     internal bool IsDragging => drag != null;
@@ -138,16 +142,58 @@ internal sealed class OverlayWorkspaceView : UserControl
     protected override void OnRender(DrawingContext context)
     {
         base.OnRender(context);
-        if (!editing || FindResource("Edge") is not Brush edge) return;
+        if ((!editing && !gridFading) || FindResource("Edge") is not Brush edge) return;
         double size = Zoom, pitch = Pitch * size, originX = ActualWidth / 2 + viewX, originY = ActualHeight / 2 + viewY, inset = Gap / 2 * size;
-        var pen = new Pen(edge, 1); pen.Freeze();
+        var fill = edge.Clone(); fill.Opacity = GridSlotFill; fill.Freeze();
+        var line = edge.Clone(); line.Opacity = GridSlotLine; line.Freeze();
+        var pen = new Pen(line, 1); pen.Freeze();
         for (int row = Math.Max(-HalfRows, (int)Math.Floor(-originY / pitch)); row < HalfRows && originY + row * pitch < ActualHeight; row++)
-            for (int column = Math.Max(-HalfColumns, (int)Math.Floor(-originX / pitch)); column < HalfColumns && originX + column * pitch < ActualWidth; column++)
-                if (!IsCellCovered(column, row)) context.DrawRoundedRectangle(null, pen, new Rect(originX + column * pitch + inset, originY + row * pitch + inset, Cell * size, Cell * size), 8 * size, 8 * size);
+            for (int column = Math.Max(-HalfColumns, (int)Math.Floor(-originX / pitch)); column < HalfColumns && originX + column * pitch < ActualWidth; column++) {
+                if (IsCellCovered(column, row)) continue;
+                double x = originX + column * pitch + inset, y = originY + row * pitch + inset, level = GridLevel(x, y);
+                if (level <= 0) continue;
+                context.PushOpacity(level);
+                context.DrawRoundedRectangle(fill, pen, new Rect(x, y, Cell * size, Cell * size), 8 * size, 8 * size);
+                context.Pop();
+            }
         if (FindResource("Mint") is not Brush mint) return;
         var mark = new Pen(mint, 2); mark.Freeze();
+        context.PushOpacity(GridLevel(originX, originY));
         context.DrawLine(mark, new Point(originX - 12, originY), new Point(originX + 12, originY));
         context.DrawLine(mark, new Point(originX, originY - 12), new Point(originX, originY + 12));
+        context.Pop();
+    }
+
+    // Both directions sweep from the top-left corner; a reversal continues from each cell's current level.
+    private void FadeGrid()
+    {
+        if (!IsVisible) { StopGridFade(); return; }
+        gridInterruptedAt = gridFading ? gridClock.Elapsed.TotalMilliseconds : null;
+        gridClock.Restart();
+        if (!gridFading) CompositionTarget.Rendering += AdvanceGridFade;
+        gridFading = true;
+    }
+
+    private void AdvanceGridFade(object? sender, EventArgs e)
+    {
+        if (!IsVisible || gridClock.Elapsed.TotalMilliseconds >= GridSweepMs + GridCellFadeMs) StopGridFade();
+        InvalidateVisual();
+    }
+
+    private void StopGridFade()
+    {
+        if (gridFading) CompositionTarget.Rendering -= AdvanceGridFade;
+        gridFading = false; gridInterruptedAt = null; gridClock.Reset();
+    }
+
+    private double GridLevel(double x, double y)
+    {
+        double target = editing ? 1 : 0;
+        if (!gridFading) return target;
+        double delay = Math.Clamp((x + y) / Math.Max(1, ActualWidth + ActualHeight), 0, 1) * GridSweepMs;
+        double Step(double elapsed) => Math.Clamp((elapsed - delay) / GridCellFadeMs, 0, 1);
+        double from = gridInterruptedAt is { } at ? (editing ? 1 - Step(at) : Step(at)) : 1 - target;
+        return from + (target - from) * Step(gridClock.Elapsed.TotalMilliseconds);
     }
 
     protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
@@ -193,7 +239,9 @@ internal sealed class OverlayWorkspaceView : UserControl
 
     internal void Render(WorkspaceTab next, bool edit)
     {
+        bool toggled = editing != edit;
         tab = next; editing = edit; drag = null; ReleaseViews();
+        if (toggled) FadeGrid();
         // Empty cells take pointer input only while editing, so a fixed page below keeps working otherwise.
         Background = editing ? Brushes.Transparent : null;
         if (!ViewDirty) {

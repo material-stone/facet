@@ -43,11 +43,11 @@ internal static partial class Program
         }
         Screenshot("overlay-settings.png",new Size(1440,900));
         Screenshot("overlay-settings-narrow.png",new Size(480,360));
-        search.Text="블러";
-        Assert(Rows().Count(row=>row.Visibility==Visibility.Visible)==1 && Label(Rows().Single(row=>row.Visibility==Visibility.Visible)).Text=="블러 강도" && Marked(Label(Rows().Single(row=>row.Visibility==Visibility.Visible))),"live name search filters rows and highlights the keyword");
+        search.Text="나타나는 시간";
+        Assert(Rows().Count(row=>row.Visibility==Visibility.Visible)==1 && Label(Rows().Single(row=>row.Visibility==Visibility.Visible)).Text=="나타나는 시간" && Marked(Label(Rows().Single(row=>row.Visibility==Visibility.Visible))),"live name search filters rows and highlights the keyword");
         Assert(groups.Children.OfType<StackPanel>().Count(group=>group.Visibility==Visibility.Visible)==1,"search hides empty settings groups");
         Screenshot("overlay-settings-search.png",new Size(1440,900));
-        search.Text="흐리게";
+        search.Text="즉시 표시";
         var match=Rows().Single(row=>row.Visibility==Visibility.Visible);
         Assert(Marked((TextBlock)((StackPanel)match.Children[0]).Children[1]),"description-only match appears and highlights its matching explanation");
         search.Text="  WIN+ALT+O  ";
@@ -58,7 +58,7 @@ internal static partial class Program
         search.Text="[.*+?";
         Assert(Rows().All(row=>row.Visibility==Visibility.Collapsed) && ((TextBlock)view.FindName("EmptyMessage")).Visibility==Visibility.Visible,"search treats regex characters literally and explains empty results");
         search.Text="  ";
-        Assert(Rows().All(row=>row.Visibility==Visibility.Visible),"blank search restores every setting");
+        Assert(Rows().Where(row=>AutomationProperties.GetName((FrameworkElement)((StackPanel)row.Children[1]).Children[0])!="스킨 옵션").All(row=>row.Visibility==Visibility.Visible),"blank search restores every setting (skin options show only for a skin that has them)");
 
         var store=new Store(Path.Combine(qa,"overlay-settings-"+Guid.NewGuid().ToString("N")));
         var data=store.Load();bool fail=false,startup=false;int saves=0;
@@ -66,9 +66,9 @@ internal static partial class Program
         Assert(saves==0 && !view.HasChanges && ((Button)view.FindName("RetryButton")).Visibility==Visibility.Collapsed,"loading settings never saves and normal UI requires no save button");
         var transparency=((StackPanel)Editor("투명도")).Children.OfType<Slider>().Single();
         Assert(transparency.Minimum==0 && transparency.Maximum==100 && Math.Abs(transparency.Value-43)<.001,"transparency uses the full percentage range and preserves legacy appearance");
-        var wake=(TextBox)Editor("오버레이 단축키");
+        var wake=(TextBox)Editor("오버레이 열기·닫기");
         wake.Text="Ctrl+Alt+F1";search.Text="no-match";search.Text="";
-        Assert(ReferenceEquals(wake,Editor("오버레이 단축키")) && wake.Text=="Ctrl+Alt+F1" && view.HasChanges,"filtering preserves editor instances and unsaved input");
+        Assert(ReferenceEquals(wake,Editor("오버레이 열기·닫기")) && wake.Text=="Ctrl+Alt+F1" && view.HasChanges,"filtering preserves editor instances and unsaved input");
         wake.Text="invalid shortcut";
         Assert(!view.TrySave() && saves==0 && view.HasChanges && status.Text.Contains("단축키"),"invalid shortcut leaves the settings draft and store unchanged");
         wake.Text="Ctrl+Alt+F1";fail=true;
@@ -81,45 +81,38 @@ internal static partial class Program
         search.Text="Ctrl+Alt+F1";
         Assert(Rows().Count(row=>row.Visibility==Visibility.Visible)==1,"search uses the newly saved value");
         search.Text="";
-        var privacy=(CheckBox)Editor("화면 공유 모드");privacy.IsChecked=true;
-        Assert(data.Settings.Privacy && !view.HasChanges && new Store(store.Root).Load().Settings.Privacy,"checkbox changes apply and persist immediately without a save action");
-        var blur=((StackPanel)Editor("블러 강도")).Children.OfType<Slider>().Single();blur.Value=19;
-        Assert(data.Settings.OverlayBlurRadius==19 && !view.HasChanges && ReferenceEquals(blur,((StackPanel)Editor("블러 강도")).Children.OfType<Slider>().Single()),"slider changes persist immediately without recreating the dragged control");
+        var launchShow=(CheckBox)Editor("직접 실행 시 오버레이 표시");bool showBefore=data.Settings.ShowOverlayOnLaunch;launchShow.IsChecked=!showBefore;
+        Assert(data.Settings.ShowOverlayOnLaunch!=showBefore && !view.HasChanges && new Store(store.Root).Load().Settings.ShowOverlayOnLaunch!=showBefore,"checkbox changes apply and persist immediately without a save action");
+        var fade=((StackPanel)Editor("나타나는 시간")).Children.OfType<Slider>().Single();fade.Value=400;
+        Assert(data.Settings.OverlayShowMilliseconds==400 && !view.HasChanges && ReferenceEquals(fade,((StackPanel)Editor("나타나는 시간")).Children.OfType<Slider>().Single()),"slider changes persist immediately without recreating the dragged control");
         Assert(Rows().All(row=>row.Children.OfType<StackPanel>().SelectMany(p=>p.Children.OfType<TextBlock>()).All(t=>t.Text!="날씨 지역")),"the weather region moved to the plugin section");
-        var skins=(ComboBox)Editor("스킨");
+        var skins=(ComboBox)Editor("사용할 스킨");
         Assert((string)skins.SelectedValue=="default","settings show the default skin for existing data");
         skins.SelectedValue="midnight";
         Assert(!view.HasChanges && new Store(store.Root).Load().Settings.Skin=="midnight","skin selection autosaves for the next start");
         skins.SelectedValue="default";
-        var engines=(ComboBox)Editor("검색 엔진");
-        Assert(engines.Items.Count==3 && (Facet.Core.WebSearchEngine)engines.SelectedValue==Facet.Core.WebSearchEngine.Google,
-            "launcher settings offer Google, Naver and Bing with the legacy Google default");
-        foreach(var engine in Enum.GetValues<Facet.Core.WebSearchEngine>()) {
-            engines.SelectedValue=engine;
-            Assert(!view.HasChanges && data.Settings.LauncherSearchEngine==engine && new Store(store.Root).Load().Settings.LauncherSearchEngine==engine,
-                "search engine selection autosaves and reloads immediately: "+engine);
-        }
-        fail=true;engines.SelectedValue=Facet.Core.WebSearchEngine.Naver;
-        Assert(view.HasChanges && data.Settings.LauncherSearchEngine==Facet.Core.WebSearchEngine.Bing,
-            "failed engine autosave keeps the selection draft and the last saved engine");
-        fail=false;Assert(view.TrySave() && data.Settings.LauncherSearchEngine==Facet.Core.WebSearchEngine.Naver,
-            "retry saves the pending search engine selection");
+        Assert(Rows().All(row=>AutomationProperties.GetName((FrameworkElement)((StackPanel)row.Children[1]).Children[0]) is not ("검색 엔진" or "탐색기 alias" or "블러 강도" or "화면 공유 모드")),"hidden launcher, blur and reminder settings stay off the screen");
+        fail=true;fade.Value=800;
+        Assert(view.HasChanges && data.Settings.OverlayShowMilliseconds==400,
+            "failed slider autosave keeps the draft and the last saved value");
+        fail=false;Assert(view.TrySave() && data.Settings.OverlayShowMilliseconds==800,
+            "retry saves the pending slider value");
 
         int before=saves;wake.Text="1";Pump(450);
         Assert(saves==before && data.Settings.OverlayHotkey=="Ctrl+Alt+F1" && wake.Text=="1" && view.HasChanges,"incomplete shortcut input is retained without overwriting the last valid setting");
         wake.Text="Ctrl+";wake.Text="Ctrl+Alt+";wake.Text="Ctrl+Alt+F2";wake.CaretIndex=2;
         Assert(saves==before && view.HasChanges,"continuous text edits wait for the brief idle interval");
         Pump(450);
-        Assert(saves==before+1 && data.Settings.OverlayHotkey=="Ctrl+Alt+F2" && !view.HasChanges && wake.Text=="Ctrl+Alt+F2" && wake.CaretIndex==2 && ReferenceEquals(wake,Editor("오버레이 단축키")),"text changes automatically save once and preserve editor text and caret");
+        Assert(saves==before+1 && data.Settings.OverlayHotkey=="Ctrl+Alt+F2" && !view.HasChanges && wake.Text=="Ctrl+Alt+F2" && wake.CaretIndex==2 && ReferenceEquals(wake,Editor("오버레이 열기·닫기")),"text changes automatically save once and preserve editor text and caret");
         fail=true;wake.Text="Ctrl+Alt+F3";Pump(450);
         Assert(data.Settings.OverlayHotkey=="Ctrl+Alt+F2" && view.HasChanges && ((Button)view.FindName("RetryButton")).Visibility==Visibility.Visible,"failed autosave retains the draft and offers retry");
         fail=false;wake.Text="Ctrl+Alt+F4";Pump(450);
         Assert(data.Settings.OverlayHotkey=="Ctrl+Alt+F4" && !view.HasChanges && ((Button)view.FindName("RetryButton")).Visibility==Visibility.Collapsed,"correcting input automatically retries and clears the error");
-        fail=true;privacy.IsChecked=false;
-        Assert(data.Settings.Privacy && view.HasChanges,"failed immediate autosave keeps the persisted checkbox value");
+        fail=true;launchShow.IsChecked=showBefore;
+        Assert(data.Settings.ShowOverlayOnLaunch!=showBefore && view.HasChanges,"failed immediate autosave keeps the persisted checkbox value");
         fail=false;((Button)view.FindName("RetryButton")).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Assert(!data.Settings.Privacy && !view.HasChanges,"retry action persists a retained draft without changing it");
-        before=saves;search.Text="블러";search.Text="";Pump(450);
+        Assert(data.Settings.ShowOverlayOnLaunch==showBefore && !view.HasChanges,"retry action persists a retained draft without changing it");
+        before=saves;search.Text="나타나는 시간";search.Text="";Pump(450);
         Assert(saves==before,"searching settings never triggers persistence");
         wake.Text="Ctrl+Alt+F5";
         wake.RaiseEvent(new KeyboardFocusChangedEventArgs(Keyboard.PrimaryDevice,0,wake,search) { RoutedEvent=Keyboard.LostKeyboardFocusEvent });

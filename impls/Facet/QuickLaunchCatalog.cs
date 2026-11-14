@@ -9,6 +9,8 @@ internal sealed record LaunchCandidate(string Text, string Target, string Comple
 
 internal sealed class QuickLaunchCatalog
 {
+    // Quick launch runs PATH programs only for now; help, paths, aliases and web search stay behind this switch (ADR 0099).
+    internal static bool Extras { get; set; }
     private static readonly LaunchCandidate[] Commands = [new("help", "사용법 열기 / 닫기", "> help", false, LaunchCommand.Help)];
     private readonly string searchPath;
     private readonly string extensions;
@@ -27,10 +29,10 @@ internal sealed class QuickLaunchCatalog
         // Both enumeration and matching stay off the UI thread, including network PATH entries.
         return await Task.Run(async () => {
             token.ThrowIfCancellationRequested();
-            if (input.StartsWith('>')) return Match(Commands, input[1..].Trim(), true);
-            if (input.StartsWith("@@", StringComparison.Ordinal))
+            if (Extras && input.StartsWith('>')) return Match(Commands, input[1..].Trim(), true);
+            if (Extras && input.StartsWith("@@", StringComparison.Ordinal))
                 return Match(aliases.Select(x => new LaunchCandidate(x.Key, x.Value, "@@" + x.Key, true)), input[2..], true);
-            if (input.StartsWith('@')) return Paths(input[1..], token);
+            if (Extras && input.StartsWith('@')) return Paths(input[1..], token);
             if (string.IsNullOrWhiteSpace(input)) return (IReadOnlyList<LaunchCandidate>)Array.Empty<LaunchCandidate>();
             await gate.WaitAsync(token);
             try {

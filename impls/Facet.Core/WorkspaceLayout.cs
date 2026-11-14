@@ -49,25 +49,30 @@ public static class WorkspaceLayouts
     // The board is three screens across, so the smallest zoom shows all of it.
     public const double MinZoom = 1d / 3, MaxZoom = 3, MaxOffset = 10000000;
     public const string DashboardTab = "dashboard", ScheduleTab = "schedule", SleepTab = "sleep", ChatTab = "chat", SettingsTab = "settings";
+    // Widget ids from when the app had its own widgets; PluginData moves their placements to the plugin widgets once (ADR 0101).
     public const string ClockWidget = "builtin.clock", WeatherWidget = "builtin.weather",
         AgendaWidget = "builtin.agenda", CalendarWidget = "builtin.calendar";
+    public const string PluginClockWidget = "plugin.facet.clock.clock", PluginWeatherWidget = "plugin.facet.weather.weather",
+        PluginAgendaWidget = "plugin.facet.schedule.agenda", PluginCalendarWidget = "plugin.facet.schedule.calendar";
+    public static string CurrentWidget(string widgetId) => widgetId switch {
+        ClockWidget => PluginClockWidget, WeatherWidget => PluginWeatherWidget, AgendaWidget => PluginAgendaWidget, CalendarWidget => PluginCalendarWidget, _ => widgetId };
     private static readonly (string Id, string Title)[] BuiltIn = [(DashboardTab, "대시보드"), (ScheduleTab, "일정"), (SleepTab, "수면"), (ChatTab, "채팅"), (SettingsTab, "설정")];
 
     // Settings is the recovery path and stays free of widgets; every other tab holds a board.
     public static bool HoldsWidgets(string tabId) => tabId != SettingsTab;
 
-    public static WorkspaceLayout Default()
+    // A fresh install has an empty dashboard and the settings tab; widgets come with plugins (ADR 0101).
+    // The layout a never-edited install showed before the widgets became plugins, with the plugins' widget ids.
+    public static WorkspaceLayout LegacyDefault()
     {
         var layout = new WorkspaceLayout { GridVersion = GridVersion, Tabs = BuiltIn.Select(tab => new WorkspaceTab { Id = tab.Id, Title = tab.Title }).ToList() };
-        layout.Tabs[0].Widgets = [
-            Place(ClockWidget, -6, -4, 3, 1), Place(WeatherWidget, -3, -4, 4, 1),
-            Place(AgendaWidget, -6, 2, 9, 2)];
+        WidgetPlacement Place(string id, int x, int y, int width, int height) => new() { Id = id, WidgetId = CurrentWidget(id), X = x, Y = y, Width = width, Height = height };
+        layout.Tabs[0].Widgets = [Place(ClockWidget, -6, -4, 3, 1), Place(WeatherWidget, -3, -4, 4, 1), Place(AgendaWidget, -6, 2, 9, 2)];
         layout.Tabs[1].Widgets = [Place(CalendarWidget, -CalendarColumns / 2, -CalendarRows / 2, CalendarColumns, CalendarRows)];
         return layout;
     }
 
-    private static WidgetPlacement Place(string widget, int x, int y, int width, int height) =>
-        new() { Id = widget, WidgetId = widget, X = x, Y = y, Width = width, Height = height };
+    public static WorkspaceLayout Default() => new() { GridVersion = GridVersion, Tabs = BuiltIn.Where(tab => tab.Id is DashboardTab or SettingsTab).Select(tab => new WorkspaceTab { Id = tab.Id, Title = tab.Title }).ToList() };
 
     public static WorkspaceLayout Current(AppData data) => data.Workspace ?? Default();
 
@@ -101,10 +106,10 @@ public static class WorkspaceLayouts
         foreach (var tab in BuiltIn)
             if ((restoreFirstTabs || tab.Id == SettingsTab) && result.Tabs.All(t => t.Id != tab.Id)) result.Tabs.Add(new() { Id = tab.Id, Title = tab.Title });
         // Saved layouts from before the calendar widget get it once; removing it later stays removed.
-        if (layout != null && layout.GridVersion < 3 && result.Tabs.All(t => t.Widgets.All(w => w.WidgetId != CalendarWidget))) {
+        if (layout != null && layout.GridVersion < 3 && result.Tabs.All(t => t.Widgets.All(w => w.WidgetId is not (CalendarWidget or PluginCalendarWidget)))) {
             var schedule = result.Tabs.First(t => t.Id == ScheduleTab);
             if (FindSlot(schedule, CalendarColumns, CalendarRows, -CalendarColumns / 2, -CalendarRows / 2, MaxCell, MaxCell) is { } slot)
-                schedule.Widgets.Add(new() { Id = CalendarWidget, WidgetId = CalendarWidget, X = slot.X, Y = slot.Y, Width = CalendarColumns, Height = CalendarRows });
+                schedule.Widgets.Add(new() { Id = CalendarWidget, WidgetId = PluginCalendarWidget, X = slot.X, Y = slot.Y, Width = CalendarColumns, Height = CalendarRows });
         }
         // The sleep tab's fixed page became a widget in layouts from before GridVersion 4; it comes once and can then be removed.
         if (layout != null && layout.GridVersion < 4 && result.Tabs.All(t => t.Widgets.All(w => w.WidgetId != LegacySleep.PatternWidget))) {

@@ -29,10 +29,10 @@ internal sealed class PluginSettingsPanel : StackPanel
         if (owner == null || refreshing) return;
         refreshing = true;
         Children.Clear();
-        Children.Add(Note("앱과 같은 권한으로 실행됩니다."));
+        Children.Add(Note("체크하면 켜지고, 휴지통 버튼으로 삭제합니다. 플러그인은 Facet과 같은 권한으로 실행됩니다."));
         if (removalNote != null) { Children.Add(Note(removalNote)); removalNote = null; }
         var plugins = owner.DiscoverPlugins();
-        if (plugins.Count == 0) Children.Add(Note("설치된 플러그인이 없습니다."));
+        if (plugins.Count == 0) Children.Add(Note("설치된 플러그인이 없습니다. 아래 \"플러그인 받기\"에서 설치하세요."));
         foreach (var plugin in plugins) {
             bool granted = owner.HasPluginGrant(plugin.Id);
             var section = owner.IsPluginEnabled(plugin.Id) ? owner.PluginRuntime?.Section(plugin.Id) : null;

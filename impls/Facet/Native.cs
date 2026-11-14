@@ -16,8 +16,6 @@ public static class Native
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool IsWindow(IntPtr hwnd);
-    private delegate bool EnumWindowCallback(IntPtr hwnd, IntPtr parameter);
-    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowCallback callback, IntPtr parameter);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr hwnd);
     [DllImport("user32.dll")] private static extern bool IsIconic(IntPtr hwnd);
     [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int attribute, out int value, int size);
@@ -59,32 +57,24 @@ public static class Native
         int y = Math.Max(area.Top, area.Bottom - (rect.Bottom - rect.Top) - gapY);
         SetWindowPos(hwnd, IntPtr.Zero, x, y, 0, 0, 0x15);
     }
-    internal static bool IsCaptureToolVisible(Func<IntPtr, uint, bool>? matchesWindow = null)
+    internal static bool IsCaptureToolForeground(Func<IntPtr, uint, bool>? matchesWindow = null)
     {
-        var processes = new Dictionary<uint, bool>();
-        bool found = false;
-        EnumWindows((hwnd, _) => {
-            if (!IsWindowVisible(hwnd) || IsIconic(hwnd) ||
-                DwmGetWindowAttribute(hwnd, 14, out int cloaked, sizeof(int)) == 0 && cloaked != 0) return true;
-            GetWindowThreadProcessId(hwnd, out uint id);
-            if (matchesWindow != null) { found = matchesWindow(hwnd, id); return !found; }
-            if (!processes.TryGetValue(id, out bool matches)) {
-                matches = false;
-                try {
-                    using var process = Process.GetProcessById((int)id);
-                    string name = process.ProcessName;
-                    matches = new[] { "SnippingTool", "ScreenClippingHost", "ScreenSketch", "SnipAndSketch" }
-                        .Contains(name, StringComparer.OrdinalIgnoreCase);
-                }
-                catch (ArgumentException) { } // A window's process may exit during enumeration.
-                catch (InvalidOperationException) { }
-                catch (System.ComponentModel.Win32Exception) { }
-                processes[id] = matches;
-            }
-            found = matches;
-            return !found;
-        }, IntPtr.Zero);
-        return found;
+        // Only the foreground counts: a recording keeps Snipping Tool windows visible the whole time.
+        var hwnd = GetForegroundWindow();
+        if (hwnd == IntPtr.Zero || !IsWindowVisible(hwnd) || IsIconic(hwnd) ||
+            DwmGetWindowAttribute(hwnd, 14, out int cloaked, sizeof(int)) == 0 && cloaked != 0) return false;
+        GetWindowThreadProcessId(hwnd, out uint id);
+        if (matchesWindow != null) return matchesWindow(hwnd, id);
+        if (id == Environment.ProcessId) return false;
+        try {
+            using var process = Process.GetProcessById((int)id);
+            return new[] { "SnippingTool", "ScreenClippingHost", "ScreenSketch", "SnipAndSketch" }
+                .Contains(process.ProcessName, StringComparer.OrdinalIgnoreCase);
+        }
+        catch (ArgumentException) { } // The window's process may have just exited.
+        catch (InvalidOperationException) { }
+        catch (System.ComponentModel.Win32Exception) { }
+        return false;
     }
     public static void RestoreForeground(IntPtr hwnd)
     {

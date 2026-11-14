@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Facet;
+using Facet.SchedulePlugin;
 using Facet.Design;
 
 internal static partial class Program

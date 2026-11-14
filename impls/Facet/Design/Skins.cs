@@ -5,7 +5,10 @@ internal sealed record SkinOption(string Id,string Name,bool HasVisuals=false,Ex
 internal static class Skins
 {
     internal const string DefaultId="default";
-    private static readonly SkinOption[] BuiltIn=[new(DefaultId,"기본"),new("midnight","미드나이트"),new("space","우주",HasVisuals:true),new("voxel","복셀 월드",HasVisuals:true)];
+    // Only the plain dark and light skins are built in; every other skin is a package (ADR 0100).
+    private static readonly SkinOption[] BuiltIn=[new(DefaultId,"다크"),new("light","라이트")];
+    // Extra package folders read after the data folder; checks use it to reach registry/skins.
+    internal static readonly List<string> SharedFolders=[];
     private static string? externalRoot;
     internal static IReadOnlyList<SkinOption> Options { get; private set; }=BuiltIn;
     // Set with the tokens at startup and read when windows and tiles are built.
@@ -15,7 +18,7 @@ internal static class Skins
     // Skin folders can change while the app runs. A built-in id always wins.
     internal static IReadOnlyList<SkinOption> Rescan()
     {
-        var external=externalRoot==null ? [] : ExternalSkins.Discover(externalRoot);
+        var external=(externalRoot==null ? [] : ExternalSkins.Discover(externalRoot)).Concat(SharedFolders.SelectMany(ExternalSkins.Discover)).DistinctBy(skin=>skin.Id).ToList();
         return Options=[..BuiltIn,..external.Where(skin=>BuiltIn.All(option=>option.Id!=skin.Id)).Select(skin=>new SkinOption(skin.Id,skin.Name,skin.Theme!=null,skin))];
     }
     internal static string Resolve(string? id)=>Options.FirstOrDefault(option=>option.Id==id)?.Id ?? DefaultId;
