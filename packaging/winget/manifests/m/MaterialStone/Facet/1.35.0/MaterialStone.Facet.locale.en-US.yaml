@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+PackageIdentifier: MaterialStone.Facet
+PackageVersion: 1.35.0
+PackageLocale: en-US
+Publisher: Material Stone
+PublisherUrl: https://github.com/material-stone
+PublisherSupportUrl: https://github.com/material-stone/facet/issues
+PackageName: Facet
+PackageUrl: https://github.com/material-stone/facet
+License: MIT
+LicenseUrl: https://github.com/material-stone/facet/blob/main/LICENSE
+ShortDescription: A full-screen Windows overlay for your clock, weather, schedule and reminders, extended with plugins.
+Description: Facet opens a full-screen overlay with one shortcut. Keep your clock, weather, calendar, to-dos, notes and reminders on one screen, launch apps quickly, and add features as plugins. The interface is in Korean.
+Moniker: facet
+Tags:
+- overlay
+- dashboard
+- calendar
+- reminder
+- launcher
+- productivity
+ReleaseNotesUrl: https://github.com/material-stone/facet/releases/tag/v1.35.0
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0

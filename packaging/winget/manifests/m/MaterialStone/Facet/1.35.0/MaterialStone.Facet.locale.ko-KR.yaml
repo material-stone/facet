@@ -1,0 +1,10 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.locale.1.10.0.schema.json
+PackageIdentifier: MaterialStone.Facet
+PackageVersion: 1.35.0
+PackageLocale: ko-KR
+Publisher: Material Stone
+PackageName: Facet
+License: MIT
+ShortDescription: 단축키 하나로 여는 Windows 전체 화면 오버레이. 시계·날씨·일정·알림을 한 화면에 두고 기능은 플러그인으로 더합니다.
+ManifestType: locale
+ManifestVersion: 1.10.0

@@ -42,7 +42,7 @@ Windows 10(2004 이상) 또는 Windows 11이 설치된 64비트 PC가 필요합�
 winget install MaterialStone.Facet
 ```
 
-winget 등록은 Microsoft 검토가 끝나야 쓸 수 있어요. 그 전에는 방법 1을 사용하세요.
+winget 등록은 준비 중이에요. 등록되기 전에는 방법 1을 사용하세요.
 
 ### 방법 3. 포터블 (설치 없이)
 

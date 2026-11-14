@@ -44,7 +44,7 @@ You need a 64-bit PC with Windows 10 (version 2004 or later) or Windows 11. Noth
 winget install MaterialStone.Facet
 ```
 
-This works once Microsoft has reviewed the package. Until then, use option 1.
+The winget package is on its way. Until it is listed, use option 1.
 
 ### Option 3. Portable (no install)
 

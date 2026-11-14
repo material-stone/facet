@@ -1,0 +1,19 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
+PackageIdentifier: MaterialStone.Facet
+PackageVersion: 1.35.0
+MinimumOSVersion: 10.0.19041.0
+InstallerType: inno
+Scope: user
+InstallModes:
+- interactive
+- silent
+- silentWithProgress
+UpgradeBehavior: install
+ProductCode: '{6F3C2B1E-7A4D-4E58-9C1B-FACE70000001}_is1'
+ReleaseDate: 2026-11-14
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/material-stone/facet/releases/download/v1.35.0/Facet-1.35.0-setup-x64.exe
+  InstallerSha256: C55712C60313CC23B28A3F9BE4FC33566A0A26561C91F1856974D4B90E201C35
+ManifestType: installer
+ManifestVersion: 1.10.0
