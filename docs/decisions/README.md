@@ -144,3 +144,6 @@
 - [0100 — 다크·라이트 내장 스킨과 스킨 패키지](0100-light-dark-and-skin-packages.md)
 
 - [0101 — 시계·날씨·일정을 플러그인으로](0101-schedule-clock-weather-plugins.md)
+- [0102 — 요일·시계 위젯과 위젯별 모양](0102-weekday-and-time-widgets.md)
+- [0103 — 스킨 탭을 목록 하나로 합침](0103-skin-tab-single-list.md)
+- [0104 — 플러그인 소스 공개, 채팅·음악 플러그인 제거](0104-public-plugin-sources-without-chat-and-music.md)

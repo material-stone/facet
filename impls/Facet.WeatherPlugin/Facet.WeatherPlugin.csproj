@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0-windows10.0.19041.0</TargetFramework><UseWPF>true</UseWPF><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <!-- The host supplies the contract, so the plugin folder holds only this assembly and its manifest. -->
+  <ItemGroup><ProjectReference Include="../Facet.Plugins/Facet.Plugins.csproj" Private="false" /></ItemGroup>
+  <ItemGroup><None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
+  <!-- Embedded so the fingerprinted DLL alone carries them; pack URIs may not resolve in a plugin load context. -->
+  <ItemGroup>
+    <EmbeddedResource Include="Icons/*.png" LogicalName="icons/%(Filename)%(Extension)" />
+    <EmbeddedResource Include="../Facet/DashboardWeather/WeatherRegions.json" LogicalName="regions.json" />
+    <EmbeddedResource Include="../Facet/DashboardWeather/WeatherAdministrativeRegions.json" LogicalName="boundaries.json" />
+  </ItemGroup>
+</Project>

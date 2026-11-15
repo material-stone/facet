@@ -1,19 +1,5 @@
 # 변경 범위별 검증
 
-플레이어 상단 제목은 hover 전 정지·진입200ms 안에 이동·실제36 DIP/초 속도·이탈 시 초기화·동일 제목 갱신 시 위치 유지·짧은 제목 전환 시 정지·숨김/재표시 후 새 hover 대기와 해제 후 clock 정리를 같은 화면 밖 카드에서 검사한다.
-
-목록 제목 hover 검사는 화면 밖 음악 카드에서 마우스 진입/이탈 WPF 이벤트로 긴 제목의 이동·짧은 제목 정지·접기 후 정리·새 hover 대기·목록 교체/해제 후 clock 정리를 확인한다. 실제 행34 DIP·간격4 DIP와 두 곡 카드250 DIP 미만 높이도 확인하고 기본 음악 토스트의 기존 제목 이동·수직 중앙·폭 검사를 함께 유지한다. 사용자 포인터를 움직이거나 실제 키 입력을 보내지 않는다.
-
-소리 크기는 Core에서 구형50% 기본값·복사·JSON 왕복·범위 검증을 확인한다. 음악 UI에서 슬라이더 즉시 반영·300ms 저장·0% 음소거와 계속 재생·저장 실패 입력 유지/재시도·숨김 전 저장 확인·목록 저장 후 유지·새 서비스의 첫 재생 전 복원을 검사한다. 합성 무음 M4A의 실제 MediaPlayer.Volume도 확인하며 실제 하드웨어 청취나 시스템 전체 볼륨 변경은 하지 않는다.
-
-음악 리모컨 검사는 inline URL 부재·공통 disclosure·할 일과 같은 행/Trash 디자인, 실제 Enter 이벤트의 모달 추가·중복·저장 실패와 Enter 재시도, IME 확정 보호·Esc·바깥 클릭, 전체 dim/중앙 배치(1440×900·480×360)와 탭 이동 차단을 확인한다. 모달을 열어도 대시보드 경계가 같고 삭제 버튼은 재생을 시작하지 않는지, 전체 행 클릭은 재생하는지, 준비 중인 곡의 삭제 후 늦은 완료가 재생을 남기지 않는지도 확인한다. 합성 저장소·fake transport·숨긴 이벤트 source와 화면 밖 WPF 렌더를 사용하며 실제 사용자 음악·입력·위치는 사용하지 않는다.
-
-음악 기본 검사는 합성 URL·암호화 저장·재시도·목록과 공통 transport의 독립 수명을 확인한다. Windows MediaTranscoder로 합성 무음 M4A를 만들어 실제 MediaPlayer의 재생·탐색·중지/재개와 패널 해제 후 유지를 검사한다. fake download로 완료한 캐시만 재사용하고 실패가 기존 파일을 지우지 않는지, 로딩 중 새 선택이 무시되지 않는지, 기본 transport가 로컬 재생인지 확인한다. 한 곡 반복·자동 다음 곡·오류/재연결·앱 종료와 현재 제목을 포함한 비활성 표시도 확인한다. 음악 표시의 여백·테두리·모서리·배경은 실제 startup ToastWindow와 비교하고 작업표시줄 위16 DIP 간격을 DPI에 맞춰 확인한다. 화면 밖 호스트에서 실제 glyph ink 수직 중앙·최대280 DIP 폭·긴 제목의 읽기 대기 후 이동·동일 제목 갱신 시 연속 이동·숨김 시 clock 해제·재표시 시 재개·짧은 제목 고정을 검사한다. `-OverlayUi`는 기존 중앙 크기·위치와232 폭 리모컨만 렌더하며 임베드가 없다. 기본 검사에는 실제 사이트 연결과 음원 다운로드를 포함하지 않는다.
-
-`dotnet run --project impls/Facet.JournalChecks/Facet.JournalChecks.csproj --no-build --no-launch-profile -- --music-download-live`는 번들 yt-dlp·설치된 Node로 공식 YouTube API 예제의 제목·호환 M4A 형식을 조회하고 파일은 저장하지 않는다. `--music-cache-live`는 Creative Commons BY3의 Blender Big Buck Bunny 영상 `YE7VzlLtp-4`를 합성 저장소에 실제 다운로드하고 음소거한 native MediaPlayer로 재생·제목·길이를 확인한다. 두 추가 검사는 인터넷과 Node22 이상이 필요하다. 기본 검사의 합성 WAV→M4A 변환은 Windows 기본 API를 사용하며 FFmpeg는 필요하지 않다.
-
-이전 CDP transport는 선택 검사로 남아 있으며 운영 기본 경로는 아니다. `--music-browser`는 별도 headless Edge/Chrome과 합성 로컬 WAV/HTML의 재생·탐색·수명을, `--music-live`는 격리·음소거한 실제 watch 페이지를, `--music-audio`는 mute-audio 없이 합성 무음 PCM을 검사한다. 이 선택 검사에만 설치된 Edge/Chrome이 필요하다.
-
 컨디션 게이지의 실제 누름→뗌 회귀 검사는 `dotnet run --project impls/Facet.JournalChecks/Facet.JournalChecks.csproj --no-build --no-launch-profile -- --condition-input`으로 별도 실행한다. 합성 컨디션만 가진 작은 검사 창에서 실제 포인터/마우스 버튼을 사용하며 종료 시 창을 닫고 포인터·전경 창을 복원한다. 누르는 동안 미열림, 뗀 뒤 유지, 선택 후 자동 저장과 창 유지, 중첩 시각 선택창, 별도 바깥 클릭, 바깥 놓기 취소를 확인한다. 기본/OverlayUi 검사에는 실제 입력을 포함하지 않는다.
 
 사용자 요청(2026-10-23): 블러는 이미 확인했으므로 기능 추가 때마다 격자·빨간 배경과 탭 조작을 화면에 반복 재생하지 않는다.
@@ -36,7 +22,7 @@
 
 단축키만 수정한 경우 실제 키 전달은 필요한 동작만 격자·빨간 배경 없이 확인하며, 이를 이유로 전체 배경 회귀 검사를 실행하지 않는다.
 
-JournalChecks를 직접 실행할 때는 각각 `--overlay-ui`, `--launcher`, `--overlay-visuals`를 사용한다. 실제 Codex 연결 검사는 `--codex-chat-live`로 별도 실행한다. 화면 밖 검사는 OS의 실제 키 전달을 확인한 것으로 보고하지 않는다.
+JournalChecks를 직접 실행할 때는 각각 `--overlay-ui`, `--launcher`, `--overlay-visuals`를 사용한다. 화면 밖 검사는 OS의 실제 키 전달을 확인한 것으로 보고하지 않는다.
 
 대시보드 날씨의 일반 `-OverlayUi` 검사는 주입한 Windows 좌표·위치 권한 실패·선택 지역·합성 HTTP만 사용한다. 실제 좌표나 위치 권한 요청 없이 ipapi 미호출, 수동 지역의 암호화 저장·재로드, 지역 변경 중 오래된 응답 차단과 로딩 배치 불변을 확인한다.
 

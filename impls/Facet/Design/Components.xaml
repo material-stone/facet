@@ -104,6 +104,22 @@
     </ControlTemplate>
    </Setter.Value></Setter>
   </Style>
+  <Style x:Key="Switch" TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
+   <Setter Property="Margin" Value="0"/>
+   <Setter Property="Template"><Setter.Value>
+    <ControlTemplate TargetType="CheckBox">
+     <Grid x:Name="Surface" Background="Transparent" Width="38" Height="22">
+      <Border x:Name="Track" Background="{StaticResource Input}" BorderBrush="{StaticResource Edge}" BorderThickness="1.5" CornerRadius="11" SnapsToDevicePixels="True"/>
+      <Ellipse x:Name="Knob" Width="14" Height="14" Fill="{StaticResource Muted}" HorizontalAlignment="Left" Margin="4,0,0,0" VerticalAlignment="Center"/>
+     </Grid>
+     <ControlTemplate.Triggers>
+      <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource Mint}"/></Trigger>
+      <Trigger Property="IsChecked" Value="True"><Setter TargetName="Track" Property="Background" Value="{StaticResource Mint}"/><Setter TargetName="Track" Property="BorderBrush" Value="{StaticResource Mint}"/><Setter TargetName="Knob" Property="Fill" Value="{StaticResource OnAccent}"/><Setter TargetName="Knob" Property="HorizontalAlignment" Value="Right"/><Setter TargetName="Knob" Property="Margin" Value="0,0,4,0"/></Trigger>
+      <Trigger Property="IsEnabled" Value="False"><Setter TargetName="Surface" Property="Opacity" Value="0.4"/></Trigger>
+     </ControlTemplate.Triggers>
+    </ControlTemplate>
+   </Setter.Value></Setter>
+  </Style>
   <Style TargetType="ComboBox" BasedOn="{StaticResource AppControl}">
    <Setter Property="Foreground" Value="{StaticResource Ink}"/><Setter Property="Background" Value="{StaticResource Input}"/>
    <Setter Property="BorderBrush" Value="{StaticResource Edge}"/><Setter Property="Padding" Value="10,8"/><Setter Property="Margin" Value="0,5,0,12"/>

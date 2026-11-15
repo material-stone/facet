@@ -201,6 +201,7 @@ Check("workspace layout rejects overlaps and keeps built-in tab rules",()=>{
     var wrapped=WorkspaceLayouts.AddWidget(data,tab.Id,"plugin.a",1,1,false,40,40,8,8);That(wrapped.X==7 && wrapped.Y==7,"a viewed area past the edge stays on the board");WorkspaceLayouts.RemoveWidget(data,tab.Id,wrapped.Id);
     var near=WorkspaceLayouts.AddWidget(data,tab.Id,"plugin.a",1,1,false,100,50);That(near.X==100 && near.Y==50,"new widgets can start at the viewed area");WorkspaceLayouts.RemoveWidget(data,tab.Id,near.Id);
     WorkspaceLayouts.SetView(data,tab.Id,120.5,-40,9);That(data.Workspace.Tabs.Single(t=>t.Id==tab.Id).View is {X:120.5,Y:-40,Zoom:WorkspaceLayouts.MaxZoom},"views keep the vector and clamp the zoom");
+    {var s=new Settings();That(WorkspaceGrid.CellSize(s)==96 && WorkspaceGrid.Style(s)==WorkspaceGrid.Dots,"the grid defaults to 96 px dots");s.GridCellSize=5;s.GridStyle="rounded";That(WorkspaceGrid.CellSize(s)==WorkspaceGrid.MinCellSize && WorkspaceGrid.Style(s)==WorkspaceGrid.Dots,"grid settings clamp the size and fall back to dots");}
     That(Rejects(()=>WorkspaceLayouts.SetHidden(data,"settings",true)) && Rejects(()=>WorkspaceLayouts.RemoveTab(data,"settings")) && Rejects(()=>WorkspaceLayouts.RenameTab(data,"settings","x")),"the settings tab keeps its rules");
     WorkspaceLayouts.MoveTab(data,tab.Id,1);That(data.Workspace.Tabs[^1].Id=="settings","moving a tab never passes settings");
     WorkspaceLayouts.MoveTab(data,tab.Id,-1);That(data.Workspace.Tabs[3].Id==tab.Id);

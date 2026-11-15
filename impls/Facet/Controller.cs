@@ -50,6 +50,7 @@ public sealed class Controller : IDisposable
         Store = new(root); Data = Store.Load();
         Design.Skins.UseFolder(Path.Combine(root, "skins"));
         Design.Skins.Apply(Application.Current, Data.Settings.Skin);
+        OverlayWorkspaceView.UseGrid(Data.Settings);
         // Current visibility never controls startup; use ShowOverlayOnLaunch and launch origin.
         Data.Settings.OverlayVisible = false;
         string? deployment = LaunchProtocol.FindLauncher() is { } packaged ? Path.GetDirectoryName(packaged) : null;
@@ -318,12 +319,14 @@ public sealed class Controller : IDisposable
     public bool ApplySettings(Settings next)
     {
         bool skinChanged = Design.Skins.Resolve(Data.Settings.Skin) != Design.Skins.Resolve(next.Skin);
+        bool gridChanged = (WorkspaceGrid.CellSize(Data.Settings), WorkspaceGrid.Style(Data.Settings)) != (WorkspaceGrid.CellSize(next), WorkspaceGrid.Style(next));
         string result = RegisterKeys(next);
         HotkeyStatus = result;
         if (result.Contains("실패")) { LastError = result; return false; }
         if (!Commit(d => d.Settings = next)) { RegisterKeys(Data.Settings); return false; }
         ApplyDisplay();
         Overlay.ApplyThemeOptions();
+        if (gridChanged) { OverlayWorkspaceView.UseGrid(Data.Settings); Overlay.ApplyGrid(); }
         // The settings view that is saving gets replaced, so the switch waits until this save has returned.
         if (skinChanged) Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() => { if (!Exiting && !disposed) Overlay.SwitchSkin(Data.Settings.Skin); }));
         return true;

@@ -38,7 +38,10 @@ internal sealed class WidgetFit : Decorator
 // One tab's board, three screens wide and tall around its origin, which sits between four cells at the center plus the view offset.
 internal sealed class OverlayWorkspaceView : UserControl
 {
-    internal const double Cell = 80, Gap = 16, Pitch = Cell + Gap;
+    // Shared by every board; Controller sets it from Settings and the boards render again.
+    internal static double Pitch { get; private set; } = WorkspaceGrid.DefaultCellSize;
+    internal static string GridStyle { get; private set; } = WorkspaceGrid.Dots;
+    internal static void UseGrid(Settings settings) { Pitch = WorkspaceGrid.CellSize(settings); GridStyle = WorkspaceGrid.Style(settings); }
     private readonly Canvas surface = new() { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
     private readonly ScaleTransform scale = new();
     private readonly TranslateTransform move = new();
@@ -49,7 +52,7 @@ internal sealed class OverlayWorkspaceView : UserControl
     private double viewX, viewY, zoom = 1;
     private bool hasView;
     private (Point Start, double X, double Y)? pan;
-    private const double GridSweepMs = 420, GridCellFadeMs = 200, GridSlotLine = .5, GridSlotFill = .1;
+    private const double GridSweepMs = 420, GridCellFadeMs = 200, GridMarkLevel = .6;
     private readonly System.Diagnostics.Stopwatch gridClock = new();
     private bool gridFading;
     private double? gridInterruptedAt;
@@ -143,19 +146,61 @@ internal sealed class OverlayWorkspaceView : UserControl
     {
         base.OnRender(context);
         if ((!editing && !gridFading) || FindResource("Edge") is not Brush edge) return;
-        double size = Zoom, pitch = Pitch * size, originX = ActualWidth / 2 + viewX, originY = ActualHeight / 2 + viewY, inset = Gap / 2 * size;
-        var fill = edge.Clone(); fill.Opacity = GridSlotFill; fill.Freeze();
-        var line = edge.Clone(); line.Opacity = GridSlotLine; line.Freeze();
-        var pen = new Pen(line, 1); pen.Freeze();
-        for (int row = Math.Max(-HalfRows, (int)Math.Floor(-originY / pitch)); row < HalfRows && originY + row * pitch < ActualHeight; row++)
-            for (int column = Math.Max(-HalfColumns, (int)Math.Floor(-originX / pitch)); column < HalfColumns && originX + column * pitch < ActualWidth; column++) {
-                if (IsCellCovered(column, row)) continue;
-                double x = originX + column * pitch + inset, y = originY + row * pitch + inset, level = GridLevel(x, y);
-                if (level <= 0) continue;
-                context.PushOpacity(level);
-                context.DrawRoundedRectangle(fill, pen, new Rect(x, y, Cell * size, Cell * size), 8 * size, 8 * size);
-                context.Pop();
+        double size = Zoom, pitch = Pitch * size, originX = ActualWidth / 2 + viewX, originY = ActualHeight / 2 + viewY;
+        var tint = edge.Clone(); tint.Opacity = GridMarkLevel; tint.Freeze();
+        var pen = new Pen(tint, 1); pen.Freeze();
+        int firstRow = Math.Max(-HalfRows, (int)Math.Floor(-originY / pitch)), firstColumn = Math.Max(-HalfColumns, (int)Math.Floor(-originX / pitch));
+        int lastRow = Math.Min(HalfRows, (int)Math.Ceiling((ActualHeight - originY) / pitch)), lastColumn = Math.Min(HalfColumns, (int)Math.Ceiling((ActualWidth - originX) / pitch));
+        // Coverage is read once per frame, and marks are grouped by fade level so a frame issues a few dozen draws, not one per mark.
+        int columns = lastColumn - firstColumn + 2, rows = lastRow - firstRow + 2;
+        if (columns <= 0 || rows <= 0) return;
+        var covered = new bool[columns, rows];
+        foreach (var (id, (_, item)) in tiles) {
+            var (left, top, width, height) = drag is { } state && state.Id == id ? (state.NextX, state.NextY, state.NextWidth, state.NextHeight) : (item.X, item.Y, item.Width, item.Height);
+            for (int c = Math.Max(left, firstColumn - 1); c < Math.Min(left + width, lastColumn + 1); c++)
+                for (int r = Math.Max(top, firstRow - 1); r < Math.Min(top + height, lastRow + 1); r++) covered[c - firstColumn + 1, r - firstRow + 1] = true;
+        }
+        bool Covered(int column, int row) => covered[column - firstColumn + 1, row - firstRow + 1];
+        const int Steps = 24;
+        var groups = new StreamGeometryContext?[Steps + 1];
+        var shapes = new StreamGeometry?[Steps + 1];
+        StreamGeometryContext? Group(double x, double y)
+        {
+            int step = (int)Math.Round(GridLevel(x, y) * Steps);
+            if (step <= 0) return null;
+            if (groups[step] == null) { shapes[step] = new StreamGeometry(); groups[step] = shapes[step]!.Open(); }
+            return groups[step];
+        }
+        void Line(StreamGeometryContext? g, double x1, double y1, double x2, double y2) { if (g == null) return; g.BeginFigure(new(x1, y1), false, false); g.LineTo(new(x2, y2), true, false); }
+        bool lines = GridStyle == WorkspaceGrid.Lines, crosses = GridStyle == WorkspaceGrid.Crosses;
+        double arm = Math.Min(6, pitch / 6), dot = Math.Max(1, Math.Min(2, pitch / 30));
+        // Marks inside a widget are skipped; its edges keep theirs so lines run under rounded corners.
+        for (int row = firstRow; row <= lastRow; row++)
+            for (int column = firstColumn; column <= lastColumn; column++) {
+                double x = originX + column * pitch, y = originY + row * pitch;
+                if (lines) {
+                    if (column < lastColumn && row > -HalfRows && row < HalfRows && !(Covered(column, row) && Covered(column, row - 1)))
+                        Line(Group(x + pitch / 2, y), x, y, x + pitch, y);
+                    if (row < lastRow && column > -HalfColumns && column < HalfColumns && !(Covered(column, row) && Covered(column - 1, row)))
+                        Line(Group(x, y + pitch / 2), x, y, x, y + pitch);
+                    continue;
+                }
+                if (Covered(column, row) && Covered(column - 1, row) && Covered(column, row - 1) && Covered(column - 1, row - 1)) continue;
+                if (Group(x, y) is not { } g) continue;
+                if (crosses) { Line(g, x - arm, y, x + arm, y); Line(g, x, y - arm, x, y + arm); }
+                else {
+                    g.BeginFigure(new(x - dot, y), true, true);
+                    g.ArcTo(new(x + dot, y), new(dot, dot), 0, false, SweepDirection.Clockwise, false, false);
+                    g.ArcTo(new(x - dot, y), new(dot, dot), 0, false, SweepDirection.Clockwise, false, false);
+                }
             }
+        for (int step = 1; step <= Steps; step++) {
+            if (groups[step] is not { } g) continue;
+            g.Close(); shapes[step]!.Freeze();
+            context.PushOpacity(step / (double)Steps);
+            if (lines || crosses) context.DrawGeometry(null, pen, shapes[step]); else context.DrawGeometry(tint, null, shapes[step]);
+            context.Pop();
+        }
         if (FindResource("Mint") is not Brush mint) return;
         var mark = new Pen(mint, 2); mark.Freeze();
         context.PushOpacity(GridLevel(originX, originY));
@@ -298,8 +343,8 @@ internal sealed class OverlayWorkspaceView : UserControl
 
     private static void Place(FrameworkElement tile, int x, int y, int width, int height)
     {
-        Canvas.SetLeft(tile, x * Pitch + Gap / 2); Canvas.SetTop(tile, y * Pitch + Gap / 2);
-        tile.Width = width * Pitch - Gap; tile.Height = height * Pitch - Gap;
+        Canvas.SetLeft(tile, x * Pitch); Canvas.SetTop(tile, y * Pitch);
+        tile.Width = width * Pitch; tile.Height = height * Pitch;
     }
 
     private void BeginDrag(WidgetPlacement item, bool resize, UIElement capture, MouseButtonEventArgs e)

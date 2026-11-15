@@ -13,8 +13,6 @@ graphify-out/
 artifacts/
 .test-data/
 *.user
-impls/Facet.MusicPlugin/Tools/yt-dlp.exe
-impls/Facet.MusicPlugin/Tools/yt-dlp.exe.download
 __pycache__/
 *.pyc
 # Personal planning documents kept outside the public repository

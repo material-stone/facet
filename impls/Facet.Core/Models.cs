@@ -69,6 +69,9 @@ public sealed class Settings
     public double OverlayBlurRadius { get; set; } = 18;
     public int OverlayShowMilliseconds { get; set; } = 280;
     public int OverlayHideMilliseconds { get; set; } = 280;
+    // Board cell side in pixels at 100% zoom; see WorkspaceGrid for the range and styles.
+    public int GridCellSize { get; set; } = WorkspaceGrid.DefaultCellSize;
+    public string GridStyle { get; set; } = WorkspaceGrid.Dots;
     public double OverlayWidth { get; set; } = 350;
     public double? OverlayLeft { get; set; }
     public double? OverlayTop { get; set; }

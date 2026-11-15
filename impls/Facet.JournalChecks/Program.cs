@@ -385,6 +385,9 @@ internal static partial class Program
         if(args.Contains("--seed-skin")) { var seeded=new Store(args[1]);var seedData=seeded.Load();seedData.Settings.Skin=args[2];seeded.Save(seedData);return 0; }
 #if PLUGIN_CHECKS
         if(args.Contains("--hud-preview")) return RunHudPreview(args);
+#if PLUGIN_CHECKS
+        if(args.Contains("--clock-face-preview")) return RunClockFacePreview(args);
+#endif
 #endif
         string qa=Path.GetFullPath(Path.Combine(".test-data","journal-"+Guid.NewGuid().ToString("N"))); Directory.CreateDirectory(qa);
         try {
@@ -427,62 +430,17 @@ internal static partial class Program
             else {
                 CheckOverlayOnly(controller,qa);
                 CheckSkins(controller,qa);
-#if PLUGIN_CHECKS
-                CheckAgentChat(controller,qa,args.Contains("--codex-chat-live"));
-#endif
-#if PLUGIN_CHECKS
-                CheckChatTab(qa);
-#endif
-#if PLUGIN_CHECKS
-                CheckChatPlugin(qa);
-#endif
                 CheckPortablePlugins(qa);
         CheckDataBackup(qa);
                 CheckPackages(qa);
-#if PLUGIN_CHECKS
-                CheckVoiceAgent(controller,qa);
-#endif
                 CheckWorkspace(controller);
-#if PLUGIN_CHECKS
-                CheckMusicRules();
-#endif
-#if PLUGIN_CHECKS
-                CheckMusic();
-#endif
-#if PLUGIN_CHECKS
-                CheckMusicLifetime(qa);
-#endif
 #if PLUGIN_CHECKS
                 CheckConditions(qa);
 #endif
 #if PLUGIN_CHECKS
                 CheckSleep(qa);
 #endif
-#if PLUGIN_CHECKS
-                CheckLocalMusic(qa);
-#endif
-#if PLUGIN_CHECKS
-                CheckLatestMusicSelection(qa);
-#endif
-#if PLUGIN_CHECKS
-                CheckMusicPlaylistHover(qa);
-#endif
-#if PLUGIN_CHECKS
-                if(args.Contains("--music-download-live"))CheckMusicDownloadProbe(qa);
-#endif
-#if PLUGIN_CHECKS
-                if(args.Contains("--music-cache-live"))CheckDownloadedMusicLive(qa);
-#endif
-#if PLUGIN_CHECKS
-                if(args.Contains("--codex-chat-metadata")) CheckLiveChatMetadata(qa);
-#endif
                 if(args.Contains("--hotkeys")) CheckOverlayOnlyHotkeys(qa);
-#if PLUGIN_CHECKS
-                if(args.Contains("--supertonic-live")) CheckSupertonicLive(qa);
-#endif
-#if PLUGIN_CHECKS
-                if(Array.IndexOf(args,"--chat-plugin-folder") is >=0 and var chatFolder) CheckDeployedChatPlugin(args[chatFolder+1],qa);
-#endif
                 if(args.Contains("--overlay-ui") || args.Contains("--launcher")) CheckStartupSettings(controller);
 #if PLUGIN_CHECKS
                 if(args.Contains("--overlay-ui")) { CheckDashboard(qa); CheckDisplayCursors(controller); CheckWeather(qa); CheckOverlayCalendar(new OverlayTabs(),qa,nativeInput:false); CheckCalendarDayEditor(controller,qa); CheckDashboardRemindersAndDebug(qa); CheckReminderCli(controller,qa); }

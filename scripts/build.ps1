@@ -78,9 +78,6 @@ try {
     $launcherStage = Join-Path $deployRoot ('.launcher-' + $buildId)
     dotnet publish impls/Facet.Launcher/Facet.Launcher.csproj -c Release --self-contained false -o $launcherStage --nologo -m:1 /nodeReuse:false
     if ($LASTEXITCODE -ne 0) { throw 'Launcher publish failed. The previous release remains selected.' }
-    # The music plugin is a separate deliverable; connect it by copying this folder to <data>/plugins/music (ADR 0080).
-    dotnet publish impls/Facet.MusicPlugin/Facet.MusicPlugin.csproj -c Release -o (Join-Path $deployRoot 'plugins/music') --nologo -m:1 /nodeReuse:false
-    if ($LASTEXITCODE -ne 0) { throw 'Music plugin publish failed. The previous release remains selected.' }
     # The condition plugin ships the same way, to <data>/plugins/condition (ADR 0081).
     dotnet publish impls/Facet.ConditionPlugin/Facet.ConditionPlugin.csproj -c Release -o (Join-Path $deployRoot 'plugins/condition') --nologo -m:1 /nodeReuse:false
     if ($LASTEXITCODE -ne 0) { throw 'Condition plugin publish failed. The previous release remains selected.' }
@@ -95,9 +92,6 @@ try {
         dotnet publish "impls/$($plugin[0])/$($plugin[0]).csproj" -c Release -o (Join-Path $deployRoot "plugins/$($plugin[1])") --nologo -m:1 /nodeReuse:false
         if ($LASTEXITCODE -ne 0) { throw "$($plugin[0]) publish failed. The previous release remains selected." }
     }
-    # The chat plugin ships the same way, to <data>/plugins/chat (ADR 0084). The runtime flattens its native ONNX and DirectML DLLs beside the plugin.
-    dotnet publish impls/Facet.ChatPlugin/Facet.ChatPlugin.csproj -c Release -r win-x64 --self-contained false -o (Join-Path $deployRoot 'plugins/chat') --nologo -m:1 /nodeReuse:false
-    if ($LASTEXITCODE -ne 0) { throw 'Chat plugin publish failed. The previous release remains selected.' }
     foreach ($file in @('Facet.exe', 'Facet.dll', 'Facet.Core.dll', 'Facet.Plugins.dll', 'Facet.deps.json', 'Facet.runtimeconfig.json')) {
         if (-not (Test-Path -LiteralPath (Join-Path $releasePath $file) -PathType Leaf)) { throw ('Published release is incomplete: ' + $file) }
     }

@@ -36,7 +36,7 @@ internal static partial class Program
             var top=search.TranslatePoint(new Point(),hud);var bottom=strip.TranslatePoint(new Point(0,strip.ActualHeight),hud);
             var center=view.TranslatePoint(new Point(view.ActualWidth/2,0),hud);
             Assert(view.ActualWidth<=800 && Math.Abs(center.X-size.Width/2)<1 && top.Y>=bottom.Y+24 && top.Y+search.ActualHeight<size.Height,"settings stays centered within 800 DIP below the tabs at "+size);
-            Assert(scroll.ExtentHeight>scroll.ViewportHeight && scroll.ViewportHeight>0,"settings scrolls inside the available height at "+size);
+            Assert(scroll.ViewportHeight>0 && (size.Height>400 || scroll.ExtentHeight>scroll.ViewportHeight),"settings scrolls inside the available height at "+size);
             var first=Rows()[0];var left=Label(first).TranslatePoint(new Point(),hud);var right=Editor("직접 실행 시 오버레이 표시").TranslatePoint(new Point(),hud);
             Assert(left.X<right.X && Label(first).ToolTip is string description && description.Contains("직접"),"setting name stays left of its editor and exposes a description tooltip");
             Assert(first.ActualHeight<=48,"compact toggle rows use at most 48 DIP without extra gaps at "+size);
@@ -58,7 +58,12 @@ internal static partial class Program
         search.Text="[.*+?";
         Assert(Rows().All(row=>row.Visibility==Visibility.Collapsed) && ((TextBlock)view.FindName("EmptyMessage")).Visibility==Visibility.Visible,"search treats regex characters literally and explains empty results");
         search.Text="  ";
-        Assert(Rows().Where(row=>AutomationProperties.GetName((FrameworkElement)((StackPanel)row.Children[1]).Children[0])!="스킨 옵션").All(row=>row.Visibility==Visibility.Visible),"blank search restores every setting (skin options show only for a skin that has them)");
+        Assert(view.CurrentSection=="일반" && groups.Children.OfType<StackPanel>().Count(group=>group.Visibility==Visibility.Visible)==2,"without search only the chosen side tab's groups show");
+        search.Text="플러그인 받기";view.ShowSection("스킨");
+        string[] Shown()=>groups.Children.OfType<StackPanel>().Where(group=>group.Visibility==Visibility.Visible).SelectMany(group=>group.Children.OfType<Grid>()).Where(row=>row.Visibility==Visibility.Visible).Select(row=>AutomationProperties.GetName((FrameworkElement)((StackPanel)row.Children[1]).Children[0])).ToArray();
+        Assert(search.Text=="" && Shown().Contains("사용할 스킨") && !Shown().Contains("플러그인 받기"),"picking the skin tab clears search and shows only skin rows");
+        view.ShowSection("일반");search.Text="  ";
+        Assert(groups.Children.OfType<StackPanel>().Where(group=>group.Visibility==Visibility.Visible).SelectMany(group=>group.Children.OfType<Grid>()).All(row=>row.Visibility==Visibility.Visible),"blank search restores every setting of the chosen tab");
 
         var store=new Store(Path.Combine(qa,"overlay-settings-"+Guid.NewGuid().ToString("N")));
         var data=store.Load();bool fail=false,startup=false;int saves=0;
@@ -86,11 +91,12 @@ internal static partial class Program
         var fade=((StackPanel)Editor("나타나는 시간")).Children.OfType<Slider>().Single();fade.Value=400;
         Assert(data.Settings.OverlayShowMilliseconds==400 && !view.HasChanges && ReferenceEquals(fade,((StackPanel)Editor("나타나는 시간")).Children.OfType<Slider>().Single()),"slider changes persist immediately without recreating the dragged control");
         Assert(Rows().All(row=>row.Children.OfType<StackPanel>().SelectMany(p=>p.Children.OfType<TextBlock>()).All(t=>t.Text!="날씨 지역")),"the weather region moved to the plugin section");
-        var skins=(ComboBox)Editor("사용할 스킨");
-        Assert((string)skins.SelectedValue=="default","settings show the default skin for existing data");
-        skins.SelectedValue="midnight";
+        var skins=(SkinsPanel)Editor("사용할 스킨");
+        Assert(skins.SelectedSkin=="default","settings show the default skin for existing data");
+        var midnight=VisualElements(skins).OfType<RadioButton>().Single(radio=>AutomationProperties.GetName(radio)==Facet.Design.Skins.Options.Single(option=>option.Id=="midnight").Name+" 적용");
+        midnight.IsChecked=true;
         Assert(!view.HasChanges && new Store(store.Root).Load().Settings.Skin=="midnight","skin selection autosaves for the next start");
-        skins.SelectedValue="default";
+        VisualElements(skins).OfType<RadioButton>().Single(radio=>AutomationProperties.GetName(radio)=="기본 적용").IsChecked=true;
         Assert(Rows().All(row=>AutomationProperties.GetName((FrameworkElement)((StackPanel)row.Children[1]).Children[0]) is not ("검색 엔진" or "탐색기 alias" or "블러 강도" or "화면 공유 모드")),"hidden launcher, blur and reminder settings stay off the screen");
         fail=true;fade.Value=800;
         Assert(view.HasChanges && data.Settings.OverlayShowMilliseconds==400,

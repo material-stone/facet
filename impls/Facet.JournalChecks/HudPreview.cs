@@ -6,7 +6,6 @@ using Facet;
 using Facet.ConditionPlugin;
 using Facet.Core;
 using Facet.Design;
-using Facet.MusicPlugin;
 using Facet.SleepPlugin;
 using Facet.Widgets;
 
@@ -40,7 +39,6 @@ internal static partial class Program
             var today=DateOnly.FromDateTime(now);
             var nights=new[]{(6.5),5,7.2,6,8,7,7.15}.Select((hours,i)=>new Facet.SleepPlugin.SleepEntry { Date=today.AddDays(i-6),Attempt="23:00",Latency=0,AwakeMinutes=0,FinalWake=TimeOnly.FromTimeSpan(TimeSpan.FromHours(23+hours-24)).ToString("HH:mm") }).ToArray();
             sleep.Refresh(nights,today);
-            var music=new DashboardMusicPanel();
             var board=new Canvas();
             void Tile(FrameworkElement view,double left,double top,double height,bool fill=false)
             {
@@ -57,7 +55,6 @@ internal static partial class Program
             Tile(condition,1192,74,176);
             Tile(history,1192,266,176);
             Tile(sleep,1192,458,176);
-            Tile(music,1192,650,176);
             var host=new Grid { Background=new SolidColorBrush(Color.FromRgb(5,7,15)),Width=1600,Height=900 };
             if(Skins.Visuals!.CreateBackdrop() is { } backdrop)host.Children.Add(backdrop);else host.Background=new SolidColorBrush(Color.FromRgb(70,62,90));host.Children.Add(board);
             var window=new Window { Content=host,Width=1600,Height=900,WindowStyle=WindowStyle.None,ResizeMode=ResizeMode.NoResize,Left=-20000,Top=-20000,ShowActivated=false,ShowInTaskbar=false };window.Show();
@@ -67,7 +64,7 @@ internal static partial class Program
             var image=new System.Windows.Media.Imaging.RenderTargetBitmap(1600,900,96,96,PixelFormats.Pbgra32);image.Render(host);
             var encoder=new System.Windows.Media.Imaging.PngBitmapEncoder();encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
             using(var file=File.Create(output))encoder.Save(file);
-            window.Close();music.Dispose();
+            window.Close();
             return 0;
         }
         catch(Exception ex) { Console.Error.WriteLine(ex);return 1; }

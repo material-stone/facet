@@ -20,21 +20,26 @@ internal sealed class ClockFitButton : Button
     private readonly Viewbox fit;
     private readonly Func<IWidgetModal> modal;
     private readonly Func<string, bool> save;
+    private readonly string title;
+    private readonly Func<FrameworkElement>? extra;
     private IModalHandle? open;
 
-    internal ClockFitButton(FrameworkElement face, Func<IWidgetModal> modal, Func<string, bool> save)
+    // Extra builds more settings shown above the alignment grid, such as the clock plugin's face choice.
+    internal ClockFitButton(FrameworkElement face, Func<IWidgetModal> modal, Func<string, bool> save, string title = "시계 정렬", Func<FrameworkElement>? extra = null)
     {
-        this.modal = modal; this.save = save;
+        this.modal = modal; this.save = save; this.title = title; this.extra = extra;
         fit = new Viewbox { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.Both, Child = face };
         Content = fit;
         Template = Chrome(new CornerRadius(12));
         Background = Brushes.Transparent; BorderThickness = new Thickness(0); Padding = new Thickness(0);
         Focusable = false; IsTabStop = false; FocusVisualStyle = null; Cursor = System.Windows.Input.Cursors.Hand;
         HorizontalContentAlignment = HorizontalAlignment.Stretch; VerticalContentAlignment = VerticalAlignment.Stretch;
-        AutomationProperties.SetName(this, "시계 정렬 설정");
+        AutomationProperties.SetName(this, title + " 설정");
         Alignment = DefaultAlignment;
         Click += (_, _) => OpenChooser();
     }
+
+    internal FrameworkElement Face { get => (FrameworkElement)fit.Child; set => fit.Child = value; }
 
     internal string Alignment
     {
@@ -66,8 +71,8 @@ internal sealed class ClockFitButton : Button
     internal FrameworkElement BuildChooser()
     {
         var root = new StackPanel { Width = 312 };
-        var title = new TextBlock { Text = "시계 정렬", FontSize = 16, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 12) };
-        title.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
+        var heading = new TextBlock { Text = title, FontSize = 16, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 12) };
+        heading.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
         var grid = new UniformGrid { Rows = 3, Columns = 3, Width = 312, Height = 216 };
         var error = new TextBlock { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0), Visibility = Visibility.Collapsed };
         error.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
@@ -98,7 +103,9 @@ internal sealed class ClockFitButton : Button
                 grid.Children.Add(button);
             }
         Mark();
-        root.Children.Add(title); root.Children.Add(grid); root.Children.Add(error);
+        root.Children.Add(heading);
+        if (extra != null) root.Children.Add(extra());
+        root.Children.Add(grid); root.Children.Add(error);
         return root;
     }
 
@@ -112,7 +119,7 @@ internal sealed class ClockFitButton : Button
         return new BeginStoryboard { Storyboard = board };
     }
 
-    private static ControlTemplate Chrome(CornerRadius corner)
+    internal static ControlTemplate Chrome(CornerRadius corner)
     {
         var border = new FrameworkElementFactory(typeof(Border), "Chrome");
         border.SetValue(Border.CornerRadiusProperty, corner);

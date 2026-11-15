@@ -28,12 +28,13 @@ internal sealed class PackagesPanel : StackPanel
     {
         this.kind = kind;
         status.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
-        var buttons = new WrapPanel();
+        // Right-aligned so the commands sit level with the row's label; plugins open their folder from the installed list.
+        var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
         IsVisibleChanged += (_, _) => { if (IsVisible && owner != null && !listRequested) { listRequested = true; LoadList(); } };
-        buttons.Children.Add(Command("목록 새로고침", LoadList));
-        buttons.Children.Add(Command("zip 파일로 설치", InstallFile));
-        buttons.Children.Add(Command(Noun + " 폴더 열기", () => OpenFolder(Path.Combine(dataRoot, kind == PackageKind.Plugin ? "plugins" : "skins"))));
-        buttons.Children.Add(Command("직접 만든 " + Noun + " 올리기", Submit));
+        buttons.Children.Add(Command(Design.IconKind.Refresh, "목록 새로고침", LoadList, showText: false));
+        buttons.Children.Add(Command(Design.IconKind.Archive, "파일로 설치", InstallFile));
+        if (kind == PackageKind.Skin) buttons.Children.Add(Command(Design.IconKind.Folder, Noun + " 폴더 열기", () => OpenFolder(Path.Combine(dataRoot, "skins"))));
+        buttons.Children.Add(Command(Design.IconKind.Upload, "업로드", Submit, "직접 만든 " + Noun + " 올리기"));
         Children.Add(buttons);
         Children.Add(status);
         Children.Add(list);
@@ -41,11 +42,29 @@ internal sealed class PackagesPanel : StackPanel
 
     internal void Connect(OverlayTabs tabs, Controller controller, string root, Action onChanged) { owner = tabs; app = controller; dataRoot = root; changed = onChanged; }
 
-    private static Button Command(string text, Action run)
+    private static Button Command(Design.IconKind icon, string text, Action run, string? tip = null, bool showText = true)
     {
-        var button = new Button { Content = text, Margin = new(0, 0, 8, 8), Padding = new(10, 4, 10, 4) };
+        var button = PluginSettingsPanel.IconButton(icon, text, showText);
+        button.Margin = new(8, 0, 0, 8);
+        if (tip != null) { button.ToolTip = tip; System.Windows.Automation.AutomationProperties.SetHelpText(button, tip); }
         button.Click += (_, _) => run();
         return button;
+    }
+
+    // Install buttons and the installed mark share one width and end at the row's right edge.
+    private const double StateWidth = 108;
+
+    private static FrameworkElement StateContent(Design.IconKind icon, string text, string brush)
+    {
+        var mark = new Design.Icon { Kind = icon, Width = 16, Height = 16, VerticalAlignment = VerticalAlignment.Center };
+        mark.SetResourceReference(Design.Icon.ForegroundProperty, brush);
+        var caption = new TextBlock { Text = text, Margin = new(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        caption.SetResourceReference(TextBlock.ForegroundProperty, brush);
+        var content = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        content.Children.Add(mark);
+        content.Children.Add(caption);
+        // A fixed inner width with right-aligned content: the button template centres its content otherwise.
+        return new Grid { Width = StateWidth - 26, HorizontalAlignment = HorizontalAlignment.Right, Children = { content } };
     }
 
     private void Show(string text, bool error = false)
@@ -94,8 +113,18 @@ internal sealed class PackagesPanel : StackPanel
         string? installed = InstalledVersion(entry);
         bool update = installed != null && PackageRegistry.IsNewer(entry.Version, installed);
         bool download = installed == null || update, active = !download && IsActive(entry);
-        string caption = update ? "업데이트" : installed == null ? "설치" : active ? (kind == PackageKind.Plugin ? "켜져 있음" : "사용 중") : (kind == PackageKind.Plugin ? "켜기" : "적용");
-        var install = new Button { Content = caption, IsEnabled = !active, MinWidth = 72, VerticalAlignment = VerticalAlignment.Center, Padding = new(10, 4, 10, 4) };
+        if (active) {
+            // Not a button: the caption ends at the row's right edge, where the install buttons end.
+            var done = new Border { Width = StateWidth, Height = 34, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Child = StateContent(Design.IconKind.Check, kind == PackageKind.Plugin ? "설치됨" : "사용 중", "Mint") };
+            ((FrameworkElement)done.Child).VerticalAlignment = VerticalAlignment.Center;
+            System.Windows.Automation.AutomationProperties.SetName(done, entry.Name + (kind == PackageKind.Plugin ? " 설치됨" : " 사용 중"));
+            Grid.SetColumn(done, 1);
+            row.Children.Add(done);
+            return row;
+        }
+        string caption = update ? "업데이트" : installed == null ? "설치" : (kind == PackageKind.Plugin ? "켜기" : "적용");
+        var install = new Button { Content = StateContent(download ? Design.IconKind.Download : Design.IconKind.Check, caption, "Ink"), ContentTemplate = null, HorizontalContentAlignment = HorizontalAlignment.Left, Width = StateWidth, Height = 34, Margin = new(0), VerticalAlignment = VerticalAlignment.Center, Padding = new(12, 0, 12, 0) };
+        System.Windows.Automation.AutomationProperties.SetName(install, entry.Name + " " + caption);
         install.Click += async (_, _) => {
             if (busy) return;
             busy = true;
@@ -145,16 +174,20 @@ internal sealed class PackagesPanel : StackPanel
     {
         var dialog = new OpenFolderDialog { Title = "올릴 " + Noun + " 폴더 선택" };
         if (dialog.ShowDialog(Window.GetWindow(this)) != true) return;
-        try {
-            string zip = Packages.Pack(dialog.FolderName, Path.Combine(dataRoot, "outgoing-packages"));
-            Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{zip}\"") { UseShellExecute = false })?.Dispose();
-            Process.Start(new ProcessStartInfo(PackageRegistry.SubmitUrl) { UseShellExecute = true })?.Dispose();
-            Show($"{Path.GetFileName(zip)}을(를) 만들었습니다. 열린 GitHub 제출 양식에 이 파일을 끌어다 놓으세요. 스킨은 자동 검사 후, 플러그인은 관리자 승인 후 공개됩니다.");
-        }
+        try { Show(Submit(dialog.FolderName, dataRoot)); }
         catch (Exception ex) when (ex is InvalidDataException or IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception) { Show(ex.Message, true); }
     }
 
-    private static void OpenFolder(string folder)
+    // Shared with the skin tab; returns the message to show.
+    internal static string Submit(string folder, string dataRoot)
+    {
+        string zip = Packages.Pack(folder, Path.Combine(dataRoot, "outgoing-packages"));
+        Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{zip}\"") { UseShellExecute = false })?.Dispose();
+        Process.Start(new ProcessStartInfo(PackageRegistry.SubmitUrl) { UseShellExecute = true })?.Dispose();
+        return $"{Path.GetFileName(zip)}을(를) 만들었습니다. 열린 GitHub 제출 양식에 이 파일을 끌어다 놓으세요. 스킨은 자동 검사 후, 플러그인은 관리자 승인 후 공개됩니다.";
+    }
+
+    internal static void OpenFolder(string folder)
     {
         Directory.CreateDirectory(folder);
         Process.Start(new ProcessStartInfo(folder) { UseShellExecute = true })?.Dispose();

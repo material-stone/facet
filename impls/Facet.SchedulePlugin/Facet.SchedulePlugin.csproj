@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0-windows10.0.19041.0</TargetFramework><UseWPF>true</UseWPF><UseWindowsForms>false</UseWindowsForms><ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable></PropertyGroup>
+  <!-- The host supplies the contract and the pure Core rules, so the plugin folder holds only this assembly and its manifest (ADR 0101). -->
+  <ItemGroup>
+    <ProjectReference Include="../Facet.Plugins/Facet.Plugins.csproj" Private="false" />
+    <ProjectReference Include="../Facet.Core/Facet.Core.csproj" Private="false" />
+  </ItemGroup>
+  <!-- Markdown notes; the plugin folder carries its own copy. -->
+  <ItemGroup><PackageReference Include="Markdig" Version="1.4.2" /></ItemGroup>
+  <ItemGroup><InternalsVisibleTo Include="Facet.JournalChecks" /></ItemGroup>
+  <ItemGroup>
+    <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Parsed in code: pack URIs may not resolve in a plugin load context. -->
+    <Page Remove="ScheduleColorPickerStyles.xaml" />
+    <EmbeddedResource Include="ScheduleColorPickerStyles.xaml" LogicalName="ScheduleColorPickerStyles.xaml" />
+  </ItemGroup>
+</Project>

@@ -28,6 +28,13 @@ public partial class OverlaySettingsView : UserControl
 
     private readonly List<SettingRow> rows = [];
     private readonly List<(StackPanel Host, TextBlock Heading, string Name, List<SettingRow> Rows)> groups = [];
+    // Side tabs in display order; null draws a divider between tab bunches.
+    private static readonly (string Name, string[] Groups)?[] Sections = [
+        ("일반", ["앱 시작","오버레이"]), ("탭", ["탭"]), ("단축키", ["단축키"]), null,
+        ("스킨", ["스킨"]), ("플러그인", ["플러그인"]), null,
+        ("데이터", ["데이터"])];
+    private readonly Dictionary<string, RadioButton> sectionTabs = [];
+    private string section = "일반";
     private Func<Settings>? loadSettings;
     private Func<Settings, bool>? saveSettings;
     private Func<bool?> readStartup = () => null;
@@ -42,6 +49,7 @@ public partial class OverlaySettingsView : UserControl
     {
         InitializeComponent();
         BuildRows();
+        BuildSections();
         Reload(new Settings());
         AddHandler(TextBoxBase.TextChangedEvent, new TextChangedEventHandler((_, e) => { if (!ReferenceEquals(e.OriginalSource, SearchInput)) Changed(defer:true); }));
         AddHandler(ToggleButton.CheckedEvent, new RoutedEventHandler((_, _) => Changed()));
@@ -52,6 +60,7 @@ public partial class OverlaySettingsView : UserControl
         }));
         Unloaded += (_,_) => { autoSave.Stop(); if(loadSettings!=null)TrySave(); };
         Loaded += (_,_) => FocusSearch();
+        SizeChanged += (_,e) => Arrange(e.NewSize.Width < 600);
         IsVisibleChanged += (_, _) => { if (IsVisible && !HasChanges && loadSettings != null) Reload(loadSettings()); };
     }
 
@@ -88,7 +97,7 @@ public partial class OverlaySettingsView : UserControl
     internal WorkspaceSettingsPanel WorkspacePanel { get; } = new();
     internal PluginSettingsPanel PluginPanel { get; } = new();
     internal PackagesPanel PluginPackages { get; } = new(PackageKind.Plugin);
-    internal PackagesPanel SkinPackages { get; } = new(PackageKind.Skin);
+    internal SkinsPanel SkinPanel { get; } = new();
     // After a package install, so the skin list shows it without reopening the tab.
     internal void ReloadSkins() { if (loadSettings != null && !HasChanges) Reload(loadSettings()); }
 
@@ -99,18 +108,24 @@ public partial class OverlaySettingsView : UserControl
         startup = Toggle("Windows 로그인 시 자동 실행", "Windows에 로그인하면 오버레이를 열지 않고 트레이에서 앱을 시작합니다.", _ => false, (_,_) => { });
 
         Group("탭");
+        Range("격자 칸 크기", "위젯을 배치하는 칸 한 변의 크기입니다(100% 확대 기준). 칸이 커지면 위젯도 함께 커집니다.", WorkspaceGrid.MinCellSize, WorkspaceGrid.MaxCellSize, 4, s=>WorkspaceGrid.CellSize(s), (s,v)=>s.GridCellSize=(int)v, v=>$"{v:0} px");
+        var gridStyles = new ComboBox { ItemsSource=WorkspaceGrid.Styles.Select(style=>new { style.Id, style.Name }).ToList(), DisplayMemberPath="Name", SelectedValuePath="Id" };
+        Add("격자 모양", "위젯 편집 중 빈 칸을 보여 주는 방식입니다. 점은 칸 모서리, 선은 칸 경계, 십자는 모서리에 + 표시를 그립니다.", gridStyles,
+            ()=>WorkspaceGrid.Styles.FirstOrDefault(style=>style.Id==gridStyles.SelectedValue as string).Name ?? "",
+            s=>gridStyles.SelectedValue=WorkspaceGrid.Style(s), s=>s.GridStyle=gridStyles.SelectedValue as string ?? WorkspaceGrid.Dots);
+        gridStyles.SelectionChanged += (_,_)=>Changed();
         Add("탭 구성", "설정 외의 탭을 추가·삭제하고 순서·표시·이름을 바꿉니다. 위젯 배치는 각 탭의 위젯 편집 버튼에서 바꿉니다. 변경은 바로 저장됩니다.", WorkspacePanel, ()=>"", _=>{}, _=>{});
 
         Group("스킨");
-        var skins = new ComboBox { ItemsSource=Design.Skins.Options, DisplayMemberPath="Name", SelectedValuePath="Id" };
-        Add("사용할 스킨", "앱의 색, 배경, 위젯 틀을 함께 바꿉니다. 고르면 바로 적용됩니다. 기본 스킨이 들어 있고, 다른 스킨은 아래 \"스킨 받기\"에서 설치합니다.", skins,
-            ()=>(skins.SelectedItem as Design.SkinOption)?.Name ?? "",
-            s=>{ skins.ItemsSource=Design.Skins.Rescan();skins.SelectedValue=Design.Skins.Resolve(s.Skin); },
-            s=>s.Skin=skins.SelectedValue as string ?? Design.Skins.DefaultId);
+        var skins = SkinPanel;
+        Add("사용할 스킨", "앱의 색, 배경, 위젯 틀을 함께 바꿉니다. 고르면 바로 적용됩니다. 아래 목록에서 공개된 스킨을 설치하거나 zip 파일로 설치할 수 있습니다.", skins,
+            ()=>Design.Skins.Options.FirstOrDefault(option=>option.Id==skins.SelectedSkin)?.Name ?? "",
+            s=>skins.Reload(s.Skin),
+            s=>s.Skin=skins.SelectedSkin,bare:true);
         // Only the chosen skin's own options appear, right under the list.
         var skinArea=new StackPanel();
         var skinBoxes=new List<(Design.ThemeOption Option,CheckBox Box)>();
-        string ChosenSkin()=>skins.SelectedValue as string ?? Design.Skins.DefaultId;
+        string ChosenSkin()=>skins.SelectedSkin;
         void ShowSkinOptions(Settings s)
         {
             skinArea.Children.Clear();skinBoxes.Clear();
@@ -131,11 +146,10 @@ public partial class OverlaySettingsView : UserControl
             });
         var skinOptionsRow=rows[^1];
         skinOptionsRow.Available=()=>skinBoxes.Count>0;
-        skins.SelectionChanged += (_,_)=>{
+        skins.SelectionChanged += ()=>{
             if(!loading) { ShowSkinOptions(loadSettings?.Invoke() ?? new Settings());skinOptionsRow.Baseline=skinOptionsRow.Read(); }
             Changed();
         };
-        Add("스킨 받기", "공개 목록에서 스킨을 골라 설치하거나 zip 파일로 설치합니다. 직접 만든 스킨을 올릴 수도 있습니다.", SkinPackages, ()=>"", _=>{}, _=>{});
 
         Group("오버레이");
         Range("투명도", "오버레이 배경의 투명도입니다. 0%는 완전 불투명, 100%는 완전 투명입니다. 글자와 입력창은 유지합니다.", 0, 100, 1, OverlayAppearance.Transparency, (s,v)=>s.OverlayTransparencyPercent=v, v=>$"{v:0}%");
@@ -147,8 +161,8 @@ public partial class OverlaySettingsView : UserControl
         Range("사라지는 시간", "오버레이가 사라지는 데 걸리는 시간입니다. 0ms는 즉시 숨깁니다.", 0, 2000, 20, s=>s.OverlayHideMilliseconds, (s,v)=>s.OverlayHideMilliseconds=(int)v, v=>$"{v:0} ms");
 
         Group("플러그인");
-        Add("설치된 플러그인", "켜고 끄기, 플러그인별 설정, 다시 불러오기, 삭제를 합니다. 켠 플러그인의 위젯은 각 탭의 위젯 편집에서 배치합니다. 바뀐 내용은 바로 저장됩니다.", PluginPanel, ()=>"", _=>{}, _=>{});
-        Add("플러그인 받기", "공개 목록에서 플러그인을 골라 설치하거나 zip 파일로 설치합니다. 플러그인은 Facet과 같은 권한으로 실행되니 믿을 수 있는 것만 설치하세요.", PluginPackages, ()=>"", _=>{}, _=>{});
+        Add("설치된 플러그인", "켜고 끄기, 플러그인별 설정, 다시 불러오기, 삭제를 합니다. 켠 플러그인의 위젯은 각 탭의 위젯 편집에서 배치합니다. 바뀐 내용은 바로 저장됩니다.", PluginPanel, ()=>"", _=>{}, _=>{}, wide:true);
+        Add("플러그인 받기", "공개 목록에서 플러그인을 골라 설치하거나 zip 파일로 설치합니다. 플러그인은 Facet과 같은 권한으로 실행되니 믿을 수 있는 것만 설치하세요.", PluginPackages, ()=>"", _=>{}, _=>{}, wide:true);
 
         Group("단축키");
         Text("오버레이 열기·닫기", "오버레이를 열고 닫는 전역 단축키입니다. 예: Win+Alt+O", s=>s.OverlayHotkey, (s,v)=>s.OverlayHotkey=v.Trim());
@@ -160,6 +174,53 @@ public partial class OverlaySettingsView : UserControl
         Add("복원", "백업 파일을 고르면 Facet을 다시 시작할 때 그 시점으로 되돌립니다. 지금 기록은 옆 폴더에 남겨 둡니다.", RestoreEditor(), ()=>"", _=>{}, _=>{});
 
 
+    }
+
+    private void BuildSections()
+    {
+        var order=Sections.Where(item=>item!=null).SelectMany(item=>item!.Value.Groups).ToList();
+        foreach(var group in groups.OrderBy(group=>order.IndexOf(group.Name)).ToArray()) { Groups.Children.Remove(group.Host);Groups.Children.Add(group.Host); }
+        foreach(var item in Sections) {
+            if(item is not { } entry) { SectionNav.Children.Add(new Border { Height=1,Background=Brush("Edge"),Margin=new(4,6,4,10) });continue; }
+            var tab=new RadioButton { Content=entry.Name,GroupName="SettingsSections",Style=(Style)FindResource("SideTab"),IsChecked=entry.Name==section };
+            AutomationProperties.SetName(tab,entry.Name);
+            tab.Checked+=(_,_)=>ShowSection(entry.Name);
+            sectionTabs[entry.Name]=tab;SectionNav.Children.Add(tab);
+        }
+    }
+
+    // Picking a tab leaves search so the tab's own rows show.
+    internal void ShowSection(string name)
+    {
+        if(!sectionTabs.TryGetValue(name,out var tab))return;
+        section=name;
+        if(tab.IsChecked!=true)tab.IsChecked=true;
+        if(SearchInput.Text.Length>0)SearchInput.Text="";else Filter();
+        SettingsScroll.ScrollToTop();
+    }
+
+    internal string CurrentSection => section;
+
+    // A narrow panel moves the side tabs into one row above the settings so rows keep their width.
+    private bool? narrow;
+    private void Arrange(bool compact)
+    {
+        if(narrow==compact)return;
+        narrow=compact;
+        Grid.SetRowSpan(SectionFrame,compact?1:3);Grid.SetColumnSpan(SectionFrame,compact?2:1);
+        SectionFrame.BorderThickness=compact?new(0,0,0,1):new(0,0,1,0);
+        SectionFrame.Padding=compact?new(0,0,0,6):new(0,0,16,0);SectionFrame.Margin=compact?new(0,0,0,8):new(0,0,20,0);
+        foreach(var element in new FrameworkElement[]{SettingsScroll,StatusBar}) { Grid.SetColumn(element,compact?0:1);Grid.SetColumnSpan(element,compact?2:1); }
+        Grid.SetRow(SettingsScroll,compact?1:0);Grid.SetRowSpan(SettingsScroll,compact?1:2);
+        DockPanel.SetDock(SearchInput,compact?Dock.Left:Dock.Top);
+        SearchInput.Width=compact?150:double.NaN;SearchInput.VerticalAlignment=compact?VerticalAlignment.Center:VerticalAlignment.Stretch;SearchInput.Margin=compact?new(0,0,12,0):new(0,0,0,16);
+        SectionNav.Orientation=compact?Orientation.Horizontal:Orientation.Vertical;
+        SectionScroll.HorizontalScrollBarVisibility=compact?ScrollBarVisibility.Auto:ScrollBarVisibility.Disabled;
+        SectionScroll.VerticalScrollBarVisibility=compact?ScrollBarVisibility.Disabled:ScrollBarVisibility.Auto;
+        foreach(var child in SectionNav.Children.OfType<FrameworkElement>()) {
+            if(child is Border divider) { divider.Width=compact?1:double.NaN;divider.Height=compact?double.NaN:1;divider.Margin=compact?new(4,6,8,10):new(4,6,4,10); }
+            else child.Margin=compact?new(0,0,4,0):new(0,0,0,4);
+        }
     }
 
     private FrameworkElement BackupEditor()
@@ -211,7 +272,8 @@ public partial class OverlaySettingsView : UserControl
         Groups.Children.Add(host); groups.Add((host,heading,name,[]));
     }
 
-    private void Add(string name,string description,FrameworkElement editor,Func<string> read,Action<Settings> load,Action<Settings> write)
+    // bare hides the name so a self-describing panel (the skin list) takes the whole row; the name stays for search and automation.
+    private void Add(string name,string description,FrameworkElement editor,Func<string> read,Action<Settings> load,Action<Settings> write,bool wide=false,bool bare=false)
     {
         var host=new Grid { MinHeight=44 };
         host.ColumnDefinitions.Add(new ColumnDefinition { Width=new GridLength(2,GridUnitType.Star) });
@@ -226,7 +288,10 @@ public partial class OverlaySettingsView : UserControl
         var right=new StackPanel { Margin=new(0,5,0,5),VerticalAlignment=VerticalAlignment.Center };
         editor.Margin=new(0);editor.HorizontalAlignment=editor is CheckBox ? HorizontalAlignment.Right : HorizontalAlignment.Stretch;
         AutomationProperties.SetName(editor,name); AutomationProperties.SetHelpText(editor,description);
-        right.Children.Add(editor);right.Children.Add(summary);Grid.SetColumn(right,1);
+        right.Children.Add(editor);right.Children.Add(summary);
+        // A wide editor spans the row under the label and keeps its first line free for right-aligned commands.
+        if(wide || bare) Grid.SetColumnSpan(right,2); else Grid.SetColumn(right,1);
+        if(bare) left.Visibility=Visibility.Collapsed;
         host.Children.Add(left);host.Children.Add(right);
         var row=new SettingRow { Name=name,Description=description,Host=host,Label=label,Detail=detail,Summary=summary,Read=read,Load=load,Write=write };
         rows.Add(row);groups[^1].Rows.Add(row);groups[^1].Host.Children.Add(host);
@@ -292,7 +357,9 @@ public partial class OverlaySettingsView : UserControl
     {
         string[] terms=SearchInput.Text.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         int count=0;
+        var shown=Sections.FirstOrDefault(item=>item?.Name==section)?.Groups ?? [];
         foreach(var group in groups) {
+            if(terms.Length==0 && !shown.Contains(group.Name)) { group.Host.Visibility=Visibility.Collapsed;continue; }
             bool any=false;Highlight(group.Heading,group.Name,terms);
             foreach(var row in group.Rows) {
                 string value=row.Read(), haystack=row.Name+"\n"+row.Description+"\n"+value;

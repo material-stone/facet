@@ -15,6 +15,13 @@ internal static partial class Program
     {
         Assert(JsonSerializer.Deserialize<Settings>("{}")!.Skin==Skins.DefaultId,"a stored settings file without a skin keeps the default skin");
         Assert(Skins.Resolve("removed-skin")==Skins.DefaultId && Skins.Resolve(null)==Skins.DefaultId,"unknown or missing skin ids fall back to the default skin");
+        var listed=new SkinOption("listed","목록",false,new ExternalSkin("listed","목록","1.0",new Dictionary<string,Color>(),null,""));
+        var gone=new SkinOption("gone","빠짐",false,new ExternalSkin("gone","빠짐","1.0",new Dictionary<string,Color>(),null,""));
+        RegistryEntry Entry(string id,string version)=>new(PackageKind.Skin,id,id,version,"","","","");
+        RegistryEntry[] registry=[Entry("listed","1.1"),Entry("fresh","1.0")];
+        Assert(SkinsPanel.StateOf(listed,registry,true)==SkinsPanel.SkinState.Update && SkinsPanel.StateOf(gone,registry,true)==SkinsPanel.SkinState.Unsupported,"installed skins show an update chip for a newer listing and an unsupported chip when unlisted");
+        Assert(SkinsPanel.StateOf(gone,registry,false)==SkinsPanel.SkinState.Current && SkinsPanel.StateOf(new SkinOption(Skins.DefaultId,"기본"),registry,true)==SkinsPanel.SkinState.Current,"an unloaded registry and the built-in skin never get a chip");
+        Assert(SkinsPanel.Installable([listed,gone],registry).Select(entry=>entry.Id).SequenceEqual(["fresh"]),"only registry skins without an installed folder are offered for install");
         var tokens=new ResourceDictionary { Source=new Uri("pack://application:,,,/Facet;component/Design/Tokens.xaml") };
         var colorKeys=tokens.Keys.Cast<object>().Where(key=>tokens[key] is SolidColorBrush).ToArray();
         foreach(var option in Skins.Options.Where(option=>option.Id!=Skins.DefaultId)) {
@@ -264,7 +271,7 @@ internal static partial class Program
             Color Panel()=>((SolidColorBrush)ui.FindResource("Panel")).Color;
             Color Shared()=>((SolidColorBrush)new ToolTip { Style=(Style)ui.FindResource(typeof(ToolTip)) }.Background).Color;
             var layers=(Grid)controller.Overlay.Content;
-            var before=layers.Children.OfType<OverlayTabs>().Single();before.OpenSettings();
+            var before=layers.Children.OfType<OverlayTabs>().Single();before.OpenSettings();before.SettingsSection="스킨";
             void Save(string skin) {
                 // The parent check process holds the global hotkeys, so ApplySettings cannot re-register them here.
                 if(!controller.Commit(d=>d.Settings.Skin=skin))throw new Exception("saving the skin failed: "+controller.LastError);
@@ -276,6 +283,7 @@ internal static partial class Program
             if(Panel()!=space || Shared()!=space)throw new Exception("a running switch kept the previous colors");
             var after=layers.Children.OfType<OverlayTabs>().Single();
             if(ReferenceEquals(before,after) || !after.IsSettingsActive)throw new Exception("the switch did not rebuild the overlay on the settings tab");
+            if(after.SettingsSection!="스킨")throw new Exception("the switch left the skin tab of the settings");
             if(Skins.Visuals==null || layers.Children.Count!=5 || layers.Children[2] is not OverlayTabs)throw new Exception("the switch did not add the theme backdrop below the tabs");
             var overlay=controller.Overlay;
             // The settings tab may not be laid out in this window, so its rows are walked logically.

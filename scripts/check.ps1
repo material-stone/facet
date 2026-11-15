@@ -5,8 +5,6 @@ $projectRoot = Split-Path -Parent $PSScriptRoot
 $env:DOTNET_CLI_HOME = Join-Path $projectRoot '.dotnet'
 Push-Location $projectRoot
 try {
-    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'setup-tools.ps1')
-    if ($LASTEXITCODE -ne 0) { throw 'Tool setup failed.' }
     powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check-deployment.ps1')
     if ($LASTEXITCODE -ne 0) { throw 'Deployment checks failed.' }
     node scripts/check-world-overlaps.js

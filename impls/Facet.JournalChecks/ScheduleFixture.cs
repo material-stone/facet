@@ -16,7 +16,7 @@ internal static partial class Program
         if (host.Children.OfType<Canvas>().SelectMany(c => c.Children.OfType<ScheduleBoard>()).FirstOrDefault() is { } existing) return existing;
         // Sized like the default calendar tile at the board's origin.
         var board = new ScheduleBoard(new ScheduleRecords(PluginFileStore.For(root, LegacySchedule.Plugin)), hud) {
-            Width = WorkspaceLayouts.CalendarColumns * OverlayWorkspaceView.Pitch - OverlayWorkspaceView.Gap, Height = WorkspaceLayouts.CalendarRows * OverlayWorkspaceView.Pitch - OverlayWorkspaceView.Gap };
+            Width = WorkspaceLayouts.CalendarColumns * OverlayWorkspaceView.Pitch, Height = WorkspaceLayouts.CalendarRows * OverlayWorkspaceView.Pitch };
         // Centered on the viewport like a tile at the board's origin, free to overflow a small window.
         var origin = new Canvas { Width = 0, Height = 0, HorizontalAlignment = System.Windows.HorizontalAlignment.Center, VerticalAlignment = System.Windows.VerticalAlignment.Center };
         Canvas.SetLeft(board, -board.Width / 2); Canvas.SetTop(board, -board.Height / 2);

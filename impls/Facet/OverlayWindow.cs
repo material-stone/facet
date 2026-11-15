@@ -120,6 +120,7 @@ public sealed class OverlayWindow : Window
         world?.Dispose(); world = null; Background = Brushes.Transparent;
     }
     private void UpdateWorld() => world?.SetVisible(IsVisible && requestedVisible && !IsQuickLaunch && requestedStrength > 0, this);
+    internal void ApplyGrid() => tabs.ApplyWorkspace();
     internal void ApplyThemeOptions()
     {
         if ((themeBackdrop as Panel)?.Children.OfType<Design.FlightReticle>().FirstOrDefault() is not { } reticle || Design.Skins.Visuals is not { } visuals) return;
@@ -145,6 +146,7 @@ public sealed class OverlayWindow : Window
         double progress = (double)GetValue(TransitionProgressProperty);
         bool settings = tabs.IsSettingsActive;
         double scroll = tabs.SettingsScrollOffset;
+        string section = tabs.SettingsSection;
         if (themeBackdrop != null) layers.Children.Remove(themeBackdrop);
         if (voyageDebug != null) { layers.Children.Remove(voyageDebug); voyageDebug = null; }
         RemoveWorld();
@@ -161,6 +163,7 @@ public sealed class OverlayWindow : Window
         // Whether a world exists decides the blur and the tint, and Present returns early when its inputs are unchanged.
         app.ApplyDisplay();
         ApplyProgress((double)GetValue(TransitionProgressProperty));
+        tabs.SettingsSection = section;
         if (settings) tabs.OpenSettings();
         tabs.SettingsScrollOffset = scroll;
         if (IsQuickLaunch) quickLaunch.Begin();

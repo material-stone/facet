@@ -42,6 +42,16 @@ public sealed class PluginGrant
     public string Fingerprint { get; set; } = "";
 }
 
+// How the board's cells look while editing. Cells touch; the marks sit on their shared edges.
+public static class WorkspaceGrid
+{
+    public const int DefaultCellSize = 96, MinCellSize = 24, MaxCellSize = 160;
+    public const string Dots = "dots", Lines = "lines", Crosses = "crosses";
+    public static readonly (string Id, string Name)[] Styles = [(Dots, "점"), (Lines, "선"), (Crosses, "십자")];
+    public static int CellSize(Settings settings) => Math.Clamp(settings.GridCellSize, MinCellSize, MaxCellSize);
+    public static string Style(Settings settings) => Styles.Any(s => s.Id == settings.GridStyle) ? settings.GridStyle : Dots;
+}
+
 public static class WorkspaceLayouts
 {
     // Columns and Rows size the default area around the origin; the board itself has no edge in practice.

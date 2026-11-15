@@ -20,8 +20,7 @@ function Publish([string]$Project, [string]$Output, [string]$Runtime, [string[]]
 
 Push-Location $projectRoot
 try {
-    if ($SkipChecks) { & (Join-Path $PSScriptRoot 'setup-tools.ps1') }
-    else { & (Join-Path $PSScriptRoot 'check.ps1') }
+    if (-not $SkipChecks) { & (Join-Path $PSScriptRoot 'check.ps1') }
 
     [xml]$appProject = Get-Content 'impls/Facet/Facet.csproj'
     $version = [string]$appProject.Project.PropertyGroup.Version
@@ -49,10 +48,9 @@ try {
         foreach ($project in 'Facet.Launcher', 'Facet.Mcp', 'Facet.Cli') { Publish $project $packageRoot 'runtime' }
         # Plugins are optional: a checkout without plugin projects builds the plain app (ADR 0098).
         $bundled = Join-Path $packageRoot 'bundled-plugins'
-        foreach ($plugin in @(@('Facet.MusicPlugin', 'music'), @('Facet.ConditionPlugin', 'condition'), @('Facet.SleepPlugin', 'sleep'), @('Facet.SchedulePlugin', 'schedule'), @('Facet.ClockPlugin', 'clock'), @('Facet.WeatherPlugin', 'weather'))) {
+        foreach ($plugin in @(@('Facet.ConditionPlugin', 'condition'), @('Facet.SleepPlugin', 'sleep'), @('Facet.SchedulePlugin', 'schedule'), @('Facet.ClockPlugin', 'clock'), @('Facet.WeatherPlugin', 'weather'))) {
             if (Test-Path "impls/$($plugin[0])") { Publish $plugin[0] (Join-Path $bundled $plugin[1]) '' }
         }
-        if (Test-Path 'impls/Facet.ChatPlugin') { Publish 'Facet.ChatPlugin' (Join-Path $bundled 'chat') '' @('-r', 'win-x64', '--self-contained', 'false') }
     } finally { Pop-Location }
 
     foreach ($part in @("host/fxr/$runtimeVersion", "shared/Microsoft.NETCore.App/$runtimeVersion", "shared/Microsoft.WindowsDesktop.App/$runtimeVersion")) {
@@ -84,8 +82,6 @@ Facet $version (Windows x64)
 
     # A partial package must fail here rather than on someone else's PC.
     $expected = @()
-    if (Test-Path 'impls/Facet.ChatPlugin') { $expected += 'bundled-plugins/chat/onnxruntime.dll' }
-    if (Test-Path 'impls/Facet.MusicPlugin') { $expected += 'bundled-plugins/music/Tools/yt-dlp.exe' }
     foreach ($file in @('Facet.Launcher.exe', 'Facet.Mcp.exe', 'Facet.Cli.exe', 'latest.json', 'releases/portable/Facet.exe', 'releases/portable/Facet.Plugins.dll', 'releases/portable/Microsoft.Windows.SDK.NET.dll', "runtime/host/fxr/$runtimeVersion/hostfxr.dll") + $expected) {
         if (-not (Test-Path -LiteralPath (Join-Path $packageRoot $file) -PathType Leaf)) { throw "Package is incomplete: $file" }
     }

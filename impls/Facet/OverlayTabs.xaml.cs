@@ -16,6 +16,11 @@ public partial class OverlayTabs : UserControl, IWidgetLayer
     internal void StopWidgets() { modals.CloseAll(); DisposeWidgets(); }
     // Releases this instance before a replacement takes over; playback and sessions keep running in the Controller.
     internal void Retire() => StopWidgets();
+    // Kept across a skin switch, which rebuilds the tabs.
+    internal string SettingsSection {
+        get => SettingsView.CurrentSection;
+        set => SettingsView.ShowSection(value);
+    }
     internal double SettingsScrollOffset {
         get => SettingsView.ScrollOffset;
         set => Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => SettingsView.ScrollOffset = value));
@@ -76,8 +81,9 @@ public partial class OverlayTabs : UserControl, IWidgetLayer
         ConnectPlugins(controller);
         SettingsView.WorkspacePanel.Connect(this);
         SettingsView.PluginPanel.Connect(this);
-        foreach (var packages in new[] { SettingsView.PluginPackages, SettingsView.SkinPackages })
-            packages.Connect(this, controller, Path.GetDirectoryName(PluginFolder) ?? "", () => { RefreshSettingsPanels(); SettingsView.ReloadSkins(); });
+        string dataRoot = Path.GetDirectoryName(PluginFolder) ?? "";
+        SettingsView.PluginPackages.Connect(this, controller, dataRoot, () => { RefreshSettingsPanels(); SettingsView.ReloadSkins(); });
+        SettingsView.SkinPanel.Connect(controller, dataRoot, () => { RefreshSettingsPanels(); SettingsView.ReloadSkins(); });
         ApplyWorkspace();
         SettingsView.Connect(controller);
     }
@@ -121,7 +127,7 @@ public partial class OverlayTabs : UserControl, IWidgetLayer
         return false;
     }
     internal void OpenSettings() { Tabs.SelectedItem = SettingsTab; SettingsView.FocusSearch(); }
-    internal void OpenPluginSettings(string pluginId) { Tabs.SelectedItem = SettingsTab; SettingsView.PluginPanel.Expand(pluginId); }
+    internal void OpenPluginSettings(string pluginId) { Tabs.SelectedItem = SettingsTab; SettingsView.ShowSection("플러그인"); SettingsView.PluginPanel.Expand(pluginId); }
     // Selects the tab that holds the widget; false when it is not on a visible tab.
     internal bool ShowWidget(string widgetId)
     {
