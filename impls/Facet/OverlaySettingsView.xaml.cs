@@ -103,7 +103,7 @@ public partial class OverlaySettingsView : UserControl
 
         Group("스킨");
         var skins = new ComboBox { ItemsSource=Design.Skins.Options, DisplayMemberPath="Name", SelectedValuePath="Id" };
-        Add("사용할 스킨", "앱의 색, 배경, 위젯 틀을 함께 바꿉니다. 고르면 바로 적용됩니다. 다크와 라이트가 기본으로 들어 있고, 다른 스킨은 아래 \"스킨 받기\"에서 설치합니다.", skins,
+        Add("사용할 스킨", "앱의 색, 배경, 위젯 틀을 함께 바꿉니다. 고르면 바로 적용됩니다. 기본 스킨이 들어 있고, 다른 스킨은 아래 \"스킨 받기\"에서 설치합니다.", skins,
             ()=>(skins.SelectedItem as Design.SkinOption)?.Name ?? "",
             s=>{ skins.ItemsSource=Design.Skins.Rescan();skins.SelectedValue=Design.Skins.Resolve(s.Skin); },
             s=>s.Skin=skins.SelectedValue as string ?? Design.Skins.DefaultId);

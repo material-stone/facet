@@ -40,7 +40,7 @@ internal static partial class Program
         Assert(Skins.Resolve("aurora")=="aurora" && Skins.Load("aurora")["Bg"] is SolidColorBrush { Color:var bg } && bg==Color.FromRgb(0x10,0x20,0x30) && Skins.LoadVisuals("aurora")==null,"an installed skin is selectable and supplies its tokens");
         Assert(Skins.Load("aurora").Contains(SystemColors.WindowTextBrushKey) && !Skins.Load("aurora").Contains("Panel"),"a skin overrides only what it sets, plus the matching system colors");
         Directory.CreateDirectory(Path.Combine(data,"skins","broken"));File.WriteAllText(Path.Combine(data,"skins","broken","skin.json"),"nope");
-        Directory.CreateDirectory(Path.Combine(data,"skins","clash"));File.WriteAllText(Path.Combine(data,"skins","clash","skin.json"),"{\"id\":\"light\",\"name\":\"가짜\"}");
+        Directory.CreateDirectory(Path.Combine(data,"skins","clash"));File.WriteAllText(Path.Combine(data,"skins","clash","skin.json"),"{\"id\":\"default\",\"name\":\"가짜\"}");
         Assert(Skins.Rescan().Count(option=>option.Id=="aurora")==1 && Skins.Options.All(option=>option.Name!="가짜") && Skins.Options.All(option=>option.Id!="broken"),"a broken folder is skipped and a built-in id cannot be replaced");
 
         // A theme with an image, written the way an author would.

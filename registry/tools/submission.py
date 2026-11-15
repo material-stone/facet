@@ -21,7 +21,7 @@ VALID_ASSET = re.compile(r"[a-z0-9_-]{1,64}\.png")
 RESERVED = re.compile(r"(con|prn|aux|nul|com\d|lpt\d)(\..*)?", re.IGNORECASE)
 COLOR_TOKENS = {"Bg", "OverlayBackdrop", "ModalBackdrop", "DangerSoft", "Panel", "Edge", "Ink", "Muted", "ScheduleNow",
                 "Mint", "Danger", "CalendarSunday", "CalendarSaturday", "Input", "Selected", "Hover", "OnAccent"}
-BUILT_IN_SKINS = {"default", "light"}
+BUILT_IN_SKINS = {"default"}
 SKIN_EXTENSIONS = {".json", ".png", ".txt", ".md", ".html", ".ttf", ".otf"}
 VALID_PAGE = re.compile(r"[a-z0-9_-]{1,64}\.html")
 VALID_FONT = re.compile(r"[A-Za-z0-9_-]{1,64}\.(ttf|otf)")

@@ -1,6 +1,6 @@
 # 플러그인 작성
 
-플러그인은 `Facet.Plugins`만 참조하는 .NET 10 WPF 클래스 라이브러리입니다. 예제는 `impls/Facet.SamplePlugin`, 타이머를 쓰는 실사용 예는 `impls/Facet.ClockPlugin`(요일 시계), 네트워크·내장 리소스·위젯별 저장을 쓰는 예는 `impls/Facet.WeatherPlugin`(날씨)에 있습니다.
+플러그인은 `Facet.Plugins`만 참조하는 .NET 10 WPF 클래스 라이브러리입니다. 예제는 `impls/Facet.SamplePlugin`, 타이머를 쓰는 실사용 예는 `impls/Facet.ClockPlugin`(시계), 네트워크·내장 리소스·위젯별 저장을 쓰는 예는 `impls/Facet.WeatherPlugin`(날씨)에 있습니다.
 
 ```csharp
 public sealed class MyPlugin : IFacetPlugin

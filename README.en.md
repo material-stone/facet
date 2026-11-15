@@ -20,7 +20,7 @@ Pick only the widgets and skins you want and make the screen your own.
 - Press a shortcut and an overlay opens on top of whatever you are doing. Press it again and it is gone.
 - The overlay has tabs, and each tab is a board. Place widgets on it, move them and resize them.
 - Widgets come as **plugins**. Plain Facet starts light and empty; install only what you use.
-- **Skins** change the whole look. Dark and Light are built in, and more are a download away.
+- **Skins** change the whole look. A calm dark default skin is built in, and more are a download away.
 - **Quick Launch** starts a program as soon as you type its name.
 - Your records stay on your PC, and you can back them up and restore them from Settings at any time.
 
@@ -78,7 +78,7 @@ To write your own, see the [plugin guide](docs/plugins/README.md) and the [uploa
 
 ## Skins
 
-Dark and Light are built in. 👉 **[Browse skins](registry/skins/README.md)** (Korean)
+A dark default skin is built in. 👉 **[Browse skins](registry/skins/README.md)** (Korean)
 
 1. Under **Settings → Skins → Get skins**, click **Install** on a skin. It is applied right away.
 2. To switch, pick another one under **Settings → Skins → Skin**.

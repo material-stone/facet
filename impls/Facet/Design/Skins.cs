@@ -5,8 +5,8 @@ internal sealed record SkinOption(string Id,string Name,bool HasVisuals=false,Ex
 internal static class Skins
 {
     internal const string DefaultId="default";
-    // Only the plain dark and light skins are built in; every other skin is a package (ADR 0100).
-    private static readonly SkinOption[] BuiltIn=[new(DefaultId,"다크"),new("light","라이트")];
+    // Only the default (dark) skin is built in; every other skin is a package (ADR 0100).
+    private static readonly SkinOption[] BuiltIn=[new(DefaultId,"기본")];
     // Extra package folders read after the data folder; checks use it to reach registry/skins.
     internal static readonly List<string> SharedFolders=[];
     private static string? externalRoot;

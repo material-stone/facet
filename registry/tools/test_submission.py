@@ -36,7 +36,7 @@ class Inspect(unittest.TestCase):
         self.refused({"skin.json": SKIN, "plugin.json": PLUGIN, "My.dll": "x"})
         self.refused({"skin.json": "not json"})
         self.refused({"skin.json": {**SKIN, "id": "../a"}})
-        self.refused({"skin.json": {**SKIN, "id": "light"}})
+        self.refused({"skin.json": {**SKIN, "id": "default"}})
         self.refused({"skin.json": {**SKIN, "version": "a/b"}})
         self.refused({"plugin.json": PLUGIN})
 
