@@ -4,11 +4,11 @@
       "kind": "plugin",
       "id": "facet.clock",
       "name": "시계",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "author": "material-stone",
-      "description": "요일과 날짜를 함께 보여 주는 시계 위젯입니다.",
-      "url": "https://github.com/material-stone/facet/releases/download/plugin-facet.clock-1.0.1/facet.clock-1.0.1.zip",
-      "sha256": "bc38d6dd34eb5067862907c7317400f59ce9edab62e750b526470d53b1bace4a"
+      "description": "날짜와 시계, 요일, 시계 위젯입니다. 위젯마다 아날로그·디지털과 스타일을 고를 수 있습니다.",
+      "url": "https://github.com/material-stone/facet/releases/download/plugin-facet.clock-1.1.0/facet.clock-1.1.0.zip",
+      "sha256": "e370926f34ad0374b9d6650b97cec192a97f9b72d8052876550eb6462de5c356"
     },
     {
       "kind": "plugin",
