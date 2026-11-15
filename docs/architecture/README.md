@@ -49,7 +49,7 @@
 
 - [0057 — 최신 배포본만 유지](../decisions/0057-latest-release-retention.md)
 
-- [0056 — Facet 프로젝트와 배포 이름 통일](../decisions/0056-teum-project-naming.md)
+- [0056 — Teum 프로젝트와 배포 이름 통일](../decisions/0056-teum-project-naming.md)
 
 - [0055 — 수면 탭의 기록 구간과 평균](../decisions/0055-sleep-tab-interval-average.md)
 
