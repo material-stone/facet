@@ -45,8 +45,7 @@ function global:dotnet {
     $outputPath = [string]$args[$outputIndex + 1]
     [IO.Directory]::CreateDirectory($outputPath) | Out-Null
     [IO.File]::WriteAllText((Join-Path $outputPath 'partial-build.txt'), 'Synthetic publish output.')
-    if ($args[1] -like '*Facet.Cli*') { $files = @('Facet.Cli.exe', 'Facet.Core.dll') }
-    elseif ($args[1] -like '*Facet.Launcher*') { $files = @('Facet.Launcher.exe') }
+    if ($args[1] -like '*Facet.Launcher*') { $files = @('Facet.Launcher.exe') }
     else { $files = @('Facet.exe', 'Facet.dll', 'Facet.Core.dll', 'Facet.Plugins.dll', 'Facet.deps.json', 'Facet.runtimeconfig.json') }
     foreach ($name in $files) {
         if (-not ($global:deploymentIncomplete -and $name -eq 'Facet.Core.dll')) { [IO.File]::WriteAllText((Join-Path $outputPath $name), 'NEXT_' + $name) }

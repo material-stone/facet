@@ -54,10 +54,12 @@ internal static partial class Program
         modalHandle=widgetModal.Show(modalContent)!;modalHandle.Close();Assert(!modalHandle.IsOpen && modalLayer.Visibility==Visibility.Collapsed,"the widget can close its modal");
 
 #if PLUGIN_CHECKS
-        var toolHost=new AgentToolHost(runtime);
+        // Plugin tools run directly; no agent interface serves them for now (ADR 0105).
+        string RunTool(string name,string args="{}")=>PumpAwait(runtime.Plugins.AgentTools.Single(t=>t.Name==name).Run(args));
+        bool ToolRejects(string name,string args){try{RunTool(name,args);return false;}catch(ArgumentException){return true;}}
 
         // The condition plugin brings both widgets and its tools; the records stay when its folder goes.
-        Assert(!typeof(Controller).Assembly.GetTypes().Any(t=>t.Name.StartsWith("Condition")) && !AgentToolCatalog.Tools.Any(t=>t.Name.Contains("condition")) && !AgentToolCatalog.Tools.Any(t=>t.Description.Contains("컨디션")),"the app holds no condition code or tools without the plugin");
+        Assert(!typeof(Controller).Assembly.GetTypes().Any(t=>t.Name.StartsWith("Condition")),"the app holds no condition code or tools without the plugin");
         Assert(!hud.AddWidget("plugin.facet.condition.current"),"the condition widgets need the plugin");
         string conditionFolder=Path.Combine(runtime.Store.Root,"plugins","condition");Directory.CreateDirectory(conditionFolder);
         File.Copy(Path.Combine(AppContext.BaseDirectory,"Facet.ConditionPlugin.dll"),Path.Combine(conditionFolder,"Facet.ConditionPlugin.dll"),true);
@@ -69,20 +71,15 @@ internal static partial class Program
         Layout();
         Assert(Directory.Exists(Path.Combine(runtime.Store.Root,"plugin-data","facet.condition")),"the app creates the plugin's data folder outside its code folder");
         Assert(runtime.Plugins.AgentTools.Select(t=>t.Name).Order().SequenceEqual(["facet_list_conditions","facet_set_condition"]),"the condition plugin offers its agent tools");
-        var setCondition=toolHost.HandleAsync(new AgentToolCall{Tool="facet_set_condition",Arguments=new(){["kind"]="tired"}});PumpAwait(setCondition);
-        Assert(setCondition.Result.Ok,"an agent records a condition: "+setCondition.Result.Message);
-        var badCondition=toolHost.HandleAsync(new AgentToolCall{Tool="facet_set_condition",Arguments=new(){["kind"]="angry"}});PumpAwait(badCondition);
-        Assert(badCondition.Result.Code=="invalid_request","an unknown condition is a bad request");
-        var futureCondition=toolHost.HandleAsync(new AgentToolCall{Tool="facet_set_condition",Arguments=new(){["kind"]="good",["at"]=DateTimeOffset.Now.AddDays(1).ToString("o")}});PumpAwait(futureCondition);
-        Assert(futureCondition.Result.Code=="invalid_request","a future condition is a bad request");
-        var listCondition=toolHost.HandleAsync(new AgentToolCall{Tool="facet_list_conditions"});PumpAwait(listCondition);
-        Assert(listCondition.Result.Result is System.Text.Json.Nodes.JsonArray{Count:1},"an agent reads the records back");
+        Assert(System.Text.Json.Nodes.JsonNode.Parse(RunTool("facet_set_condition","{\"kind\":\"tired\"}")) is not null,"an agent records a condition");
+        Assert(ToolRejects("facet_set_condition","{\"kind\":\"angry\"}"),"an unknown condition is a bad request");
+        Assert(ToolRejects("facet_set_condition","{\"kind\":\"good\",\"at\":\""+DateTimeOffset.Now.AddDays(1).ToString("o")+"\"}"),"a future condition is a bad request");
+        Assert(System.Text.Json.Nodes.JsonNode.Parse(RunTool("facet_list_conditions")) is System.Text.Json.Nodes.JsonArray{Count:1},"an agent reads the records back");
         foreach(var tab in WorkspaceLayouts.Current(runtime.Data).Tabs.ToArray())
             foreach(var item in tab.Widgets.Where(w=>w.WidgetId.StartsWith("plugin.facet.condition.")).ToArray()) hud.RemoveWorkspaceWidgetForCheck(tab.Id,item.Id);
         Assert(hud.SetPluginEnabled(conditionPlugin,false) && runtime.Plugins.AgentTools.Count==0,"turning the plugin off removes its tools");
         Directory.Delete(conditionFolder,true);
         Assert(new Facet.ConditionPlugin.ConditionRecords(PluginFileStore.For(runtime.Store.Root,LegacyConditions.Plugin)).Entries.Single().Kind=="tired","the records outlive the plugin and its folder");
-        toolHost.Dispose();
 
 #endif
         // Save failure keeps the previous layout.
@@ -314,11 +311,11 @@ internal static partial class Program
     }
 
     private static string? AutomationName(object? item)=>System.Windows.Automation.AutomationProperties.GetName((TabItem)item!);
-    private static void PumpAwait(System.Threading.Tasks.Task task,int milliseconds=30000)
+    private static T PumpAwait<T>(System.Threading.Tasks.Task<T> task,int milliseconds=30000)
     {
         var watch=System.Diagnostics.Stopwatch.StartNew();
         while(!task.IsCompleted && watch.ElapsedMilliseconds<milliseconds)Pump(25);
         if(!task.IsCompleted)throw new TimeoutException("Plugin tool check timed out.");
-        task.GetAwaiter().GetResult();
+        return task.GetAwaiter().GetResult();
     }
 }

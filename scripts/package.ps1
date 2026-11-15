@@ -45,7 +45,7 @@ try {
     try {
         $release = Join-Path $packageRoot 'releases/portable'
         Publish 'Facet' $release '../../runtime'
-        foreach ($project in 'Facet.Launcher', 'Facet.Mcp', 'Facet.Cli') { Publish $project $packageRoot 'runtime' }
+        foreach ($project in 'Facet.Launcher') { Publish $project $packageRoot 'runtime' }
         # Plugins are optional: a checkout without plugin projects builds the plain app (ADR 0098).
         $bundled = Join-Path $packageRoot 'bundled-plugins'
         foreach ($plugin in @(@('Facet.ConditionPlugin', 'condition'), @('Facet.SleepPlugin', 'sleep'), @('Facet.SchedulePlugin', 'schedule'), @('Facet.ClockPlugin', 'clock'), @('Facet.WeatherPlugin', 'weather'))) {
@@ -76,13 +76,12 @@ Facet $version (Windows x64)
 실행: 압축을 풀고 Facet.Launcher.exe를 실행합니다. 설치와 .NET은 필요하지 않습니다.
 위젯: 설정 → 플러그인 → 플러그인 받기에서 설치합니다. 스킨: 설정 → 스킨 → 스킨 받기.
 기록: %LOCALAPPDATA%\MaterialStone\Facet 에 저장되며 이 Windows 사용자만 읽을 수 있습니다.
-폴더를 옮긴 뒤에는 Codex·Claude에 등록한 Facet 도구(MCP)를 다시 등록하세요.
 "@
     [IO.File]::WriteAllText((Join-Path $packageRoot 'README.txt'), $readme, [Text.UTF8Encoding]::new($true))
 
     # A partial package must fail here rather than on someone else's PC.
     $expected = @()
-    foreach ($file in @('Facet.Launcher.exe', 'Facet.Mcp.exe', 'Facet.Cli.exe', 'latest.json', 'releases/portable/Facet.exe', 'releases/portable/Facet.Plugins.dll', 'releases/portable/Microsoft.Windows.SDK.NET.dll', "runtime/host/fxr/$runtimeVersion/hostfxr.dll") + $expected) {
+    foreach ($file in @('Facet.Launcher.exe', 'latest.json', 'releases/portable/Facet.exe', 'releases/portable/Facet.Plugins.dll', 'releases/portable/Microsoft.Windows.SDK.NET.dll', "runtime/host/fxr/$runtimeVersion/hostfxr.dll") + $expected) {
         if (-not (Test-Path -LiteralPath (Join-Path $packageRoot $file) -PathType Leaf)) { throw "Package is incomplete: $file" }
     }
 

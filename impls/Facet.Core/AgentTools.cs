@@ -3,28 +3,9 @@ using System.Text.Json.Nodes;
 
 namespace Facet.Core;
 
-public sealed class AgentToolCall
-{
-    public int Version { get; set; } = 1;
-    public string Tool { get; set; } = "";
-    public JsonObject? Arguments { get; set; }
-}
-
-public sealed record AgentToolReply(bool Ok, string Code, string Message, JsonNode? Result = null);
-
-public sealed record AgentToolDefinition(string Name, string Description, string InputSchema);
-
-// Shared by the desktop host (dispatch) and Facet.Mcp (tools/list). Names are the MCP tool names.
+// Pure helpers the schedule plugin uses to parse its tool arguments and edit schedules (ADR 0101).
 public static class AgentToolCatalog
 {
-    private const string Empty = """{"type":"object","properties":{},"additionalProperties":false}""";
-    public static readonly IReadOnlyList<AgentToolDefinition> Tools = [
-        // The schedule tools (facet_today, facet_*_schedule) belong to the schedule plugin; their helpers below stay pure Core rules (ADR 0101).
-        new("facet_add_reminder", "지정 시각에 Windows 알림을 띄울 알림을 등록합니다.",
-            """{"type":"object","properties":{"title":{"type":"string"},"at":{"type":"string","description":"시간대 포함 ISO 8601. 예: 2026-10-31T18:00:00+09:00"},"body":{"type":"string"}},"required":["title","at"],"additionalProperties":false}"""),
-        new("facet_weather", "대시보드 설정 지역의 현재 날씨를 확인합니다.", Empty),
-    ];
-
     public static string Text(JsonObject? args, string name, int max = 20000)
     {
         string value = args?[name]?.GetValue<string>()?.Trim() ?? "";

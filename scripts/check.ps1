@@ -11,10 +11,6 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'World voxel overlap check failed.' }
     dotnet run --project impls/Facet.Checks/Facet.Checks.csproj --no-launch-profile
     if ($LASTEXITCODE -ne 0) { throw 'Core checks failed.' }
-    dotnet build impls/Facet.Cli/Facet.Cli.csproj --nologo -m:1 /nodeReuse:false
-    if ($LASTEXITCODE -ne 0) { throw 'Reminder CLI build failed.' }
-    dotnet build impls/Facet.Mcp/Facet.Mcp.csproj --nologo -m:1 /nodeReuse:false
-    if ($LASTEXITCODE -ne 0) { throw 'Agent MCP server build failed.' }
     dotnet build impls/Facet.JournalChecks/Facet.JournalChecks.csproj --nologo -m:1 /nodeReuse:false
     if ($LASTEXITCODE -ne 0) { throw 'Journal check build failed.' }
     $journalArguments = @()

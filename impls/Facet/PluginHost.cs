@@ -69,8 +69,8 @@ internal sealed class PluginHost(string dataRoot, Func<string, IPluginShell>? sh
     private static readonly Regex ToolName = new("^[a-z0-9_]{1,64}$", RegexOptions.CultureInvariant);
     private readonly Dictionary<string, Registry> loaded = [];
 
-    // Agent tools of running plugins; the app's own tools win a name clash.
-    internal IReadOnlyList<PluginAgentTool> AgentTools => loaded.Values.SelectMany(r => r.Tools).Where(t => AgentToolCatalog.Tools.All(own => own.Name != t.Name)).ToArray();
+    // Agent tools of running plugins; nothing serves them until an agent interface returns (ADR 0105).
+    internal IReadOnlyList<PluginAgentTool> AgentTools => loaded.Values.SelectMany(r => r.Tools).ToArray();
 
     internal IReadOnlyList<LauncherMode> LauncherModes => loaded.Values.SelectMany(r => r.LauncherModes).ToArray();
     internal IReadOnlyList<(string PluginId, PluginHotkey Hotkey)> Hotkeys => loaded.SelectMany(p => p.Value.Hotkeys.Select(h => (p.Key, h))).ToArray();
@@ -172,7 +172,6 @@ internal sealed class PluginHost(string dataRoot, Func<string, IPluginShell>? sh
     private sealed class DetachedShell(string root) : IPluginShell
     {
         public string DataRoot => root;
-        public string? AgentToolServer => null;
         public bool Privacy => false;
         public bool HideOverlay() => true;
         public bool ShowWidget(string widgetId) => false;

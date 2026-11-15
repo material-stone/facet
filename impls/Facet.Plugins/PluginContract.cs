@@ -48,8 +48,6 @@ public interface IPluginShell
 {
     // The app's data folder, for files that must keep their path across plugin versions.
     string DataRoot { get; }
-    // Path of the app's agent tool server, or null when it is not deployed.
-    string? AgentToolServer { get; }
     // True while the user wants records kept off the screen.
     bool Privacy { get; }
     // Hides the overlay and launcher; false when an unsaved draft kept them open.

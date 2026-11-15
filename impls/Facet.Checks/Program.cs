@@ -299,7 +299,6 @@ Check("agent tools add and delete schedules, without partial writes", () => {
     AgentToolCatalog.DeleteSchedule(data,System.Text.Json.Nodes.JsonNode.Parse("{\"date\":\"2026-11-02\",\"id\":\""+item.Id+"\"}")!.AsObject(),now);
     Assert(AgentToolCatalog.Schedules(data,new DateOnly(2026,11,2)).Count==0);
     bool rejected=false;try{AgentToolCatalog.AddSchedule(data,System.Text.Json.Nodes.JsonNode.Parse("{\"date\":\"2026/11/02\",\"start\":\"09:00\",\"title\":\"x\"}")!.AsObject(),now);}catch(ArgumentException){rejected=true;}Assert(rejected);
-    Assert(AgentToolCatalog.Tools.Select(x=>x.Name).Distinct().Count()==AgentToolCatalog.Tools.Count && AgentToolCatalog.Tools.All(x=>System.Text.Json.JsonDocument.Parse(x.InputSchema).RootElement.GetProperty("type").GetString()=="object"));
 });
 Check("old chat settings move to the chat plugin once and leave the app settings empty", () => {
     var old=JsonSerializer.Deserialize<AppData>("{\"Settings\":{\"CodexChatEnabled\":true,\"ChatAgent\":\"claude\",\"ClaudeChatModel\":\"opus\",\"CodexChatFast\":false,\"VoiceHotkey\":\"Win+Alt+B\",\"WhisperModelPath\":\"D:\\\\m.bin\"}}")!;

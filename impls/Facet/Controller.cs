@@ -33,8 +33,6 @@ public sealed class Controller : IDisposable
     private HwndSource? source;
     private IntPtr handle;
     private ToastWindow? toast;
-    private ReminderPipeServer? reminderServer;
-    private AgentToolHost? agentTools;
     private bool disposed;
     private bool exitRequested;
     internal bool ExitPending => exitRequested;
@@ -95,8 +93,6 @@ public sealed class Controller : IDisposable
         if (Store.RecoveryMessage != null) ReportError(Store.RecoveryMessage);
         if (bundledPluginError != null) ReportError(bundledPluginError);
         timer.Start(); Tick();
-        reminderServer ??= new ReminderPipeServer(Store.Root, Dispatcher, HandleReminderCommand);
-        agentTools ??= new AgentToolHost(this);
     }
     internal void HandleLaunch(bool mayOpen)
     {
@@ -139,17 +135,6 @@ public sealed class Controller : IDisposable
         throw new IOException("저장하지 못해 변경을 취소했습니다.");
     }
 
-    internal ReminderReply HandleReminderCommand(ReminderCommand command)
-    {
-        if (disposed || Exiting || ExitPending || !Overlay.IsEnabled) return new(false, "busy", "앱이 종료 또는 저장 확인 중입니다.");
-        try {
-            var candidate = new AppData { Reminders = Data.Reminders.Select(x => x with { }).ToList() };
-            var reply = UserReminders.Apply(candidate, command);
-            if (!reply.Ok || !reply.Changed) return reply;
-            return Commit(data => data.Reminders = candidate.Reminders) ? reply : new(false, "save_failed", "저장하지 못해 변경을 취소했습니다.");
-        }
-        catch (ArgumentException ex) { return new(false, "invalid_request", ex.Message); }
-    }
     public void ToggleOverlay()
     {
         if (Overlay.IsQuickLaunch && Data.Settings.OverlayVisible) {
@@ -357,7 +342,7 @@ public sealed class Controller : IDisposable
     }
     public void Dispose()
     {
-        if (disposed) return; disposed = true; timer.Stop(); Overlay.StopWidgets(); reminderServer?.Dispose(); agentTools?.Dispose(); toast?.Close();
+        if (disposed) return; disposed = true; timer.Stop(); Overlay.StopWidgets(); toast?.Close();
         Plugins.Dispose();
         for (int i = 0; i < HotkeyIds.Length; i++) Native.UnregisterHotKey(handle, HotkeyIds[i]);
         foreach (int id in pluginHotkeys.Keys) Native.UnregisterHotKey(handle, id);

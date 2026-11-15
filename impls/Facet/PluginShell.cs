@@ -6,14 +6,6 @@ namespace Facet;
 internal sealed class PluginShell(Controller app, string pluginId) : IPluginShell
 {
     public string DataRoot => app.Store.Root;
-    public string? AgentToolServer
-    {
-        get {
-            string beside = Path.Combine(AppContext.BaseDirectory, "Facet.Mcp.exe");
-            if (File.Exists(beside)) return beside;
-            return Facet.Deployment.LaunchProtocol.FindLauncher() is { } launcher && Path.Combine(Path.GetDirectoryName(launcher)!, "Facet.Mcp.exe") is var path && File.Exists(path) ? path : null;
-        }
-    }
     public bool Privacy => app.Data.Settings.Privacy;
     public bool HideOverlay() { app.HideOverlay(); return !app.Data.Settings.OverlayVisible; }
     public bool ShowWidget(string widgetId) => app.ShowWidget(widgetId);

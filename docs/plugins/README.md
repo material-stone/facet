@@ -30,7 +30,7 @@ public sealed class MyPlugin : IFacetPlugin
 - **수명:** 플러그인은 켜져 있는 동안 한 번만 등록됩니다. `Register`에서 `registry.Directory`(코드 폴더), `registry.DataDirectory`(내려받은 파일처럼 플러그인 교체·삭제 후에도 남길 파일), `registry.Settings`를 쓸 수 있고, `IDisposable`을 구현하면 끄기·다시 불러오기·앱 종료 때 호출됩니다. 위젯보다 오래 사는 일은 여기에 둡니다.
 - **자체 저장:** `Settings.Save(키, 값)`은 설정 입력란 없이 플러그인이 관리하는 값을 앱 기록에 저장합니다. 값은 65,536자까지입니다.
 - **전용 저장소:** `registry.Store`의 `Read()`·`Write(텍스트)`는 `<데이터 폴더>/plugin-data/<id>.dat`에 전체 텍스트를 암호화해 원자적으로 저장합니다. 크기 제한이 없고 플러그인 폴더를 지워도 남으니 계속 쌓이는 사용자 기록에 씁니다. 파일을 읽을 수 없으면 `Read`가 예외를 던지므로 덮어쓰지 말고 그대로 전파하세요. 실제 사용 예는 `impls/Facet.ConditionPlugin`([ADR 0081](../decisions/0081-condition-plugin-and-store.md))과 `impls/Facet.SleepPlugin`([ADR 0083](../decisions/0083-sleep-plugin-and-store.md))입니다.
-- **에이전트 도구:** `registry.AddAgentTool(new(이름, 설명, JSON 스키마, 실행 함수))`로 등록하면 연결된 에이전트가 쓸 수 있습니다. 새 에이전트 세션부터 보입니다. 실제 사용 예는 `impls/Facet.ConditionPlugin`입니다.
+- **에이전트 도구:** `registry.AddAgentTool(new(이름, 설명, JSON 스키마, 실행 함수))`로 플러그인의 도구를 선언합니다. 지금은 이 도구를 에이전트에 연결하는 MCP·CLI가 없습니다([ADR 0105](../decisions/0105-remove-mcp-and-cli.md)). 실제 사용 예는 `impls/Facet.ConditionPlugin`입니다.
 
 ## 탭·위젯 조회, 데이터, 설정
 
@@ -42,7 +42,7 @@ public sealed class MyPlugin : IFacetPlugin
 
 ## 앱 연결 (ADR 0084)
 
-- **셸:** `registry.Shell`로 데이터 폴더, `Facet.Mcp.exe` 경로, 화면 공유 모드를 읽고 오버레이 숨김, 위젯이 있는 탭 열기(`ShowWidget`), 내 설정 열기, 오류 알림, 단축키 변경(`SetHotkey`)을 요청합니다.
+- **셸:** `registry.Shell`로 데이터 폴더, 화면 공유 모드를 읽고 오버레이 숨김, 위젯이 있는 탭 열기(`ShowWidget`), 내 설정 열기, 오류 알림, 단축키 변경(`SetHotkey`)을 요청합니다.
 - **런처:** `AddLauncherMode`로 입력이 일치하는 동안 입력란 위·아래에 컨트롤을 두고 Enter를 받습니다. 메뉴는 `ILauncherHost.ShowFlyout`을 쓰면 앱이 바깥 클릭과 Esc를 처리합니다.
 - **단축키·트레이:** `AddHotkey`, `AddTrayCommand`. 플러그인을 끄면 함께 사라집니다. 저장한 단축키 변경은 다음 등록 때 `Shortcut`으로 넘기세요.
 - **설정 필드:** `Group`으로 필드를 묶고, `ToggleSetting`, 저장 전 검사를 하는 `TextSetting.Check`, 직접 만든 뷰인 `CustomSetting`을 쓸 수 있습니다.

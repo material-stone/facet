@@ -443,7 +443,7 @@ internal static partial class Program
                 if(args.Contains("--hotkeys")) CheckOverlayOnlyHotkeys(qa);
                 if(args.Contains("--overlay-ui") || args.Contains("--launcher")) CheckStartupSettings(controller);
 #if PLUGIN_CHECKS
-                if(args.Contains("--overlay-ui")) { CheckDashboard(qa); CheckDisplayCursors(controller); CheckWeather(qa); CheckOverlayCalendar(new OverlayTabs(),qa,nativeInput:false); CheckCalendarDayEditor(controller,qa); CheckDashboardRemindersAndDebug(qa); CheckReminderCli(controller,qa); }
+                if(args.Contains("--overlay-ui")) { CheckDashboard(qa); CheckDisplayCursors(controller); CheckWeather(qa); CheckOverlayCalendar(new OverlayTabs(),qa,nativeInput:false); CheckCalendarDayEditor(controller,qa); CheckDashboardRemindersAndDebug(qa); }
 #else
         if(args.Contains("--overlay-ui")) { CheckDashboard(qa); CheckWeather(qa); }
 #endif
@@ -477,7 +477,7 @@ internal static partial class Program
 #endif
                 if(args.Contains("--weather-live")) CheckLiveWeather(qa);
 #if PLUGIN_CHECKS
-                if(args.Contains("--reminder-cli")) CheckReminderCli(controller,qa);
+                if(args.Contains("--reminder-cli"))
 #endif
                 
 #if PLUGIN_CHECKS

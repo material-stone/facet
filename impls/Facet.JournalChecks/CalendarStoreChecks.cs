@@ -54,7 +54,6 @@ internal static partial class Program
         var registry=new TestRegistry(PluginFileStore.For(Path.Combine(root,"registry"),LegacySchedule.Plugin));
         new SchedulePlugin().Register(registry);
         Assert(registry.Widgets.Select(w=>w.Id).SequenceEqual(["calendar","agenda"]) && registry.Tools.Select(t=>t.Name).Order().SequenceEqual(["facet_add_schedule","facet_delete_schedule","facet_list_schedules","facet_today"]),"the schedule plugin offers both widgets and the schedule tools");
-        Assert(AgentToolCatalog.Tools.All(t=>!t.Name.Contains("schedule") && t.Name!="facet_today"),"the app's own tool catalog has no schedule tools");
         var added=registry.Tools.Single(t=>t.Name=="facet_add_schedule").Run("{\"date\":\"2026-11-02\",\"start\":\"09:10\",\"title\":\"치과\"}").Result;
         var listed=JsonDocument.Parse(registry.Tools.Single(t=>t.Name=="facet_list_schedules").Run("{\"date\":\"2026-11-02\"}").Result).RootElement;
         Assert(JsonDocument.Parse(added).RootElement.GetProperty("start").GetString()=="09:00" && listed.GetArrayLength()==1 && listed[0].GetProperty("title").GetString()=="치과","an agent adds and lists schedules through the plugin");

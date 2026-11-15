@@ -9,51 +9,9 @@ using System.Windows.Media;
 using Facet;
 using Facet.Core;
 using Facet.Design;
-using Facet.Integration;
 
 internal static partial class Program
 {
-    private static void CheckReminderCli(Controller controller, string qa)
-    {
-        string configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent!.Name;
-        string executable = Path.GetFullPath($"impls/Facet.Cli/bin/{configuration}/net10.0-windows/Facet.Cli.exe");
-        Assert(File.Exists(executable), "reminder CLI executable is built before integration checks");
-        using var server = new ReminderPipeServer(controller.Store.Root, controller.Dispatcher, controller.HandleReminderCommand);
-        (int Exit, ReminderReply Reply) Run(string root, params string[] arguments)
-        {
-            var info = new ProcessStartInfo(executable) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true, RedirectStandardError = true };
-            foreach (string arg in arguments) info.ArgumentList.Add(arg);
-            info.ArgumentList.Add("--data-dir"); info.ArgumentList.Add(root);
-            using var child = Process.Start(info)!;
-            var output = child.StandardOutput.ReadToEndAsync(); var error = child.StandardError.ReadToEndAsync(); var watch = Stopwatch.StartNew();
-            while (!child.HasExited && watch.ElapsedMilliseconds < 12000) Pump(10);
-            if (!child.HasExited) { child.Kill(); throw new TimeoutException("Isolated reminder CLI timed out."); }
-            string json = child.ExitCode == 0 ? output.GetAwaiter().GetResult() : error.GetAwaiter().GetResult();
-            return (child.ExitCode, JsonSerializer.Deserialize<ReminderReply>(json, ReminderProtocol.Json)!);
-        }
-        string at = DateTimeOffset.Now.AddHours(1).ToString("O"); string root = controller.Store.Root;
-        var added = Run(root, "add", "--key", "qa-agent-retry", "--title", "합성 일정", "--body", "합성 CLI 입력", "--at", at, "--kind", "schedule");
-        var repeat = Run(root, "add", "--key", "qa-agent-retry", "--title", "합성 일정", "--body", "합성 CLI 입력", "--at", at, "--kind", "schedule");
-        Assert(added.Exit == 0 && repeat.Exit == 0 && added.Reply.Item!.Id == repeat.Reply.Item!.Id && new Store(root).Load().Reminders.Count == 1, "actual CLI Pipe add persists encrypted reminder and deduplicates retries: "+JsonSerializer.Serialize(new {added.Exit,added.Reply,repeatExit=repeat.Exit,repeatReply=repeat.Reply}));
-        var conflict = Run(root, "add", "--key", "qa-agent-retry", "--title", "충돌 입력", "--at", at);
-        Assert(conflict.Exit == 1 && conflict.Reply.Code == "key_conflict" && controller.Data.Reminders.Single().Title == "합성 일정", "CLI key conflict preserves original item and returns structured error");
-        var listed = Run(root, "list");
-        Assert(listed.Exit == 0 && listed.Reply.Items!.Count == 1 && listed.Reply.Items[0].Title == "합성 일정", "CLI lists only reminder records through the running app");
-        var complete = Run(root, "complete", "--id", added.Reply.Item!.Id.ToString());
-        Assert(complete.Exit == 0 && new Store(root).Load().Reminders.Single().Completed, "CLI completion persists and removes item from pending notifications");
-        var invalid = Run(root, "add", "--title", "invalid", "--at", "2026-10-24T18:00:00");
-        Assert(invalid.Exit == 2 && invalid.Reply.Code == "invalid_request", "CLI rejects timestamps without an explicit timezone before contacting app");
-        string blocked = controller.Store.PathName + ".tmp";
-        Directory.CreateDirectory(blocked);
-        try {
-            var failed = Run(root, "add", "--key", "qa-save-failure", "--title", "저장 실패 입력", "--at", at);
-            Assert(failed.Exit == 1 && failed.Reply.Code == "save_failed" && controller.Data.Reminders.Count == 1 && new Store(root).Load().Reminders.Count == 1, "failed CLI save rolls back in memory and does not acknowledge success");
-        }
-        finally { Directory.Delete(blocked); }
-        var offline = Run(Path.Combine(qa, "not-running-store"), "list");
-        Assert(offline.Exit == 3 && offline.Reply.Code == "not_running" && !File.Exists(Path.Combine(qa,"not-running-store","records.dat")), "offline CLI returns clear error without directly creating a store");
-    }
-
     // Today's agenda is the schedule plugin's widget (ADR 0101): schedules and open todos from its store, not the app's reminders.
     private static void CheckDashboardRemindersAndDebug(string qa)
     {

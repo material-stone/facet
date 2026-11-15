@@ -52,7 +52,7 @@ finally { $sha.Dispose() }
 $buildLock = [Threading.Mutex]::new($false, ('Local\Facet-build-' + $lockHash))
 $lockAcquired = $false
 $committed = $false
-$releasePath = $cliStage = $mcpStage = $launcherStage = $pendingPath = $null
+$releasePath = $launcherStage = $pendingPath = $null
 Push-Location $projectRoot
 try {
     try { $lockAcquired = $buildLock.WaitOne(0) } catch [Threading.AbandonedMutexException] { $lockAcquired = $true }
@@ -69,12 +69,6 @@ try {
     $releasePath = Join-Path $deployRoot ('releases/' + $releaseName)
     dotnet publish impls/Facet/Facet.csproj -c Release --self-contained false -o $releasePath --nologo -m:1 /nodeReuse:false
     if ($LASTEXITCODE -ne 0) { throw 'App publish failed. The previous release remains selected.' }
-    $cliStage = Join-Path $deployRoot ('.cli-' + $buildId)
-    dotnet publish impls/Facet.Cli/Facet.Cli.csproj -c Release --self-contained false -o $cliStage --nologo -m:1 /nodeReuse:false
-    if ($LASTEXITCODE -ne 0) { throw 'CLI publish failed. The previous release remains selected.' }
-    $mcpStage = Join-Path $deployRoot ('.mcp-' + $buildId)
-    dotnet publish impls/Facet.Mcp/Facet.Mcp.csproj -c Release --self-contained false -o $mcpStage --nologo -m:1 /nodeReuse:false
-    if ($LASTEXITCODE -ne 0) { throw 'MCP server publish failed. The previous release remains selected.' }
     $launcherStage = Join-Path $deployRoot ('.launcher-' + $buildId)
     dotnet publish impls/Facet.Launcher/Facet.Launcher.csproj -c Release --self-contained false -o $launcherStage --nologo -m:1 /nodeReuse:false
     if ($LASTEXITCODE -ne 0) { throw 'Launcher publish failed. The previous release remains selected.' }
@@ -94,18 +88,6 @@ try {
     }
     foreach ($file in @('Facet.exe', 'Facet.dll', 'Facet.Core.dll', 'Facet.Plugins.dll', 'Facet.deps.json', 'Facet.runtimeconfig.json')) {
         if (-not (Test-Path -LiteralPath (Join-Path $releasePath $file) -PathType Leaf)) { throw ('Published release is incomplete: ' + $file) }
-    }
-    foreach ($file in Get-ChildItem -LiteralPath $cliStage -File | Where-Object { $_.Name -like 'Facet.Cli*' -or $_.Name -like 'Facet.Core*' }) {
-        $destination = Join-Path $deployRoot $file.Name
-        # Facet.Core.dll is shared with a running Facet.Mcp; an identical locked copy needs no replacement.
-        try { Copy-Item -LiteralPath $file.FullName -Destination $destination -Force -ErrorAction Stop }
-        catch { Write-Warning ('Shared file is in use; restart the agent to load the new version: ' + $destination) }
-    }
-    # Facet.Mcp stays at a stable path so agent MCP registrations survive new releases (ADR 0069).
-    foreach ($file in Get-ChildItem -LiteralPath $mcpStage -File | Where-Object { $_.Name -like 'Facet.Mcp*' -or $_.Name -like 'Facet.Core*' }) {
-        $destination = Join-Path $deployRoot $file.Name
-        try { Copy-Item -LiteralPath $file.FullName -Destination $destination -Force }
-        catch { Write-Warning ('MCP server is in use; restart the agent to load the new version: ' + $destination) }
     }
     foreach ($file in Get-ChildItem -LiteralPath $launcherStage -File) {
         $destination = Join-Path $deployRoot $file.Name
@@ -128,6 +110,7 @@ try {
             Remove-DeploymentDirectory $oldRelease.FullName $releasesRoot
         }
     }
+    # .cli- and .mcp- stages are leftovers from releases that still shipped the CLI and MCP server (ADR 0105).
     foreach ($stage in Get-ChildItem -LiteralPath $deployRoot -Directory -Force | Where-Object { $_.Name -match '^\.(cli|mcp|launcher)-' }) {
         Remove-DeploymentDirectory $stage.FullName $deployRoot
     }
@@ -137,7 +120,7 @@ try {
     try {
         if ($lockAcquired) {
             if (-not $committed -and $releasePath) { Remove-DeploymentDirectory $releasePath $releasesRoot }
-            foreach ($stage in @($cliStage, $mcpStage, $launcherStage)) { if ($stage) { Remove-DeploymentDirectory $stage $deployRoot } }
+            foreach ($stage in @($launcherStage)) { if ($stage) { Remove-DeploymentDirectory $stage $deployRoot } }
             if ($pendingPath -and (Test-Path -LiteralPath $pendingPath)) { Remove-Item -LiteralPath $pendingPath -Force }
         }
     } finally {
