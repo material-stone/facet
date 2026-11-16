@@ -11,7 +11,7 @@
    `graphify query "<question>" --budget 1200`.
 4. 영향받는 경계와 경로만 확인한 뒤 수정합니다.
 5. 인계 전에 native test와 선언된 architecture check를 실행합니다.
-6. 앱 기능을 추가·수정했다면 contract의 `build`(`scripts/build.ps1`)로 배포까지 마쳐 고정된 런처가 새 release를 실행하게 합니다. `dotnet build`만으로는 런처가 갱신되지 않습니다.
+6. 앱 기능을 추가·수정했다면 contract의 `build`(`scripts/build.ps1`)로 배포까지 마쳐 고정된 런처가 새 release를 실행하게 합니다. `dotnet build`만으로는 런처가 갱신되지 않습니다. `build.ps1`은 실행한 checkout의 `artifacts/Facet`에 배포하므로, git worktree에서 작업했다면 worktree가 아니라 메인 checkout(고정된 런처가 있는 곳)을 최신 `main`으로 fast-forward한 뒤 그곳에서 `build`를 실행합니다.
 
 ### Architecture guardrails
 
