@@ -86,6 +86,19 @@ try {
         dotnet publish "impls/$($plugin[0])/$($plugin[0]).csproj" -c Release -o (Join-Path $deployRoot "plugins/$($plugin[1])") --nologo -m:1 /nodeReuse:false
         if ($LASTEXITCODE -ne 0) { throw "$($plugin[0]) publish failed. The previous release remains selected." }
     }
+    # The app runs plugins from <data>/plugins, not from this deployment, so a rebuild alone would not reach it.
+    # Overwrite each first-party plugin the user already installed so the build is testable without a release.
+    # plugin.json is kept: the installed version stays the registry's, so a later release still offers 업데이트.
+    $dataPlugins = Join-Path $env:LOCALAPPDATA 'MaterialStone/Facet/plugins'
+    foreach ($built in Get-ChildItem -LiteralPath (Join-Path $deployRoot 'plugins') -Directory) {
+        $installed = Join-Path $dataPlugins $built.Name
+        if (-not (Test-Path -LiteralPath (Join-Path $installed 'plugin.json'))) { continue }
+        foreach ($file in Get-ChildItem -LiteralPath $built.FullName -File | Where-Object { $_.Name -ne 'plugin.json' }) {
+            try { Copy-Item -LiteralPath $file.FullName -Destination $installed -Force -ErrorAction Stop }
+            catch { Write-Warning ('Could not refresh installed plugin file; close Facet and rebuild: ' + (Join-Path $installed $file.Name)) }
+        }
+        Write-Host ('Refreshed installed plugin: ' + $built.Name)
+    }
     foreach ($file in @('Facet.exe', 'Facet.dll', 'Facet.Core.dll', 'Facet.Plugins.dll', 'Facet.deps.json', 'Facet.runtimeconfig.json')) {
         if (-not (Test-Path -LiteralPath (Join-Path $releasePath $file) -PathType Leaf)) { throw ('Published release is incomplete: ' + $file) }
     }

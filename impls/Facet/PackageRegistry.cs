@@ -16,6 +16,8 @@ internal static class PackageRegistry
 {
     internal const string Repository = "material-stone/facet";
     internal const string SubmitUrl = "https://github.com/" + Repository + "/issues/new?template=submit.yml";
+    // The API serves main as soon as it moves; raw.githubusercontent caches it for minutes, so it is only the fallback.
+    private const string FreshIndexUrl = "https://api.github.com/repos/" + Repository + "/contents/registry/index.json?ref=main";
     private const string IndexUrl = "https://raw.githubusercontent.com/" + Repository + "/main/registry/index.json";
     private const int MaxIndexBytes = 4 << 20;
     private static readonly Regex ValidUrl = new("^https://github\\.com/" + Regex.Escape(Repository) + "/releases/download/[A-Za-z0-9._%-]+/[A-Za-z0-9._%-]+$", RegexOptions.CultureInvariant);
@@ -50,7 +52,18 @@ internal static class PackageRegistry
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
         timeout.CancelAfter(TimeSpan.FromSeconds(20));
-        using var response = await (client ?? Shared).GetAsync(IndexUrl, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        var http = client ?? Shared;
+        using var fresh = new HttpRequestMessage(HttpMethod.Get, FreshIndexUrl);
+        fresh.Headers.Accept.ParseAdd("application/vnd.github.raw+json");
+        HttpResponseMessage? response = null;
+        try { response = await http.SendAsync(fresh, HttpCompletionOption.ResponseHeadersRead, timeout.Token); }
+        catch (HttpRequestException) { }
+        if (response is not { IsSuccessStatusCode: true }) {
+            // Rate-limited or unreachable API: the cached copy is still a reviewed list.
+            response?.Dispose();
+            response = await http.GetAsync(IndexUrl, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+        }
+        using var _ = response;
         response.EnsureSuccessStatusCode();
         using var memory = new MemoryStream();
         await CopyLimited(await response.Content.ReadAsStreamAsync(timeout.Token), memory, MaxIndexBytes, timeout.Token);
