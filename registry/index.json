@@ -31,6 +31,16 @@
       "sha256": "e01f159cb31fa0873348b3612864f9203a448486b6dec7a0e849529d1bd10de5"
     },
     {
+      "kind": "plugin",
+      "id": "facet.sysmon",
+      "name": "시스템 모니터",
+      "version": "1.0.0",
+      "author": "material-stone",
+      "description": "CPU·GPU·메모리 게이지와 네트워크 그래프를 보여 주는 위젯입니다. 90%를 넘으면 경고 연출이 나옵니다.",
+      "url": "https://github.com/material-stone/facet/releases/download/plugin-facet.sysmon-1.0.0/facet.sysmon-1.0.0.zip",
+      "sha256": "c20fc9f2dbcfe0ff990ee88ba916963680f1919a733fa56db71ae9c8877a43b5"
+    },
+    {
       "kind": "skin",
       "id": "midnight",
       "name": "미드나이트",
