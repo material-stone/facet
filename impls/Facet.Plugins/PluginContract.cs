@@ -90,7 +90,9 @@ public interface ILauncherSession : IDisposable
     Task SubmitAsync(string input);
 }
 
-// Sizes are in grid cells. A view that implements IDisposable is disposed when its tile goes away.
+// Width and Height are the base size in pixels the view is laid out at; the tile stretches it to any size (ADR 0108).
+// Zero falls back to DefaultColumns and DefaultRows times 96 px. MinColumns and MinRows are kept for older plugins and unused.
+// A view that implements IDisposable is disposed when its tile goes away.
 // AllowMultiple is several on one tab; AllowMultipleTabs is placing on more than one tab.
 // UsesData asks the app to create a logical store for each placed widget.
 public sealed record WidgetDescriptor(string Id, string Title, Func<WidgetContext, FrameworkElement> Create)
@@ -100,6 +102,11 @@ public sealed record WidgetDescriptor(string Id, string Title, Func<WidgetContex
     public int DefaultRows { get; init; } = 2;
     public int MinColumns { get; init; } = 1;
     public int MinRows { get; init; } = 1;
+    public int Width { get; init; }
+    public int Height { get; init; }
+    public const int CellPixels = 96;
+    public int BaseWidth => Width > 0 ? Width : DefaultColumns * CellPixels;
+    public int BaseHeight => Height > 0 ? Height : DefaultRows * CellPixels;
     public bool AllowMultiple { get; init; } = true;
     public bool AllowMultipleTabs { get; init; } = true;
     public bool UsesData { get; init; }

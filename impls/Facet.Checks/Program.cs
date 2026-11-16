@@ -173,55 +173,84 @@ Check("schedule color/label presets derive from used schedules then persist expl
     Assert(rejected && CalendarNotes.SchedulePresets(data).Count==1);
     var loaded=JsonSerializer.Deserialize<AppData>(JsonSerializer.Serialize(data))!;Assert(CalendarNotes.SchedulePresets(loaded).Single().Label=="운동");
 });
-Check("workspace layout rejects overlaps and keeps built-in tab rules",()=>{
+Check("workspace layout rejects overlaps, places in pixels and keeps tab rules",()=>{
     void That(bool ok,string _="")=>Assert(ok);
     bool Rejects(Action action){try{action();return false;}catch(ArgumentException){return true;}}
-    That(new AppData().Workspace==null && WorkspaceLayouts.Current(new AppData()).Tabs.Select(t=>t.Id).SequenceEqual(new[]{"dashboard","settings"}) && WorkspaceLayouts.Default().Tabs.All(t=>t.Widgets.Count==0),"a fresh install has an empty dashboard and settings (ADR 0101)");
+    const int C=WorkspaceGrid.DefaultCellSize;
+    That(new AppData().Workspace==null && WorkspaceLayouts.Current(new AppData()).Tabs.Select(t=>t.Id).SequenceEqual(new[]{"dashboard"}) && WorkspaceLayouts.Default().Tabs.All(t=>t.Widgets.Count==0),"a fresh install has an empty dashboard and no settings tab (ADR 0108)");
     // The rules below run on the layout a never-edited install had before its widgets became plugins.
     var data=new AppData{Workspace=WorkspaceLayouts.LegacyDefault()};
-    That(WorkspaceLayouts.Current(data).Tabs.Select(t=>t.Id).SequenceEqual(new[]{"dashboard","schedule","sleep","chat","settings"}));
+    That(WorkspaceLayouts.Current(data).Tabs.Select(t=>t.Id).SequenceEqual(new[]{"dashboard","schedule","sleep","chat"}),"the former settings tab leaves the layout");
     var defaults=WorkspaceLayouts.LegacyDefault().Tabs[0];
     That(defaults.Widgets.All(w=>WorkspaceLayouts.CanPlace(defaults,w.Id,w.X,w.Y,w.Width,w.Height)),"default layout is valid");
+    That(defaults.Widgets[0] is {X:-6*C,Y:-4*C,Width:3*C,Height:C},"the legacy cells become pixels");
     var tab=WorkspaceLayouts.AddTab(data,"  업무  ");
-    That(tab.Title=="업무" && data.Workspace!.Tabs[^1].Id=="settings" && data.Workspace!.Tabs[^2].Id==tab.Id,"new tabs stay before settings");
-    var first=WorkspaceLayouts.AddWidget(data,tab.Id,"plugin.a",4,2,false);var second=WorkspaceLayouts.AddWidget(data,tab.Id,"plugin.a",4,2,false);
-    That(first.X==-6 && first.Y==-4 && second.X==-2 && second.Y==-4,"new widgets take the first free slot around the origin");
-    That(Rejects(()=>WorkspaceLayouts.MoveWidget(data,tab.Id,second.Id,-4,-4,4,2)) && second.X==-2,"overlap is rejected without moving");
-    WorkspaceLayouts.MoveWidget(data,tab.Id,second.Id,500,-300,6,3);That(second.X==500 && second.Y==-300 && second.Width==6,"the board has no practical edge");
+    That(tab.Title=="업무" && data.Workspace!.Tabs[^1].Id==tab.Id,"new tabs go last");
+    // A new widget is centered on the given point at its own size, or goes to the nearest free spot.
+    var first=WorkspaceLayouts.AddWidget(data,tab.Id,"plugin.a",4*C,2*C,false);
+    That(first.X==-2*C && first.Y==-C && first.Width==4*C,"a new widget is centered on the viewed point");
+    var second=WorkspaceLayouts.AddWidget(data,tab.Id,"plugin.a",4*C,2*C,false);
+    That(WorkspaceLayouts.IsFree(new(){Widgets=[first]},second.X,second.Y,second.Width,second.Height,null) && Math.Abs(second.X-first.X)+Math.Abs(second.Y-first.Y)<=4*C && second.X%C==0 && second.Y%C==0,"a blocked center moves to the nearest free grid spot");
+    var odd=WorkspaceLayouts.AddWidget(data,tab.Id,"plugin.a",50,30,false,5000,5000,MaxHalf(),MaxHalf(),step:1);
+    That(odd.X==5000-25 && odd.Y==5000-15,"without snapping the center keeps its pixel");WorkspaceLayouts.RemoveWidget(data,tab.Id,odd.Id);
+    That(Rejects(()=>WorkspaceLayouts.MoveWidget(data,tab.Id,second.Id,first.X+10,first.Y+10,4*C,2*C)),"overlap is rejected without moving");
+    WorkspaceLayouts.MoveWidget(data,tab.Id,second.Id,50000,-30000,601,299);That(second.X==50000 && second.Y==-30000 && second.Width==601,"the board has no practical edge and sizes are free pixels");
     That(Rejects(()=>WorkspaceLayouts.MoveWidget(data,tab.Id,second.Id,WorkspaceLayouts.MaxCell+1,0,4,2)),"coordinates stay in the supported range");
-    WorkspaceLayouts.MoveWidget(data,tab.Id,second.Id,-2,-3,6,3);That(second.Y==-3);
+    WorkspaceLayouts.MoveWidget(data,tab.Id,second.Id,-2*C,-3*C-200,6*C,2*C);That(second.Y==-3*C-200);
     That(Rejects(()=>WorkspaceLayouts.AddWidget(data,"dashboard",WorkspaceLayouts.PluginClockWidget,3,2,true)),"single widgets cannot be placed twice");
     var rule=WorkspaceLayouts.LegacyDefault();
     That(WorkspaceLayouts.PlacementProblem(rule,"dashboard",WorkspaceLayouts.PluginClockWidget,true,false)!=null && WorkspaceLayouts.PlacementProblem(rule,"chat",WorkspaceLayouts.PluginClockWidget,true,false)==null,"one per tab allows other tabs");
     That(WorkspaceLayouts.PlacementProblem(rule,"chat",WorkspaceLayouts.PluginClockWidget,false,true)!=null && WorkspaceLayouts.PlacementProblem(rule,"dashboard",WorkspaceLayouts.PluginClockWidget,false,true)==null,"one tab only allows more on that tab");
-    That(Rejects(()=>WorkspaceLayouts.AddWidget(data,"settings","plugin.a",1,1,false)) && Rejects(()=>WorkspaceLayouts.SetView(data,"settings",0,0,1)),"settings holds no board");
-    var onChat=WorkspaceLayouts.AddWidget(data,"chat","plugin.a",1,1,false);That(onChat.X==-6,"fixed pages hold widgets on a board");WorkspaceLayouts.RemoveWidget(data,"chat",onChat.Id);
-    var big=WorkspaceLayouts.AddWidget(data,tab.Id,"plugin.a",12,8,false);That(big.Y>=-1,"a large widget goes below the others instead of failing");WorkspaceLayouts.RemoveWidget(data,tab.Id,big.Id);
-    That(Rejects(()=>WorkspaceLayouts.AddWidget(data,tab.Id,"plugin.a",12,8,false,-6,-4,5,5)),"a widget larger than the board is rejected");
-    var wrapped=WorkspaceLayouts.AddWidget(data,tab.Id,"plugin.a",1,1,false,40,40,8,8);That(wrapped.X==7 && wrapped.Y==7,"a viewed area past the edge stays on the board");WorkspaceLayouts.RemoveWidget(data,tab.Id,wrapped.Id);
-    var near=WorkspaceLayouts.AddWidget(data,tab.Id,"plugin.a",1,1,false,100,50);That(near.X==100 && near.Y==50,"new widgets can start at the viewed area");WorkspaceLayouts.RemoveWidget(data,tab.Id,near.Id);
+    That(Rejects(()=>WorkspaceLayouts.AddWidget(data,tab.Id,WorkspaceLayouts.TabBarWidget,100,40,false)),"the tab bar is not added as a widget");
+    That(Rejects(()=>WorkspaceLayouts.AddWidget(data,tab.Id,"plugin.a",12*C,8*C,false,0,0,5*C,5*C)),"a widget larger than the board is rejected");
+    var wrapped=WorkspaceLayouts.AddWidget(data,tab.Id,"plugin.a",C,C,false,40*C,40*C,8*C,8*C);That(wrapped.X==7*C && wrapped.Y==7*C,"a viewed point past the edge stays on the board");WorkspaceLayouts.RemoveWidget(data,tab.Id,wrapped.Id);
     WorkspaceLayouts.SetView(data,tab.Id,120.5,-40,9);That(data.Workspace.Tabs.Single(t=>t.Id==tab.Id).View is {X:120.5,Y:-40,Zoom:WorkspaceLayouts.MaxZoom},"views keep the vector and clamp the zoom");
-    {var s=new Settings();That(WorkspaceGrid.CellSize(s)==96 && WorkspaceGrid.Style(s)==WorkspaceGrid.Dots,"the grid defaults to 96 px dots");s.GridCellSize=5;s.GridStyle="rounded";That(WorkspaceGrid.CellSize(s)==WorkspaceGrid.MinCellSize && WorkspaceGrid.Style(s)==WorkspaceGrid.Dots,"grid settings clamp the size and fall back to dots");}
-    That(Rejects(()=>WorkspaceLayouts.SetHidden(data,"settings",true)) && Rejects(()=>WorkspaceLayouts.RemoveTab(data,"settings")) && Rejects(()=>WorkspaceLayouts.RenameTab(data,"settings","x")),"the settings tab keeps its rules");
-    WorkspaceLayouts.MoveTab(data,tab.Id,1);That(data.Workspace.Tabs[^1].Id=="settings","moving a tab never passes settings");
+    {var s=new Settings();That(WorkspaceGrid.CellSize(s)==96 && WorkspaceGrid.Style(s)==WorkspaceGrid.Dots,"the grid defaults to 96 px dots");s.GridCellSize=1;s.GridStyle="rounded";That(WorkspaceGrid.CellSize(s)==2 && WorkspaceGrid.MinCellSize==2 && WorkspaceGrid.Style(s)==WorkspaceGrid.Dots,"grid settings start at 2 px and fall back to dots");s.GridCellSize=7;That(WorkspaceGrid.CellSize(s)==7,"any whole pixel size is kept");}
+    // The tab bar has one placement for every tab and survives a reload.
+    That(data.Workspace.TabBar==null,"the tab bar starts at its default place");
+    WorkspaceLayouts.MoveTabBar(data,-300,-420,600,48);That(Rejects(()=>WorkspaceLayouts.MoveTabBar(data,0,0,0,10)),"a tab bar needs a size");
+    That(data.Workspace.Snap,"snapping is on by default");WorkspaceLayouts.SetSnap(data,false);
+    WorkspaceLayouts.MoveTab(data,tab.Id,1);That(data.Workspace.Tabs[^1].Id==tab.Id,"moving past the end does nothing");
     WorkspaceLayouts.MoveTab(data,tab.Id,-1);That(data.Workspace.Tabs[3].Id==tab.Id);
-    data.Workspace.Tabs[^1].Hidden=true;var loaded=WorkspaceLayouts.Normalize(JsonSerializer.Deserialize<AppData>(JsonSerializer.Serialize(data))!.Workspace);
+    var loaded=WorkspaceLayouts.Normalize(JsonSerializer.Deserialize<AppData>(JsonSerializer.Serialize(data))!.Workspace);
     var reloadedTab=loaded.Tabs.Single(t=>t.Id==tab.Id);
-    That(!loaded.Tabs[^1].Hidden && reloadedTab.Widgets.Count==2 && reloadedTab.Widgets[0].X==-6 && reloadedTab.View is {X:120.5},"reload restores settings and keeps placements and views");
+    That(reloadedTab.Widgets.Count==2 && reloadedTab.Widgets[0].X==-2*C && reloadedTab.View is {X:120.5},"reload keeps pixel placements and views");
+    That(loaded.TabBar is {X:-300,Y:-420,Width:600,Height:48} && !loaded.Snap,"reload keeps the shared tab bar and the snap choice");
+    // The last visible tab stays, since the strip is the only way between tabs.
+    var single=new AppData();That(Rejects(()=>WorkspaceLayouts.SetHidden(single,"dashboard",true)) && Rejects(()=>WorkspaceLayouts.RemoveTab(single,"dashboard")),"the last visible tab cannot be hidden or removed");
+    That(WorkspaceLayouts.Normalize(new WorkspaceLayout{GridVersion=7,Tabs=[new(){Id="a",Title="a",Hidden=true}]}).Tabs.Single() is {Hidden:false},"an all-hidden layout shows its first tab");
+    That(WorkspaceLayouts.Normalize(new WorkspaceLayout{GridVersion=7,Tabs=[new(){Id="settings",Title="설정"}]}).Tabs.Single().Id=="dashboard","a layout with only settings gets a dashboard");
+    // Cell layouts from before GridVersion 7 move to pixels once, with the cell size they were drawn at.
     var broken=new WorkspaceLayout{Tabs=[new(){Id="settings",Title="x"},new(){Id="tab-a",Title="a",Widgets=[new(){Id="1",WidgetId="w",X=0,Y=0,Width=2,Height=2},new(){Id="2",WidgetId="w",X=1,Y=1,Width=2,Height=2},new(){Id="3",WidgetId="w",X=11,Y=0,Width=0,Height=1}]}]};
     var fixedUp=WorkspaceLayouts.Normalize(broken);
-    That(fixedUp.Tabs.Count==6 && fixedUp.Tabs[^1].Id=="settings" && fixedUp.Tabs.Single(t=>t.Id=="tab-a").Widgets.Single().Id=="1","normalize restores tabs and drops only invalid placements");
+    That(fixedUp.Tabs.Count==5 && fixedUp.Tabs.All(t=>t.Id!="settings") && fixedUp.Tabs.Single(t=>t.Id=="tab-a").Widgets.Single().Id=="1","normalize restores tabs, drops settings and drops only invalid placements");
     var centered=fixedUp.Tabs.Single(t=>t.Id=="tab-a").Widgets.Single();
-    That(centered.X==-6 && centered.Y==-4 && fixedUp.GridVersion==WorkspaceLayouts.GridVersion,"an old grid moves once so it is centered on the origin");
-    That(WorkspaceLayouts.Normalize(fixedUp).Tabs.Single(t=>t.Id=="tab-a").Widgets.Single().X==-6,"a current grid does not move again");
+    That(centered.X==-6*C && centered.Y==-4*C && centered.Width==2*C && fixedUp.GridVersion==7,"an old grid moves once so it is centered on the origin, in pixels");
+    That(WorkspaceLayouts.Normalize(fixedUp).Tabs.Single(t=>t.Id=="tab-a").Widgets.Single().X==-6*C,"a current layout does not move again");
+    var sized=WorkspaceLayouts.Normalize(new WorkspaceLayout{GridVersion=6,Tabs=[new(){Id="t",Title="t",Widgets=[new(){Id="w",WidgetId="w",X=-2,Y=1,Width=3,Height=2}]}]},40).Tabs.Single(t=>t.Id=="t").Widgets.Single();
+    That(sized is {X:-80,Y:40,Width:120,Height:80},"GridVersion 7 multiplies cells by the stored cell size");
+    That(WorkspaceGrid.LegacyCellSize(new Settings{GridCellSize=5})==24 && WorkspaceGrid.LegacyCellSize(null)==96,"the stored cell size is read in its old range");
     That(WorkspaceLayouts.Normalize(new WorkspaceLayout{GridVersion=2,Tabs=[new(){Id="chat",View=new(){X=double.NaN}}]}).Tabs.Single(t=>t.Id=="chat").View==null,"an invalid view falls back to the default");
-    That(WorkspaceLayouts.Normalize(null).Tabs.Count==5);
+    That(WorkspaceLayouts.Normalize(null).Tabs.Count==4);
     var iconed=new AppData{Workspace=WorkspaceLayouts.LegacyDefault()};WorkspaceLayouts.SetIcon(iconed,"chat","Music");
-    That(WorkspaceLayouts.Normalize(JsonSerializer.Deserialize<AppData>(JsonSerializer.Serialize(iconed))!.Workspace).Tabs.Single(t=>t.Id=="chat").Icon=="Music" && Rejects(()=>WorkspaceLayouts.SetIcon(iconed,"settings","Music")),"a tab keeps its icon and settings keeps its own");
+    That(WorkspaceLayouts.Normalize(JsonSerializer.Deserialize<AppData>(JsonSerializer.Serialize(iconed))!.Workspace).Tabs.Single(t=>t.Id=="chat").Icon=="Music","a tab keeps its icon");
     var ordinary=new AppData{Workspace=WorkspaceLayouts.LegacyDefault()};WorkspaceLayouts.RemoveTab(ordinary,"sleep");WorkspaceLayouts.RenameTab(ordinary,"chat","대화");
     var ordinaryLoaded=WorkspaceLayouts.Normalize(JsonSerializer.Deserialize<AppData>(JsonSerializer.Serialize(ordinary))!.Workspace);
     That(ordinaryLoaded.Tabs.All(t=>t.Id!="sleep") && ordinaryLoaded.Tabs.Single(t=>t.Id=="chat").Title=="대화","a removed first tab stays removed and a new name stays");
-    That(WorkspaceLayouts.Normalize(new WorkspaceLayout{GridVersion=5,Tabs=[new(){Id="settings",Title="설정"}]}).Tabs.Count==5,"an older layout gets its first tabs once");
+    That(WorkspaceLayouts.Normalize(new WorkspaceLayout{GridVersion=5,Tabs=[new(){Id="settings",Title="설정"}]}).Tabs.Count==4,"an older layout gets its first tabs once");
+    static int MaxHalf()=>WorkspaceLayouts.MaxCell;
+});
+Check("widget drags snap, stretch freely and keep the ratio with Shift",()=>{
+    void That(bool ok,string _="")=>Assert(ok);
+    That(WorkspaceLayouts.Snap(140,96)==96 && WorkspaceLayouts.Snap(-50,96)==-96 && WorkspaceLayouts.Snap(141.4,1)==141,"positions round to the grid, or to pixels without it");
+    That(WorkspaceLayouts.Resize(0,0,100,200,-50,200,false,1)==(50,400),"a free corner drag stretches each side apart");
+    That(WorkspaceLayouts.Resize(0,0,100,200,100,10,true,1)==(200,400),"Shift keeps the start's aspect ratio");
+    That(WorkspaceLayouts.Resize(0,0,100,200,-10,90,true,1)==(145,290),"with Shift the larger pull decides");
+    That(WorkspaceLayouts.Resize(0,0,100,50,-500,-500,false,1)==(WorkspaceLayouts.MinWidgetSize,WorkspaceLayouts.MinWidgetSize),"a widget never shrinks under the pixel floor");
+    var ratio=WorkspaceLayouts.Resize(0,0,100,50,-500,-500,true,1);That(ratio.Height>=WorkspaceLayouts.MinWidgetSize && ratio.Width==ratio.Height*2,"the floor keeps the ratio with Shift");
+    That(WorkspaceLayouts.Resize(10,0,96,96,40,100,false,96)==(182,192),"snapping puts the corner on the grid");
+    That(WorkspaceLayouts.Resize(0,0,192,96,60,0,true,96)==(288,144),"with Shift and snapping the width snaps and the height follows the ratio");
+    That(WorkspaceLayouts.Resize(0,0,100,100,1000,1000,false,1,300,250)==(300,250),"a drag stops at the board's edge");
 });
 Check("editing moving and deleting a carried schedule preserves both dates notes and tasks",()=>{
     var date=new DateOnly(2027,1,1);var data=new AppData();var current=new CalendarDayEntry {Date=date,Note="현재 기록",Todos=[new(){Title="현재 할 일"}]};

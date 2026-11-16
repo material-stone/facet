@@ -25,9 +25,8 @@ public partial class OverlayTabs : UserControl, IWidgetLayer
         get => SettingsView.ScrollOffset;
         set => Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() => SettingsView.ScrollOffset = value));
     }
-    private const double WidgetBarInset = 92;
     private bool dismissingModalClick;
-    internal bool IsSettingsActive => SettingsTab.IsSelected;
+    internal bool IsSettingsActive => SettingsModal.Visibility == Visibility.Visible;
     internal bool IsWidgetModalOpen => modals.IsOpen;
     public OverlayTabs()
     {
@@ -40,6 +39,7 @@ public partial class OverlayTabs : UserControl, IWidgetLayer
         PreviewMouseUp+=(_,e)=>{if(dismissingModalClick && e.ChangedButton==MouseButton.Left){e.Handled=true;dismissingModalClick=false;ReleaseMouseCapture();}};
         LostMouseCapture+=(_,e)=>{if(ReferenceEquals(e.OriginalSource,this))dismissingModalClick=false;};
         IsVisibleChanged+=(_,_)=>{if(!IsVisible){modals.TryClose();SetWorkspaceEditing(false);}};
+        SizeChanged += (_, _) => { foreach (var view in workspaces.Values) view.RefreshTabBar(); };
         Tabs.ItemContainerGenerator.ItemsChanged += (_, _) => UpdateTabCorners();
         Tabs.ItemContainerGenerator.StatusChanged += (_, _) => UpdateTabCorners();
         UpdateTabCorners();
@@ -47,7 +47,8 @@ public partial class OverlayTabs : UserControl, IWidgetLayer
             if (!ReferenceEquals(e.OriginalSource,Tabs)) return;
             modals.TryClose();
             UpdateWorkspaceBar();
-            FocusSettingsSearch();
+            SelectedWorkspace?.RefreshTabBar();
+            PlaceTabStrip();
         };
     }
 
@@ -55,12 +56,12 @@ public partial class OverlayTabs : UserControl, IWidgetLayer
     public void Add(FrameworkElement layer) { if (layer.Parent == null) WidgetLayers.Children.Add(layer); }
     public void Remove(FrameworkElement layer) => WidgetLayers.Children.Remove(layer);
 
+    // The default tab bar placement follows the strip's natural size.
     private void TabStrip_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (DashboardViewport == null || sender is not FrameworkElement strip) return;
-        WorkspaceRow.Height = strip.ActualHeight; // Keeps the edit controls centered on the tab row.
-        double inset = strip.Margin.Top + strip.ActualHeight + 48;
-        SettingsViewport.Margin = new Thickness(24, inset, 24, WidgetBarInset);
+        if (DashboardViewport == null) return;
+        foreach (var view in workspaces.Values) view.RefreshTabBar();
+        PlaceTabStrip();
     }
 
     private void UpdateTabCorners()
@@ -110,12 +111,13 @@ public partial class OverlayTabs : UserControl, IWidgetLayer
     public bool HandleEscape()
     {
         if(modals.IsOpen) { modals.HandleEscape();return true; }
+        if (IsSettingsActive) { CloseSettings(); return true; }
         if (HandleWorkspaceEscape()) return true;
         return SelectedInputs.Any(input => Ask(input.HandleEscape));
     }
 
     internal bool HandleWidgetKey(Key key, ModifierKeys modifiers) =>
-        !modals.IsOpen && !workspaceEditing && SelectedInputs.Any(input => Ask(() => input.HandleKey(key, modifiers)));
+        !modals.IsOpen && !IsSettingsActive && !workspaceEditing && SelectedInputs.Any(input => Ask(() => input.HandleKey(key, modifiers)));
 
     public bool TrySaveEdits()
     {
@@ -123,11 +125,33 @@ public partial class OverlayTabs : UserControl, IWidgetLayer
         if (!modals.TryClose()) return false;
         foreach (var input in AllInputs) if (!Ask(input.TrySave)) return false;
         if (SettingsView.TrySave()) return true;
-        Tabs.SelectedItem = SettingsTab;
+        ShowSettings();
         return false;
     }
-    internal void OpenSettings() { Tabs.SelectedItem = SettingsTab; SettingsView.FocusSearch(); }
-    internal void OpenPluginSettings(string pluginId) { Tabs.SelectedItem = SettingsTab; SettingsView.ShowSection("플러그인"); SettingsView.PluginPanel.Expand(pluginId); }
+    internal void OpenSettings() { ShowSettings(); SettingsView.FocusSearch(); }
+    internal void OpenPluginSettings(string pluginId) { ShowSettings(); SettingsView.ShowSection("플러그인"); SettingsView.PluginPanel.Expand(pluginId); }
+    private void ShowSettings()
+    {
+        if (IsSettingsActive) return;
+        SetWorkspaceEditing(false);
+        modals.TryClose();
+        SettingsModal.Visibility = Visibility.Visible;
+    }
+    // Closing saves first; a save that fails keeps the modal open with its message, like leaving the old settings tab did.
+    internal bool CloseSettings()
+    {
+        if (!IsSettingsActive) return true;
+        if (!SettingsView.TrySave()) return false;
+        SettingsModal.Visibility = Visibility.Collapsed;
+        Focus();
+        return true;
+    }
+    private void SettingsOpen_Click(object sender, RoutedEventArgs e) { if (IsSettingsActive) CloseSettings(); else OpenSettings(); }
+    private void SettingsModal_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ChangedButton != MouseButton.Left || !ReferenceEquals(e.OriginalSource, SettingsModal)) return;
+        e.Handled = true; dismissingModalClick = CaptureMouse(); CloseSettings();
+    }
     // Selects the tab that holds the widget; false when it is not on a visible tab.
     internal bool ShowWidget(string widgetId)
     {
@@ -148,7 +172,7 @@ public partial class OverlayTabs : UserControl, IWidgetLayer
 
     public void MoveTab(int direction)
     {
-        if (modals.IsOpen) return;
+        if (modals.IsOpen || IsSettingsActive) return;
         var visible = Tabs.Items.OfType<TabItem>().Where(item => item.Visibility == Visibility.Visible).ToList();
         if (visible.Count == 0) return;
         if (!TrySaveEdits()) return;

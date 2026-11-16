@@ -12,7 +12,7 @@ internal static partial class Program
 {
     private static void CheckOverlaySettings(string qa)
     {
-        var hud=new OverlayTabs();var tabs=(TabControl)hud.FindName("Tabs");tabs.SelectedItem=hud.FindName("SettingsTab");
+        var hud=new OverlayTabs();var tabs=(TabControl)hud.FindName("Tabs");hud.OpenSettings();
         var view=(OverlaySettingsView)hud.FindName("SettingsView");
         var search=(TextBox)view.FindName("SearchInput");var groups=(StackPanel)view.FindName("Groups");
         var scroll=(ScrollViewer)view.FindName("SettingsScroll");var status=(TextBlock)view.FindName("Status");
@@ -23,7 +23,7 @@ internal static partial class Program
         void Layout(Size size) { hud.Measure(size);hud.Arrange(new Rect(size));hud.UpdateLayout(); }
         void Screenshot(string name,Size size) {
             // A fresh detached tree gives each offscreen bitmap a complete first render.
-            var preview=new OverlayTabs();((TabControl)preview.FindName("Tabs")).SelectedItem=preview.FindName("SettingsTab");
+            var preview=new OverlayTabs();preview.OpenSettings();
             var previewView=(OverlaySettingsView)preview.FindName("SettingsView");((TextBox)previewView.FindName("SearchInput")).Text=search.Text;
             preview.Measure(size);preview.Arrange(new Rect(size));preview.UpdateLayout();
             var image=new RenderTargetBitmap((int)size.Width,(int)size.Height,96,96,PixelFormats.Pbgra32);image.Render(preview);

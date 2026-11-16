@@ -73,7 +73,7 @@ public static class PluginData
     private static void MoveBuiltInWidgets(AppData data)
     {
         // A never-edited layout used to show these widgets; someone with schedules keeps the layout they saw.
-        if (data.Workspace == null && (data.CalendarDays.Count > 0 || data.SchedulePresets != null)) data.Workspace = WorkspaceLayouts.LegacyDefault();
+        if (data.Workspace == null && (data.CalendarDays.Count > 0 || data.SchedulePresets != null)) data.Workspace = WorkspaceLayouts.LegacyDefault(WorkspaceGrid.LegacyCellSize(data.Settings));
         foreach (var item in data.Workspace?.Tabs.SelectMany(t => t.Widgets) ?? []) {
             string current = WorkspaceLayouts.CurrentWidget(item.WidgetId);
             if (current == item.WidgetId) continue;
@@ -117,7 +117,7 @@ public static class PluginData
             var layout = WorkspaceLayouts.Default();
             layout.GridVersion = 3;
             layout.Tabs[0].Widgets.Add(new() { Id = "builtin.sleep", WidgetId = "builtin.sleep", X = -6, Y = -1, Width = 9, Height = 3 });
-            data.Workspace = WorkspaceLayouts.Normalize(layout);
+            data.Workspace = WorkspaceLayouts.Normalize(layout, WorkspaceGrid.LegacyCellSize(data.Settings));
         }
         foreach (var item in data.Workspace?.Tabs.SelectMany(t => t.Widgets) ?? [])
             if (item.WidgetId == "builtin.sleep") item.WidgetId = LegacySleep.DurationWidget;
@@ -143,7 +143,7 @@ public static class PluginData
         if (data.Workspace == null && used) {
             var layout = WorkspaceLayouts.Default();
             layout.GridVersion = 4;
-            data.Workspace = WorkspaceLayouts.Normalize(layout);
+            data.Workspace = WorkspaceLayouts.Normalize(layout, WorkspaceGrid.LegacyCellSize(data.Settings));
         }
     }
 

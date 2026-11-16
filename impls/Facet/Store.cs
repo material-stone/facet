@@ -50,7 +50,7 @@ public sealed class Store
             string text = LegacySchedule.Merge(store.Read(), stored, data.CalendarDays, data.SchedulePresets);
             if (!store.Write(text) || store.Read() != text) throw new IOException("복사한 일정 저장소가 원본과 다릅니다.");
             // A never-edited layout showed the calendar; it keeps showing it as the plugin's widget.
-            data.Workspace ??= WorkspaceLayouts.LegacyDefault();
+            data.Workspace ??= WorkspaceLayouts.LegacyDefault(WorkspaceGrid.LegacyCellSize(data.Settings));
             data.CalendarDays = []; data.SchedulePresets = null;
             WriteProtected(PathName, Protect(RecordsBytes(data), true));
             if (File.Exists(CalendarPathName)) File.Move(CalendarPathName, CalendarPathName + ".moved", true);
@@ -195,7 +195,7 @@ public sealed class Store
             throw new InvalidDataException("날짜별 할 일과 노트 형식이 올바르지 않습니다.");
         foreach (var day in d.CalendarDays) CalendarNotes.Validate(day);
         d.SchedulePresets = CleanPresets(d.SchedulePresets);
-        if (d.Workspace != null) d.Workspace = WorkspaceLayouts.Normalize(d.Workspace);
+        if (d.Workspace != null) d.Workspace = WorkspaceLayouts.Normalize(d.Workspace, WorkspaceGrid.LegacyCellSize(d.Settings));
         if (d.EnabledPlugins != null) d.EnabledPlugins = d.EnabledPlugins.Where(p => p != null && !string.IsNullOrEmpty(p.Id) && !string.IsNullOrEmpty(p.Fingerprint)).DistinctBy(p => p.Id).ToList();
         PluginData.Normalize(d);
         UserReminders.ValidateAll(d.Reminders);

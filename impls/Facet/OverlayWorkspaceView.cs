@@ -2,7 +2,8 @@ using System.Windows.Input;
 
 namespace Facet;
 
-// Scales a tile's view to fit: fixed or content-height views shrink uniformly and fill views get the exact tile.
+// Scales a view to fit: fixed or content-height views shrink uniformly and fill views get the exact size.
+// Boards no longer use it (they stretch with WidgetStretch, ADR 0108); previews of single widgets still do.
 internal sealed class WidgetFit : Decorator
 {
     internal bool FillHeight { get; init; }
@@ -35,7 +36,31 @@ internal sealed class WidgetFit : Decorator
     }
 }
 
-// One tab's board, three screens wide and tall around its origin, which sits between four cells at the center plus the view offset.
+// Lays a widget's view out at its base size and stretches it to the tile, width and height apart (ADR 0108).
+internal sealed class WidgetStretch : Decorator
+{
+    internal double BaseWidth { get; init; }
+    internal double BaseHeight { get; init; }
+    internal Size Scale { get; private set; } = new(1, 1);
+
+    protected override Size MeasureOverride(Size available)
+    {
+        Child?.Measure(new Size(Math.Max(1, BaseWidth), Math.Max(1, BaseHeight)));
+        return new Size(double.IsFinite(available.Width) ? available.Width : BaseWidth, double.IsFinite(available.Height) ? available.Height : BaseHeight);
+    }
+
+    protected override Size ArrangeOverride(Size size)
+    {
+        if (Child == null) return size;
+        double width = Math.Max(1, BaseWidth), height = Math.Max(1, BaseHeight);
+        Scale = new(size.Width / width, size.Height / height);
+        Child.RenderTransform = Scale is { Width: 1, Height: 1 } ? Transform.Identity : new ScaleTransform(Scale.Width, Scale.Height);
+        Child.Arrange(new Rect(0, 0, width, height));
+        return size;
+    }
+}
+
+// One tab's board, three screens wide and tall around its origin plus the view offset. Placements are board pixels (ADR 0108).
 internal sealed class OverlayWorkspaceView : UserControl
 {
     // Shared by every board; Controller sets it from Settings and the boards render again.
@@ -53,6 +78,8 @@ internal sealed class OverlayWorkspaceView : UserControl
     private bool hasView;
     private (Point Start, double X, double Y)? pan;
     private const double GridSweepMs = 420, GridCellFadeMs = 200, GridMarkLevel = .6;
+    // Marks closer than this on screen are thinned to every Nth grid line, so tiny cells stay cheap to draw.
+    private const double MinMarkSpacing = 10;
     private readonly System.Diagnostics.Stopwatch gridClock = new();
     private bool gridFading;
     private double? gridInterruptedAt;
@@ -60,21 +87,27 @@ internal sealed class OverlayWorkspaceView : UserControl
     internal string TabId { get; }
     internal bool IsDragging => drag != null;
     internal bool IsPanning => pan != null;
+    // Edit drags snap to the grid; Alt inverts it for one drag.
+    internal bool Snap { get; set; } = true;
     // Changed since the last save; a render keeps this live view instead of the stored one.
     internal bool ViewDirty { get; private set; }
     internal double ViewX => viewX;
     internal double ViewY => viewY;
     internal double Zoom => zoom;
     internal event Action? ViewChanged;
-    // Whole cells from the origin to each edge; unmeasured boards apply no limit yet.
-    internal int HalfColumns => ActualWidth > 0 ? (int)(ActualWidth * 1.5 / Pitch) : WorkspaceLayouts.MaxCell;
-    internal int HalfRows => ActualHeight > 0 ? (int)(ActualHeight * 1.5 / Pitch) : WorkspaceLayouts.MaxCell;
+    // Fires while the tab bar's tile moves or after it settles, so the real tab strip can follow it.
+    internal event Action? TabBarMoved;
+    // Board pixels from the origin to each edge; unmeasured boards apply no limit yet.
+    internal int HalfWidth => ActualWidth > 0 ? (int)(ActualWidth * 1.5) : WorkspaceLayouts.MaxCell;
+    internal int HalfHeight => ActualHeight > 0 ? (int)(ActualHeight * 1.5) : WorkspaceLayouts.MaxCell;
     internal Func<WidgetPlacement, FrameworkElement>? CreateView;
-    internal Func<WidgetPlacement, (int Columns, int Rows)>? MinimumSize;
-    internal Func<WidgetPlacement, bool>? FillsHeight;
+    internal Func<WidgetPlacement, (int Width, int Height)>? BaseSize;
     internal Func<WidgetPlacement, bool>? HasPanel;
     internal Func<string, int, int, int, int, bool>? CommitMove;
     internal Action<string>? RemoveRequested;
+    // The tab bar widget's placement shared by every tab; its tile only marks the place, the strip itself lies under the board.
+    internal Func<WidgetPlacement?>? TabBar;
+    internal Func<int, int, int, int, bool>? CommitTabBar;
 
     internal OverlayWorkspaceView(string tabId)
     {
@@ -92,7 +125,7 @@ internal sealed class OverlayWorkspaceView : UserControl
     private void UpdateView()
     {
         double size = Zoom;
-        if (hasView) { viewX = Limit(viewX, HalfColumns * Pitch, ActualWidth, size); viewY = Limit(viewY, HalfRows * Pitch, ActualHeight, size); }
+        if (hasView) { viewX = Limit(viewX, HalfWidth, ActualWidth, size); viewY = Limit(viewY, HalfHeight, ActualHeight, size); }
         scale.ScaleX = scale.ScaleY = size;
         move.X = ActualWidth / 2 + viewX; move.Y = ActualHeight / 2 + viewY;
         if (editing) InvalidateVisual();
@@ -127,40 +160,40 @@ internal sealed class OverlayWorkspaceView : UserControl
     internal void ReturnToOrigin() => PanTo(0, 0);
     internal void MarkViewSaved() => ViewDirty = false;
 
-    // The cell at the top-left of a default-sized area around the view's center.
-    internal (int Left, int Top) ViewedArea() => (
-        (int)Math.Round(-viewX / Zoom / Pitch) - WorkspaceLayouts.Columns / 2,
-        (int)Math.Round(-viewY / Zoom / Pitch) - WorkspaceLayouts.Rows / 2);
+    // The board point at the middle of the screen.
+    internal (int X, int Y) ViewedCenter() => ((int)Math.Round(-viewX / Zoom), (int)Math.Round(-viewY / Zoom));
 
-    // A dragged tile covers the cells of its preview, not the ones it left.
-    internal bool IsCellCovered(int column, int row)
-    {
-        foreach (var (id, (_, item)) in tiles) {
-            var (x, y, width, height) = drag is { } state && state.Id == id ? (state.NextX, state.NextY, state.NextWidth, state.NextHeight) : (item.X, item.Y, item.Width, item.Height);
-            if (column >= x && column < x + width && row >= y && row < y + height) return true;
-        }
-        return false;
-    }
+    // Board pixels to this view's own coordinates.
+    internal Point ToScreen(double x, double y) => new(ActualWidth / 2 + viewX + x * Zoom, ActualHeight / 2 + viewY + y * Zoom);
+
+    // The tab bar's place, following its tile while it is dragged.
+    internal (int X, int Y, int Width, int Height)? TabBarRect =>
+        drag is { } state && state.Id == WorkspaceLayouts.TabBarWidget ? (state.NextX, state.NextY, state.NextWidth, state.NextHeight)
+        : tiles.TryGetValue(WorkspaceLayouts.TabBarWidget, out var bar) ? (bar.Item.X, bar.Item.Y, bar.Item.Width, bar.Item.Height) : null;
+
+    private IEnumerable<(string Id, int X, int Y, int Width, int Height)> Rects() =>
+        tiles.Select(pair => drag is { } state && state.Id == pair.Key ? (pair.Key, state.NextX, state.NextY, state.NextWidth, state.NextHeight)
+            : (pair.Key, pair.Value.Item.X, pair.Value.Item.Y, pair.Value.Item.Width, pair.Value.Item.Height));
+
+    // A dragged tile covers its preview, not the place it left. Edges count as uncovered so marks run along them.
+    internal bool IsCovered(double x, double y) => Rects().Any(r => x > r.X && x < r.X + r.Width && y > r.Y && y < r.Y + r.Height);
 
     protected override void OnRender(DrawingContext context)
     {
         base.OnRender(context);
         if ((!editing && !gridFading) || FindResource("Edge") is not Brush edge) return;
-        double size = Zoom, pitch = Pitch * size, originX = ActualWidth / 2 + viewX, originY = ActualHeight / 2 + viewY;
+        double size = Zoom, originX = ActualWidth / 2 + viewX, originY = ActualHeight / 2 + viewY;
+        int stride = Math.Max(1, (int)Math.Ceiling(MinMarkSpacing / (Pitch * size)));
+        double unit = Pitch * stride, pitch = unit * size;
+        int halfColumns = (int)(HalfWidth / unit), halfRows = (int)(HalfHeight / unit);
         var tint = edge.Clone(); tint.Opacity = GridMarkLevel; tint.Freeze();
         var pen = new Pen(tint, 1); pen.Freeze();
-        int firstRow = Math.Max(-HalfRows, (int)Math.Floor(-originY / pitch)), firstColumn = Math.Max(-HalfColumns, (int)Math.Floor(-originX / pitch));
-        int lastRow = Math.Min(HalfRows, (int)Math.Ceiling((ActualHeight - originY) / pitch)), lastColumn = Math.Min(HalfColumns, (int)Math.Ceiling((ActualWidth - originX) / pitch));
-        // Coverage is read once per frame, and marks are grouped by fade level so a frame issues a few dozen draws, not one per mark.
-        int columns = lastColumn - firstColumn + 2, rows = lastRow - firstRow + 2;
-        if (columns <= 0 || rows <= 0) return;
-        var covered = new bool[columns, rows];
-        foreach (var (id, (_, item)) in tiles) {
-            var (left, top, width, height) = drag is { } state && state.Id == id ? (state.NextX, state.NextY, state.NextWidth, state.NextHeight) : (item.X, item.Y, item.Width, item.Height);
-            for (int c = Math.Max(left, firstColumn - 1); c < Math.Min(left + width, lastColumn + 1); c++)
-                for (int r = Math.Max(top, firstRow - 1); r < Math.Min(top + height, lastRow + 1); r++) covered[c - firstColumn + 1, r - firstRow + 1] = true;
-        }
-        bool Covered(int column, int row) => covered[column - firstColumn + 1, row - firstRow + 1];
+        int firstRow = Math.Max(-halfRows, (int)Math.Floor(-originY / pitch)), firstColumn = Math.Max(-halfColumns, (int)Math.Floor(-originX / pitch));
+        int lastRow = Math.Min(halfRows, (int)Math.Ceiling((ActualHeight - originY) / pitch)), lastColumn = Math.Min(halfColumns, (int)Math.Ceiling((ActualWidth - originX) / pitch));
+        if (lastColumn < firstColumn || lastRow < firstRow) return;
+        // Tiles are read once per frame in screen pixels, and marks are grouped by fade level so a frame issues a few dozen draws, not one per mark.
+        var covered = Rects().Select(r => (Left: originX + r.X * size, Top: originY + r.Y * size, Right: originX + (r.X + r.Width) * size, Bottom: originY + (r.Y + r.Height) * size)).ToArray();
+        bool Inside(double x, double y) { foreach (var r in covered) if (x > r.Left && x < r.Right && y > r.Top && y < r.Bottom) return true; return false; }
         const int Steps = 24;
         var groups = new StreamGeometryContext?[Steps + 1];
         var shapes = new StreamGeometry?[Steps + 1];
@@ -179,13 +212,13 @@ internal sealed class OverlayWorkspaceView : UserControl
             for (int column = firstColumn; column <= lastColumn; column++) {
                 double x = originX + column * pitch, y = originY + row * pitch;
                 if (lines) {
-                    if (column < lastColumn && row > -HalfRows && row < HalfRows && !(Covered(column, row) && Covered(column, row - 1)))
+                    if (column < lastColumn && row > -halfRows && row < halfRows && !Inside(x + pitch / 2, y))
                         Line(Group(x + pitch / 2, y), x, y, x + pitch, y);
-                    if (row < lastRow && column > -HalfColumns && column < HalfColumns && !(Covered(column, row) && Covered(column - 1, row)))
+                    if (row < lastRow && column > -halfColumns && column < halfColumns && !Inside(x, y + pitch / 2))
                         Line(Group(x, y + pitch / 2), x, y, x, y + pitch);
                     continue;
                 }
-                if (Covered(column, row) && Covered(column - 1, row) && Covered(column, row - 1) && Covered(column - 1, row - 1)) continue;
+                if (Inside(x, y)) continue;
                 if (Group(x, y) is not { } g) continue;
                 if (crosses) { Line(g, x - arm, y, x + arm, y); Line(g, x, y - arm, x, y + arm); }
                 else {
@@ -278,7 +311,7 @@ internal sealed class OverlayWorkspaceView : UserControl
     internal void ReleaseViews()
     {
         foreach (var (tile, _) in tiles.Values)
-            if (tile.Children.OfType<WidgetFit>().FirstOrDefault() is { } fit) fit.Child = null;
+            if (tile.Children.OfType<WidgetStretch>().FirstOrDefault() is { } fit) fit.Child = null;
         tiles.Clear(); surface.Children.Clear();
     }
 
@@ -287,48 +320,73 @@ internal sealed class OverlayWorkspaceView : UserControl
         bool toggled = editing != edit;
         tab = next; editing = edit; drag = null; ReleaseViews();
         if (toggled) FadeGrid();
-        // Empty cells take pointer input only while editing, so a fixed page below keeps working otherwise.
+        // Empty space takes pointer input only while editing, so the tab strip and fixed pages below keep working otherwise.
         Background = editing ? Brushes.Transparent : null;
         if (!ViewDirty) {
             hasView = next.View != null;
             (viewX, viewY, zoom) = next.View is { } view ? (view.X, view.Y, view.Zoom) : (0, 0, 1);
         }
         foreach (var item in next.Widgets) {
-            var tile = BuildTile(item);
+            var tile = BuildTile(item, false);
             tiles[item.Id] = (tile, item); surface.Children.Add(tile); Place(tile, item.X, item.Y, item.Width, item.Height);
+        }
+        if (TabBar?.Invoke() is { } bar) {
+            var tile = BuildTile(bar, true);
+            tiles[bar.Id] = (tile, bar); surface.Children.Add(tile); Place(tile, bar.X, bar.Y, bar.Width, bar.Height);
         }
         UpdateView();
         InvalidateVisual();
+        TabBarMoved?.Invoke();
     }
 
-    private Grid BuildTile(WidgetPlacement item)
+    // The tab bar's default place follows the strip's natural size until the user moves it.
+    internal void RefreshTabBar()
+    {
+        if (drag?.Id == WorkspaceLayouts.TabBarWidget || TabBar?.Invoke() is not { } bar || !tiles.TryGetValue(bar.Id, out var known)) return;
+        tiles[bar.Id] = (known.Tile, bar);
+        Place(known.Tile, bar.X, bar.Y, bar.Width, bar.Height);
+        if (editing) InvalidateVisual();
+        TabBarMoved?.Invoke();
+    }
+
+    private Grid BuildTile(WidgetPlacement item, bool tabBar)
     {
         var tile = new Grid { Tag = item.Id };
-        double padding = 0;
-        var inset = new Thickness(0);
-        bool panel = HasPanel?.Invoke(item) == true;
-        if (panel && Facet.Plugins.WidgetTheme.IsHud) {
-            inset = new(20, 14, 20, 14);
-            tile.Children.Add(new Facet.Widgets.HudPanel());
+        if (tabBar) {
+            if (!editing) { tile.IsHitTestVisible = false; return tile; }
         }
-        else if (panel) {
-            // A skin without a frame image still gives the panel type its token surface.
-            var frame = Design.Skins.Visuals?.Frame;
-            padding = frame?.Padding ?? 12;
-            tile.Children.Add(frame != null ? new Design.NineSliceFrame(frame) : new Border { Background = (Brush)FindResource("Panel"), BorderBrush = (Brush)FindResource("Edge"), BorderThickness = new(1), CornerRadius = new(12), IsHitTestVisible = false });
+        else {
+            var inset = new Thickness(0);
+            bool panel = HasPanel?.Invoke(item) == true;
+            if (panel && Facet.Plugins.WidgetTheme.IsHud) {
+                inset = new(20, 14, 20, 14);
+                tile.Children.Add(new Facet.Widgets.HudPanel());
+            }
+            else if (panel) {
+                // A skin without a frame image still gives the panel type its token surface.
+                var frame = Design.Skins.Visuals?.Frame;
+                inset = new(frame?.Padding ?? 12);
+                tile.Children.Add(frame != null ? new Design.NineSliceFrame(frame) : new Border { Background = (Brush)FindResource("Panel"), BorderBrush = (Brush)FindResource("Edge"), BorderThickness = new(1), CornerRadius = new(12), IsHitTestVisible = false });
+            }
+            // The panel stays at tile size; only the view inside it stretches from its base size.
+            var (baseWidth, baseHeight) = BaseSize?.Invoke(item) ?? (item.Width, item.Height);
+            tile.Children.Add(new WidgetStretch { BaseWidth = baseWidth - inset.Left - inset.Right, BaseHeight = baseHeight - inset.Top - inset.Bottom, Margin = inset, Child = CreateView?.Invoke(item) });
+            if (!editing) return tile;
         }
-        tile.Children.Add(new WidgetFit { FillHeight = FillsHeight?.Invoke(item) == true, StretchChild = panel && Facet.Plugins.WidgetTheme.IsHud, Margin = panel && Facet.Plugins.WidgetTheme.IsHud ? inset : new(padding), Child = CreateView?.Invoke(item) });
-        if (!editing) return tile;
         var cover = new Border { Background = (Brush)FindResource("Panel"), Opacity = .55, CornerRadius = new(8), BorderThickness = new(1), BorderBrush = (Brush)FindResource("Mint"), Cursor = Cursors.SizeAll };
-        System.Windows.Automation.AutomationProperties.SetName(cover, "위젯 이동");
+        System.Windows.Automation.AutomationProperties.SetName(cover, tabBar ? "탭 막대 이동" : "위젯 이동");
         cover.MouseLeftButtonDown += (_, e) => BeginDrag(item, false, cover, e);
         Hook(cover); tile.Children.Add(cover);
-        var remove = new Button { Content = "✕", Width = 28, Height = 28, Padding = new(0), Margin = new(4), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
-        System.Windows.Automation.AutomationProperties.SetName(remove, "위젯 제거");
-        remove.Click += (_, _) => RemoveRequested?.Invoke(item.Id);
-        tile.Children.Add(remove);
-        var handle = new Border { Width = 20, Height = 20, Margin = new(2), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new(4), Background = (Brush)FindResource("Mint"), Cursor = Cursors.SizeNWSE };
-        System.Windows.Automation.AutomationProperties.SetName(handle, "위젯 크기 조절");
+        // The tab bar cannot be removed.
+        if (!tabBar) {
+            var remove = new Button { Content = "✕", Width = 28, Height = 28, Padding = new(0), Margin = new(4), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
+            System.Windows.Automation.AutomationProperties.SetName(remove, "위젯 제거");
+            remove.Click += (_, _) => RemoveRequested?.Invoke(item.Id);
+            tile.Children.Add(remove);
+        }
+        var handle = new Border { Width = 20, Height = 20, Margin = new(2), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new(4), Background = (Brush)FindResource("Mint"), Cursor = Cursors.SizeNWSE,
+            ToolTip = "끌어서 크기 조절 · Shift: 비율 유지 · Alt: 스냅 반대로" };
+        System.Windows.Automation.AutomationProperties.SetName(handle, tabBar ? "탭 막대 크기 조절" : "위젯 크기 조절");
         handle.MouseLeftButtonDown += (_, e) => BeginDrag(item, true, handle, e);
         Hook(handle); tile.Children.Add(handle);
         return tile;
@@ -336,15 +394,15 @@ internal sealed class OverlayWorkspaceView : UserControl
 
     private void Hook(UIElement target)
     {
-        target.MouseMove += (_, e) => { if (drag != null) UpdateDrag(e.GetPosition(surface)); };
+        target.MouseMove += (_, e) => { if (drag != null) UpdateDrag(e.GetPosition(surface), Keyboard.Modifiers); };
         target.MouseLeftButtonUp += (_, e) => { if (drag != null) { e.Handled = true; FinishDrag(); target.ReleaseMouseCapture(); } };
         target.LostMouseCapture += (_, _) => CancelDrag();
     }
 
     private static void Place(FrameworkElement tile, int x, int y, int width, int height)
     {
-        Canvas.SetLeft(tile, x * Pitch); Canvas.SetTop(tile, y * Pitch);
-        tile.Width = width * Pitch; tile.Height = height * Pitch;
+        Canvas.SetLeft(tile, x); Canvas.SetTop(tile, y);
+        tile.Width = width; tile.Height = height;
     }
 
     private void BeginDrag(WidgetPlacement item, bool resize, UIElement capture, MouseButtonEventArgs e)
@@ -355,27 +413,28 @@ internal sealed class OverlayWorkspaceView : UserControl
         capture.CaptureMouse();
     }
 
-    // Snaps the pointer to cells; the tile previews the snapped rectangle and dims while it cannot be dropped.
-    internal void UpdateDrag(Point position)
+    private bool CanDrop(string id, int x, int y, int width, int height) =>
+        id == WorkspaceLayouts.TabBarWidget ? WorkspaceLayouts.InBounds(x, y, width, height) : tab != null && WorkspaceLayouts.CanPlace(tab, id, x, y, width, height);
+
+    // Moves by the pointer, snapped to the grid unless Snap is off (Alt inverts it); a corner drag stretches freely or,
+    // with Shift, keeps the start's aspect ratio. The tile previews the result and dims while it cannot be dropped.
+    internal void UpdateDrag(Point position, ModifierKeys modifiers = ModifierKeys.None)
     {
         if (drag is not { } state || tab == null) return;
-        int columns = (int)Math.Round((position.X - state.Start.X) / Pitch), rows = (int)Math.Round((position.Y - state.Start.Y) / Pitch);
-        var item = tiles[state.Id].Item;
+        int step = Snap ^ modifiers.HasFlag(ModifierKeys.Alt) ? Math.Max(1, (int)Pitch) : 1;
+        double dx = position.X - state.Start.X, dy = position.Y - state.Start.Y;
         int x = state.X, y = state.Y, width = state.Width, height = state.Height;
-        if (state.Resize) {
-            var minimum = MinimumSize?.Invoke(item) ?? (1, 1);
-            width = Math.Clamp(width + columns, minimum.Item1, Math.Max(minimum.Item1, HalfColumns - x));
-            height = Math.Clamp(height + rows, minimum.Item2, Math.Max(minimum.Item2, HalfRows - y));
-        }
+        if (state.Resize) (width, height) = WorkspaceLayouts.Resize(x, y, width, height, dx, dy, modifiers.HasFlag(ModifierKeys.Shift), step, HalfWidth, HalfHeight);
         else {
-            x = Math.Clamp(x + columns, -HalfColumns, Math.Max(-HalfColumns, HalfColumns - width));
-            y = Math.Clamp(y + rows, -HalfRows, Math.Max(-HalfRows, HalfRows - height));
+            x = Math.Clamp(WorkspaceLayouts.Snap(x + dx, step), -HalfWidth, Math.Max(-HalfWidth, HalfWidth - width));
+            y = Math.Clamp(WorkspaceLayouts.Snap(y + dy, step), -HalfHeight, Math.Max(-HalfHeight, HalfHeight - height));
         }
         drag = state with { NextX = x, NextY = y, NextWidth = width, NextHeight = height };
         var tile = tiles[state.Id].Tile;
         Place(tile, x, y, width, height);
-        tile.Opacity = WorkspaceLayouts.CanPlace(tab, state.Id, x, y, width, height) ? 1 : .4;
+        tile.Opacity = CanDrop(state.Id, x, y, width, height) ? 1 : .4;
         InvalidateVisual();
+        if (state.Id == WorkspaceLayouts.TabBarWidget) TabBarMoved?.Invoke();
     }
 
     internal void FinishDrag()
@@ -384,10 +443,12 @@ internal sealed class OverlayWorkspaceView : UserControl
         drag = null;
         var tile = tiles[state.Id].Tile; Panel.SetZIndex(tile, 0); tile.Opacity = 1;
         bool changed = (state.NextX, state.NextY, state.NextWidth, state.NextHeight) != (state.X, state.Y, state.Width, state.Height);
-        if (changed && WorkspaceLayouts.CanPlace(tab, state.Id, state.NextX, state.NextY, state.NextWidth, state.NextHeight)
-            && CommitMove?.Invoke(state.Id, state.NextX, state.NextY, state.NextWidth, state.NextHeight) == true) return;
+        bool bar = state.Id == WorkspaceLayouts.TabBarWidget;
+        if (changed && CanDrop(state.Id, state.NextX, state.NextY, state.NextWidth, state.NextHeight)
+            && (bar ? CommitTabBar?.Invoke(state.NextX, state.NextY, state.NextWidth, state.NextHeight) : CommitMove?.Invoke(state.Id, state.NextX, state.NextY, state.NextWidth, state.NextHeight)) == true) return;
         Place(tile, state.X, state.Y, state.Width, state.Height);
         InvalidateVisual();
+        if (bar) TabBarMoved?.Invoke();
     }
 
     internal bool CancelDrag()
@@ -397,12 +458,15 @@ internal sealed class OverlayWorkspaceView : UserControl
         var tile = tiles[state.Id].Tile; Panel.SetZIndex(tile, 0); tile.Opacity = 1;
         Place(tile, state.X, state.Y, state.Width, state.Height);
         InvalidateVisual();
+        if (state.Id == WorkspaceLayouts.TabBarWidget) TabBarMoved?.Invoke();
         return true;
     }
 
-    internal void BeginDragForCheck(string id)
+    internal void BeginDragForCheck(string id, bool resize = false)
     {
         var item = tiles[id].Item;
-        drag = (id, false, new Point(), item.X, item.Y, item.Width, item.Height, item.X, item.Y, item.Width, item.Height);
+        drag = (id, resize, new Point(), item.X, item.Y, item.Width, item.Height, item.X, item.Y, item.Width, item.Height);
     }
+
+    internal FrameworkElement? TileForCheck(string id) => tiles.TryGetValue(id, out var known) ? known.Tile : null;
 }

@@ -2,9 +2,13 @@ namespace Facet.Core;
 
 public sealed class WorkspaceLayout
 {
-    // Below 2, placements are the old 12x8 grid's top-left based cells.
+    // Below 2, placements are the old 12x8 grid's top-left based cells; below 7 they are cells around the origin; from 7 board pixels.
     public int GridVersion { get; set; }
     public List<WorkspaceTab> Tabs { get; set; } = [];
+    // The tab bar widget's one placement, shared by every tab; null keeps it at the top center of the first view (ADR 0108).
+    public WidgetPlacement? TabBar { get; set; }
+    // Edit mode snaps positions and sizes to the grid; off moves them by single pixels.
+    public bool Snap { get; set; } = true;
 }
 
 // X and Y move the origin from the board's center in screen pixels.
@@ -26,6 +30,7 @@ public sealed class WorkspaceTab
     public List<WidgetPlacement> Widgets { get; set; } = [];
 }
 
+// Board pixels at 100% zoom, measured from the board's origin (ADR 0108).
 public sealed class WidgetPlacement
 {
     public string Id { get; set; } = "";
@@ -42,23 +47,34 @@ public sealed class PluginGrant
     public string Fingerprint { get; set; } = "";
 }
 
-// How the board's cells look while editing. Cells touch; the marks sit on their shared edges.
+// How the board's grid looks while editing and what edit mode snaps to. Cells touch; the marks sit on their shared edges.
 public static class WorkspaceGrid
 {
-    public const int DefaultCellSize = 96, MinCellSize = 24, MaxCellSize = 160;
+    public const int DefaultCellSize = 96, MinCellSize = 2, MaxCellSize = 160, LegacyMinCellSize = 24;
     public const string Dots = "dots", Lines = "lines", Crosses = "crosses";
     public static readonly (string Id, string Name)[] Styles = [(Dots, "점"), (Lines, "선"), (Crosses, "십자")];
     public static int CellSize(Settings settings) => Math.Clamp(settings.GridCellSize, MinCellSize, MaxCellSize);
+    // The cell size the saved cell placements were drawn with, for the one-time move to pixels.
+    public static int LegacyCellSize(Settings? settings) => Math.Clamp(settings?.GridCellSize ?? DefaultCellSize, LegacyMinCellSize, MaxCellSize);
     public static string Style(Settings settings) => Styles.Any(s => s.Id == settings.GridStyle) ? settings.GridStyle : Dots;
 }
 
 public static class WorkspaceLayouts
 {
-    // Columns and Rows size the default area around the origin; the board itself has no edge in practice.
-    public const int Columns = 12, Rows = 8, MaxTabs = 12, MaxTitleLength = 20, GridVersion = 6, MaxCell = 100000, CalendarColumns = 14, CalendarRows = 8;
+    // Columns and Rows size the default area around the origin in cells of the old grid; the board itself has no edge in practice.
+    // MaxCell bounds coordinates and sizes in board pixels.
+    public const int Columns = 12, Rows = 8, MaxTabs = 12, MaxTitleLength = 20, GridVersion = 7, MaxCell = 100000, CalendarColumns = 14, CalendarRows = 8;
+    // Placements before GridVersion 7 counted cells; Normalize multiplies them by the cell size once.
+    private const int CellGridVersion = 6;
+    // The smallest side a widget can be dragged to.
+    public const int MinWidgetSize = 24;
+    private const int MinSearchStep = 8;
     // The board is three screens across, so the smallest zoom shows all of it.
     public const double MinZoom = 1d / 3, MaxZoom = 3, MaxOffset = 10000000;
+    // SettingsTab is the id of the former settings tab, which saved layouts may still hold; settings now open from the icon menu (ADR 0108).
     public const string DashboardTab = "dashboard", ScheduleTab = "schedule", SleepTab = "sleep", ChatTab = "chat", SettingsTab = "settings";
+    // The app's own tab bar widget; its placement is WorkspaceLayout.TabBar.
+    public const string TabBarWidget = "builtin.tabs";
     // Widget ids from when the app had its own widgets; PluginData moves their placements to the plugin widgets once (ADR 0101).
     public const string ClockWidget = "builtin.clock", WeatherWidget = "builtin.weather",
         AgendaWidget = "builtin.agenda", CalendarWidget = "builtin.calendar";
@@ -68,31 +84,56 @@ public static class WorkspaceLayouts
         ClockWidget => PluginClockWidget, WeatherWidget => PluginWeatherWidget, AgendaWidget => PluginAgendaWidget, CalendarWidget => PluginCalendarWidget, _ => widgetId };
     private static readonly (string Id, string Title)[] BuiltIn = [(DashboardTab, "대시보드"), (ScheduleTab, "일정"), (SleepTab, "수면"), (ChatTab, "채팅"), (SettingsTab, "설정")];
 
-    // Settings is the recovery path and stays free of widgets; every other tab holds a board.
+    // Every tab holds a board; only the former settings id never does.
     public static bool HoldsWidgets(string tabId) => tabId != SettingsTab;
 
-    // A fresh install has an empty dashboard and the settings tab; widgets come with plugins (ADR 0101).
+    // A fresh install has an empty dashboard; widgets come with plugins (ADR 0101).
     // The layout a never-edited install showed before the widgets became plugins, with the plugins' widget ids.
-    public static WorkspaceLayout LegacyDefault()
+    public static WorkspaceLayout LegacyDefault(int cellSize = WorkspaceGrid.DefaultCellSize)
     {
-        var layout = new WorkspaceLayout { GridVersion = GridVersion, Tabs = BuiltIn.Select(tab => new WorkspaceTab { Id = tab.Id, Title = tab.Title }).ToList() };
+        var layout = new WorkspaceLayout { GridVersion = CellGridVersion, Tabs = BuiltIn.Select(tab => new WorkspaceTab { Id = tab.Id, Title = tab.Title }).ToList() };
         WidgetPlacement Place(string id, int x, int y, int width, int height) => new() { Id = id, WidgetId = CurrentWidget(id), X = x, Y = y, Width = width, Height = height };
         layout.Tabs[0].Widgets = [Place(ClockWidget, -6, -4, 3, 1), Place(WeatherWidget, -3, -4, 4, 1), Place(AgendaWidget, -6, 2, 9, 2)];
         layout.Tabs[1].Widgets = [Place(CalendarWidget, -CalendarColumns / 2, -CalendarRows / 2, CalendarColumns, CalendarRows)];
-        return layout;
+        return Normalize(layout, cellSize);
     }
 
-    public static WorkspaceLayout Default() => new() { GridVersion = GridVersion, Tabs = BuiltIn.Where(tab => tab.Id is DashboardTab or SettingsTab).Select(tab => new WorkspaceTab { Id = tab.Id, Title = tab.Title }).ToList() };
+    public static WorkspaceLayout Default() => new() { GridVersion = GridVersion, Tabs = BuiltIn.Where(tab => tab.Id is DashboardTab).Select(tab => new WorkspaceTab { Id = tab.Id, Title = tab.Title }).ToList() };
 
     public static WorkspaceLayout Current(AppData data) => data.Workspace ?? Default();
 
     private static WorkspaceLayout Editable(AppData data) => data.Workspace ??= Default();
 
-    // Keeps the settings tab present, visible and last; drops only malformed entries.
-    // Layouts from before GridVersion 6 could not remove the first tabs, so a tab missing from one is restored once.
-    public static WorkspaceLayout Normalize(WorkspaceLayout? layout)
+    // Drops malformed entries and the former settings tab, and keeps at least one visible tab.
+    // A layout from before GridVersion 7 first runs the cell-era rules, then its cells become pixels of cellSize (ADR 0108).
+    public static WorkspaceLayout Normalize(WorkspaceLayout? layout, int cellSize = WorkspaceGrid.DefaultCellSize)
     {
-        var result = new WorkspaceLayout { GridVersion = GridVersion };
+        if (layout == null || layout.GridVersion < GridVersion) layout = Scale(NormalizeCells(layout), Math.Clamp(cellSize, WorkspaceGrid.LegacyMinCellSize, WorkspaceGrid.MaxCellSize));
+        var result = new WorkspaceLayout { GridVersion = GridVersion, Snap = layout.Snap };
+        foreach (var tab in layout.Tabs ?? []) {
+            if (tab == null || string.IsNullOrWhiteSpace(tab.Id) || !HoldsWidgets(tab.Id) || result.Tabs.Any(t => t.Id == tab.Id) || result.Tabs.Count >= MaxTabs) continue;
+            string? firstTitle = BuiltIn.FirstOrDefault(b => b.Id == tab.Id).Title;
+            if (firstTitle == null && string.IsNullOrWhiteSpace(tab.Title)) continue;
+            var kept = new WorkspaceTab { Id = tab.Id, Hidden = tab.Hidden, Icon = string.IsNullOrWhiteSpace(tab.Icon) ? null : tab.Icon, Title = string.IsNullOrWhiteSpace(tab.Title) ? firstTitle! : Trim(tab.Title), View = NormalizeView(tab.View) };
+            foreach (var item in tab.Widgets ?? []) {
+                if (item == null) continue;
+                if (!string.IsNullOrWhiteSpace(item.Id) && !string.IsNullOrWhiteSpace(item.WidgetId) && item.WidgetId != TabBarWidget && InBounds(item.X, item.Y, item.Width, item.Height) && IsFree(kept, item.X, item.Y, item.Width, item.Height, null)
+                    && !result.Tabs.Concat([kept]).SelectMany(t => t.Widgets).Any(w => w.Id == item.Id))
+                    kept.Widgets.Add(new() { Id = item.Id, WidgetId = item.WidgetId, X = item.X, Y = item.Y, Width = item.Width, Height = item.Height });
+            }
+            result.Tabs.Add(kept);
+        }
+        if (result.Tabs.Count == 0) result.Tabs.Add(new() { Id = DashboardTab, Title = BuiltIn[0].Title });
+        if (result.Tabs.All(t => t.Hidden)) result.Tabs[0].Hidden = false;
+        if (layout.TabBar is { } bar && InBounds(bar.X, bar.Y, bar.Width, bar.Height))
+            result.TabBar = new() { Id = TabBarWidget, WidgetId = TabBarWidget, X = bar.X, Y = bar.Y, Width = bar.Width, Height = bar.Height };
+        return result;
+    }
+
+    // The rules of GridVersion 6 and before, in cells. Settings stays last, and missing first tabs come back once.
+    private static WorkspaceLayout NormalizeCells(WorkspaceLayout? layout)
+    {
+        var result = new WorkspaceLayout { GridVersion = CellGridVersion, Snap = layout?.Snap ?? true };
         bool centerOldGrid = layout != null && layout.GridVersion < 2;
         foreach (var tab in layout?.Tabs ?? []) {
             if (tab == null || string.IsNullOrWhiteSpace(tab.Id) || result.Tabs.Any(t => t.Id == tab.Id)) continue;
@@ -118,24 +159,42 @@ public static class WorkspaceLayouts
         // Saved layouts from before the calendar widget get it once; removing it later stays removed.
         if (layout != null && layout.GridVersion < 3 && result.Tabs.All(t => t.Widgets.All(w => w.WidgetId is not (CalendarWidget or PluginCalendarWidget)))) {
             var schedule = result.Tabs.First(t => t.Id == ScheduleTab);
-            if (FindSlot(schedule, CalendarColumns, CalendarRows, -CalendarColumns / 2, -CalendarRows / 2, MaxCell, MaxCell) is { } slot)
+            if (FindCellSlot(schedule, CalendarColumns, CalendarRows, -CalendarColumns / 2, -CalendarRows / 2) is { } slot)
                 schedule.Widgets.Add(new() { Id = CalendarWidget, WidgetId = PluginCalendarWidget, X = slot.X, Y = slot.Y, Width = CalendarColumns, Height = CalendarRows });
         }
         // The sleep tab's fixed page became a widget in layouts from before GridVersion 4; it comes once and can then be removed.
         if (layout != null && layout.GridVersion < 4 && result.Tabs.All(t => t.Widgets.All(w => w.WidgetId != LegacySleep.PatternWidget))) {
             var sleep = result.Tabs.First(t => t.Id == SleepTab);
-            if (FindSlot(sleep, 9, 7, -5, -4, MaxCell, MaxCell) is { } slot)
+            if (FindCellSlot(sleep, 9, 7, -5, -4) is { } slot)
                 sleep.Widgets.Add(new() { Id = LegacySleep.PatternWidget, WidgetId = LegacySleep.PatternWidget, X = slot.X, Y = slot.Y, Width = 9, Height = 7 });
         }
         // The chat tab's fixed page became a widget in layouts from before GridVersion 5; it comes once and can then be removed.
         if (layout != null && layout.GridVersion < 5 && result.Tabs.All(t => t.Widgets.All(w => w.WidgetId != LegacyChat.Widget))) {
             var chat = result.Tabs.First(t => t.Id == ChatTab);
-            if (FindSlot(chat, Columns, Rows, -Columns / 2, -Rows / 2, MaxCell, MaxCell) is { } slot)
+            if (FindCellSlot(chat, Columns, Rows, -Columns / 2, -Rows / 2) is { } slot)
                 chat.Widgets.Add(new() { Id = LegacyChat.Widget, WidgetId = LegacyChat.Widget, X = slot.X, Y = slot.Y, Width = Columns, Height = Rows });
         }
-        var settings = result.Tabs.First(t => t.Id == SettingsTab);
-        result.Tabs.Remove(settings); settings.Hidden = false; result.Tabs.Add(settings);
         return result;
+    }
+
+    // Cell placements become board pixels; views were already screen pixels.
+    private static WorkspaceLayout Scale(WorkspaceLayout layout, int cell)
+    {
+        foreach (var item in layout.Tabs.SelectMany(t => t.Widgets)) {
+            item.X = (int)Math.Clamp((long)item.X * cell, -MaxCell, MaxCell); item.Y = (int)Math.Clamp((long)item.Y * cell, -MaxCell, MaxCell);
+            item.Width = (int)Math.Clamp((long)item.Width * cell, 1, MaxCell); item.Height = (int)Math.Clamp((long)item.Height * cell, 1, MaxCell);
+        }
+        layout.GridVersion = GridVersion;
+        return layout;
+    }
+
+    // The first free cell reading rows down from left and top, used only by the cell-era migrations.
+    private static (int X, int Y)? FindCellSlot(WorkspaceTab tab, int width, int height, int left, int top)
+    {
+        for (int y = top; y + height <= 1000; y++)
+            for (int x = left; x + width <= left + Columns || x == left; x++)
+                if (IsFree(tab, x, y, width, height, null)) return (x, y);
+        return null;
     }
 
     private static string Trim(string title) { title = title.Trim(); return title.Length > MaxTitleLength ? title[..MaxTitleLength] : title; }
@@ -149,6 +208,8 @@ public static class WorkspaceLayouts
         if (!HoldsWidgets(tabId)) throw new ArgumentException("이 탭에는 위젯 보드가 없습니다.");
         Tab(Editable(data), tabId).View = NormalizeView(new() { X = x, Y = y, Zoom = zoom }) ?? throw new ArgumentException("보드 시점이 올바르지 않습니다.");
     }
+
+    public static void SetSnap(AppData data, bool snap) => Editable(data).Snap = snap;
 
     public static bool InBounds(int x, int y, int width, int height) =>
         width >= 1 && height >= 1 && width <= MaxCell && height <= MaxCell && Math.Abs(x) <= MaxCell && Math.Abs(y) <= MaxCell;
@@ -170,18 +231,58 @@ public static class WorkspaceLayouts
         item.X = x; item.Y = y; item.Width = width; item.Height = height;
     }
 
-    // Reads rows down from the area's top-left, then the whole board within halfColumns and halfRows of the origin.
-    public static (int X, int Y)? FindSlot(WorkspaceTab tab, int width, int height, int left, int top, int halfColumns, int halfRows)
+    // The tab bar floats over every tab, so it is not held to the widgets' overlap rule.
+    public static void MoveTabBar(AppData data, int x, int y, int width, int height)
     {
-        if (width > halfColumns * 2 || height > halfRows * 2) return null;
-        left = Math.Clamp(left, -halfColumns, halfColumns - width);
-        top = Math.Clamp(top, -halfRows, halfRows - height);
-        for (int y = top; y + height <= halfRows; y++)
-            for (int x = left; x == left || (x + width <= left + Columns && x + width <= halfColumns); x++)
-                if (IsFree(tab, x, y, width, height, null)) return (x, y);
-        for (int y = -halfRows; y + height <= halfRows; y++)
-            for (int x = -halfColumns; x + width <= halfColumns; x++)
-                if (IsFree(tab, x, y, width, height, null)) return (x, y);
+        if (!InBounds(x, y, width, height)) throw new ArgumentException("탭 막대를 놓을 수 없는 위치입니다.");
+        Editable(data).TabBar = new() { Id = TabBarWidget, WidgetId = TabBarWidget, X = x, Y = y, Width = width, Height = height };
+    }
+
+    // Rounds a board coordinate to the grid; a step of 1 keeps every pixel.
+    public static int Snap(double value, int step) => step <= 1 ? (int)Math.Round(value) : (int)Math.Round(value / step) * step;
+
+    // A corner drag: free by default, or keeping the start's aspect ratio. Snapping moves the right edge to the grid,
+    // and the bottom too unless the ratio decides it. Sizes never go under MinWidgetSize nor past maxRight and maxBottom.
+    public static (int Width, int Height) Resize(int x, int y, int width, int height, double dx, double dy, bool keepRatio, int step, int maxRight = MaxCell, int maxBottom = MaxCell)
+    {
+        double w = width + dx, h = height + dy;
+        if (keepRatio && width > 0 && height > 0) {
+            double factor = Math.Max(w / width, h / height);
+            factor = Math.Max(factor, Math.Max((double)MinWidgetSize / width, (double)MinWidgetSize / height));
+            w = width * factor;
+            if (step > 1) w = Math.Max(MinWidgetSize, Snap(x + w, step) - x);
+            w = Math.Min(w, maxRight - x);
+            h = w * height / width;
+            if (y + h > maxBottom) { h = maxBottom - y; w = h * width / height; }
+            return (Math.Max(1, (int)Math.Round(w)), Math.Max(1, (int)Math.Round(h)));
+        }
+        if (step > 1) { w = Snap(x + w, step) - x; h = Snap(y + h, step) - y; }
+        return ((int)Math.Clamp(Math.Round(w), MinWidgetSize, Math.Max(MinWidgetSize, maxRight - x)), (int)Math.Clamp(Math.Round(h), MinWidgetSize, Math.Max(MinWidgetSize, maxBottom - y)));
+    }
+
+    // The free spot nearest to centering the widget on (centerX, centerY), searched in rings of step pixels within
+    // halfWidth and halfHeight of the origin. Null when nothing fits.
+    public static (int X, int Y)? FindSlot(WorkspaceTab tab, int width, int height, int centerX, int centerY, int halfWidth, int halfHeight, int step)
+    {
+        if (width > halfWidth * 2 || height > halfHeight * 2) return null;
+        // Without snapping the start keeps its exact pixel, but rings stay coarse enough to search quickly.
+        int ringStep = Math.Max(MinSearchStep, step);
+        step = Math.Max(1, step);
+        int startX = Math.Clamp(Snap(centerX - width / 2.0, step), -halfWidth, halfWidth - width);
+        int startY = Math.Clamp(Snap(centerY - height / 2.0, step), -halfHeight, halfHeight - height);
+        bool Fits(int x, int y) => x >= -halfWidth && x + width <= halfWidth && y >= -halfHeight && y + height <= halfHeight && IsFree(tab, x, y, width, height, null);
+        int rings = (int)Math.Ceiling(2.0 * Math.Max(halfWidth, halfHeight) / ringStep) + 1;
+        for (int ring = 0; ring <= rings; ring++) {
+            (int X, int Y)? best = null; long bestDistance = long.MaxValue;
+            for (int i = -ring; i <= ring; i++)
+                foreach (var (cx, cy) in new[] { (i, -ring), (i, ring), (-ring, i), (ring, i) }) {
+                    int x = startX + cx * ringStep, y = startY + cy * ringStep;
+                    long distance = (long)cx * cx + (long)cy * cy;
+                    if (distance < bestDistance && Fits(x, y)) { best = (x, y); bestDistance = distance; }
+                }
+            // Rings grow outward, so the first ring with a free spot holds the nearest one by ring distance.
+            if (best != null) return best;
+        }
         return null;
     }
 
@@ -194,14 +295,15 @@ public static class WorkspaceLayouts
         return null;
     }
 
-    // left and top are the cells at the corner of the area to fill, normally around what the user is looking at.
-    public static WidgetPlacement AddWidget(AppData data, string tabId, string widgetId, int width, int height, bool single, int left = -Columns / 2, int top = -Rows / 2, int halfColumns = MaxCell, int halfRows = MaxCell, bool onePerTab = false, bool oneTabOnly = false)
+    // centerX and centerY are the board point the new widget is centered on, normally the middle of what the user is looking at.
+    public static WidgetPlacement AddWidget(AppData data, string tabId, string widgetId, int width, int height, bool single, int centerX = 0, int centerY = 0, int halfWidth = MaxCell, int halfHeight = MaxCell, bool onePerTab = false, bool oneTabOnly = false, int step = WorkspaceGrid.DefaultCellSize)
     {
         var layout = Editable(data); var tab = Tab(layout, tabId);
         if (!HoldsWidgets(tabId)) throw new ArgumentException("이 탭에는 위젯을 놓을 수 없습니다.");
+        if (widgetId == TabBarWidget) throw new ArgumentException("탭 막대는 하나만 있습니다.");
         var problem = PlacementProblem(layout, tabId, widgetId, single || onePerTab, single || oneTabOnly);
         if (problem != null) throw new ArgumentException(problem);
-        var slot = FindSlot(tab, width, height, left, top, halfColumns, halfRows) ?? throw new ArgumentException("빈 공간이 부족합니다. 다른 위젯을 옮기거나 줄여 주세요.");
+        var slot = FindSlot(tab, width, height, centerX, centerY, halfWidth, halfHeight, step) ?? throw new ArgumentException("빈 공간이 부족합니다. 다른 위젯을 옮기거나 줄여 주세요.");
         var item = new WidgetPlacement { Id = Guid.NewGuid().ToString("N"), WidgetId = widgetId, X = slot.X, Y = slot.Y, Width = width, Height = height };
         tab.Widgets.Add(item); return item;
     }
@@ -215,42 +317,38 @@ public static class WorkspaceLayouts
         if (title.Length == 0) throw new ArgumentException("탭 이름을 입력해 주세요.");
         if (layout.Tabs.Count >= MaxTabs) throw new ArgumentException($"탭은 {MaxTabs}개까지 만들 수 있습니다.");
         var tab = new WorkspaceTab { Id = "tab-" + Guid.NewGuid().ToString("N"), Title = Trim(title) };
-        layout.Tabs.Insert(layout.Tabs.Count - 1, tab); return tab;
+        layout.Tabs.Add(tab); return tab;
     }
 
     public static void RenameTab(AppData data, string tabId, string title)
     {
         title = title.Trim();
-        if (tabId == SettingsTab) throw new ArgumentException("설정 탭의 이름은 바꿀 수 없습니다.");
         if (title.Length == 0) throw new ArgumentException("탭 이름을 입력해 주세요.");
         Tab(Editable(data), tabId).Title = Trim(title);
     }
 
-    public static void SetIcon(AppData data, string tabId, string icon)
-    {
-        if (tabId == SettingsTab) throw new ArgumentException("설정 탭의 아이콘은 바꿀 수 없습니다.");
-        Tab(Editable(data), tabId).Icon = icon;
-    }
+    public static void SetIcon(AppData data, string tabId, string icon) => Tab(Editable(data), tabId).Icon = icon;
 
+    // The overlay always keeps one visible tab, so the last one cannot be removed or hidden.
     public static void RemoveTab(AppData data, string tabId)
     {
-        if (tabId == SettingsTab) throw new ArgumentException("설정 탭은 삭제할 수 없습니다.");
-        Editable(data).Tabs.RemoveAll(t => t.Id == tabId);
+        var layout = Editable(data); var tab = Tab(layout, tabId);
+        if (layout.Tabs.Count(t => !t.Hidden && t != tab) == 0) throw new ArgumentException("보이는 탭이 하나는 있어야 합니다.");
+        layout.Tabs.Remove(tab);
     }
 
     public static void SetHidden(AppData data, string tabId, bool hidden)
     {
-        if (tabId == SettingsTab) throw new ArgumentException("설정 탭은 숨길 수 없습니다.");
-        Tab(Editable(data), tabId).Hidden = hidden;
+        var layout = Editable(data); var tab = Tab(layout, tabId);
+        if (hidden && layout.Tabs.Count(t => !t.Hidden && t != tab) == 0) throw new ArgumentException("보이는 탭이 하나는 있어야 합니다.");
+        tab.Hidden = hidden;
     }
 
-    // Settings stays last, so a tab can move only within the positions before it.
     public static void MoveTab(AppData data, string tabId, int direction)
     {
         var layout = Editable(data); var tab = Tab(layout, tabId);
-        if (tabId == SettingsTab) throw new ArgumentException("설정 탭은 항상 마지막입니다.");
         int index = layout.Tabs.IndexOf(tab), next = index + Math.Sign(direction);
-        if (next < 0 || next >= layout.Tabs.Count - 1) return;
+        if (next < 0 || next >= layout.Tabs.Count) return;
         layout.Tabs.RemoveAt(index); layout.Tabs.Insert(next, tab);
     }
 }

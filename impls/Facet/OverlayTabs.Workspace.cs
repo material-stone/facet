@@ -43,6 +43,8 @@ public partial class OverlayTabs
     {
         var board = CreateWorkspace(tabId);
         board.ViewChanged += UpdateWorkspaceZoom;
+        board.ViewChanged += () => { if (ReferenceEquals(board, SelectedWorkspace)) PlaceTabStrip(); };
+        board.TabBarMoved += () => { if (ReferenceEquals(board, SelectedWorkspace)) PlaceTabStrip(); };
         return board;
     }
 
@@ -51,14 +53,47 @@ public partial class OverlayTabs
         if (SelectedWorkspace is { } view) WorkspaceZoom.Text = Math.Round(view.Zoom * 100) + "%";
     }
 
-    private OverlayWorkspaceView CreateWorkspace(string tabId) => new(tabId) {
+    private OverlayWorkspaceView CreateWorkspace(string tabId)
+    {
+        OverlayWorkspaceView? board = null;
+        board = new(tabId) {
         CreateView = item => CreateWidgetView(tabId, item),
-        MinimumSize = item => catalog.TryGetValue(item.WidgetId, out var entry) ? (entry.Descriptor.MinColumns, entry.Descriptor.MinRows) : (1, 1),
-        FillsHeight = item => !catalog.TryGetValue(item.WidgetId, out var entry) || entry.Fill,
+        // A missing plugin's placeholder is laid out at the tile's own size.
+        BaseSize = item => catalog.TryGetValue(item.WidgetId, out var entry) ? (entry.Descriptor.BaseWidth, entry.Descriptor.BaseHeight) : (item.Width, item.Height),
+        TabBar = () => TabBarPlacement(board!),
+        CommitTabBar = (x, y, width, height) => ChangeWorkspace(data => WorkspaceLayouts.MoveTabBar(data, x, y, width, height)),
         HasPanel = item => catalog.TryGetValue(item.WidgetId, out var entry) && (WidgetTheme.IsHud ? entry.Descriptor.HasHudPanel && (!WidgetTheme.IsCatHud || entry.Descriptor.HasCatPanel) : entry.Descriptor.HasPanel),
         CommitMove = (id, x, y, width, height) => ChangeWorkspace(data => WorkspaceLayouts.MoveWidget(data, tabId, id, x, y, width, height)),
         RemoveRequested = id => RemovePlacement(tabId, id)
-    };
+        };
+        return board;
+    }
+
+    private FrameworkElement? TabStripElement { get { Tabs.ApplyTemplate(); return Tabs.Template.FindName("TabStrip", Tabs) as FrameworkElement; } }
+
+    // The saved tab bar placement, or by default the strip's natural size at the top center of a board's first view.
+    private WidgetPlacement TabBarPlacement(OverlayWorkspaceView board)
+    {
+        if (WorkspaceLayouts.Current(Workspace).TabBar is { } bar) return bar;
+        var strip = TabStripElement;
+        int width = Math.Max(1, (int)Math.Ceiling(strip?.ActualWidth ?? 0)), height = Math.Max(1, (int)Math.Ceiling(strip?.ActualHeight ?? 0));
+        double screen = board.ActualHeight > 0 ? board.ActualHeight : ActualHeight;
+        return new() { Id = WorkspaceLayouts.TabBarWidget, WidgetId = WorkspaceLayouts.TabBarWidget, X = -width / 2, Y = (int)Math.Round(-screen / 2 + TabBarMargin), Width = width, Height = height };
+    }
+
+    private const double TabBarMargin = 24;
+
+    // Moves and stretches the real tab strip, its shadow and its marks onto the selected board's tab bar tile.
+    private void PlaceTabStrip()
+    {
+        if (TabStripElement is not { } strip || SelectedWorkspace is not { } board || board.TabBarRect is not { } bar || strip.ActualWidth <= 0 || strip.ActualHeight <= 0 || !Tabs.IsAncestorOf(board)) return;
+        var at = board.TranslatePoint(board.ToScreen(bar.X, bar.Y), Tabs);
+        var transform = new MatrixTransform(bar.Width * board.Zoom / strip.ActualWidth, 0, 0, bar.Height * board.Zoom / strip.ActualHeight, at.X, at.Y);
+        transform.Freeze();
+        foreach (string name in new[] { "TabShadow", "TabStrip", "TabMarks" })
+            if (Tabs.Template.FindName(name, Tabs) is UIElement part) part.RenderTransform = transform;
+    }
+    internal Rect TabStripBoundsForCheck => TabStripElement is { } strip ? strip.RenderTransform.TransformBounds(new Rect(0, 0, strip.ActualWidth, strip.ActualHeight)) : Rect.Empty;
 
     private FrameworkElement CreateWidgetView(string tabId, WidgetPlacement item)
     {
@@ -125,19 +160,21 @@ public partial class OverlayTabs
         if (selected is TabItem { Visibility: Visibility.Visible } current && Tabs.Items.Contains(current)) Tabs.SelectedItem = current;
         else Tabs.SelectedItem = Tabs.Items.OfType<TabItem>().First(tab => tab.Visibility == Visibility.Visible);
         foreach (var tab in layout.Tabs)
-            if (workspaces.TryGetValue(tab.Id, out var view)) view.Render(tab, workspaceEditing);
+            if (workspaces.TryGetValue(tab.Id, out var view)) { view.Snap = layout.Snap; view.Render(tab, workspaceEditing); }
+        WorkspaceSnap.IsChecked = layout.Snap;
         var placed = layout.Tabs.SelectMany(t => t.Widgets).Select(w => w.Id).ToHashSet();
         foreach (var id in pluginViews.Keys.Where(id => !placed.Contains(id)).ToArray()) DisposeWidget(id);
         UpdateTabCorners();
         UpdateWorkspaceBar();
         RefreshSettingsPanels();
+        PlaceTabStrip();
     }
 
     private TabItem TabFor(WorkspaceTab tab)
     {
         TabItem? known = tab.Id switch {
             WorkspaceLayouts.DashboardTab => DashboardTab, WorkspaceLayouts.ScheduleTab => ManagementTab, WorkspaceLayouts.SleepTab => SleepTab,
-            WorkspaceLayouts.ChatTab => ChatTab, WorkspaceLayouts.SettingsTab => SettingsTab,
+            WorkspaceLayouts.ChatTab => ChatTab,
             _ => addedTabs.GetValueOrDefault(tab.Id)
         };
         if (known != null) {
@@ -189,16 +226,17 @@ public partial class OverlayTabs
 
     private void UpdateWorkspaceBar()
     {
-        bool widgets = SelectedWorkspace != null;
-        WorkspaceBar.Visibility = widgets ? Visibility.Visible : Visibility.Collapsed;
-        WorkspaceEdit.Visibility = workspaceEditing ? Visibility.Collapsed : Visibility.Visible;
+        WorkspaceEdit.IsEnabled = SelectedWorkspace != null;
+        WorkspaceEdit.Tag = workspaceEditing ? "on" : null;
         WorkspaceTools.Visibility = workspaceEditing ? Visibility.Visible : Visibility.Collapsed;
         UpdateWorkspaceZoom();
         WorkspaceMessage.Text = workspaceError;
         WorkspaceMessage.Visibility = workspaceError.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private void WorkspaceEdit_Click(object sender, RoutedEventArgs e) => SetWorkspaceEditing(true);
+    private void WorkspaceEdit_Click(object sender, RoutedEventArgs e) => SetWorkspaceEditing(!workspaceEditing);
+    private void WorkspaceSnap_Click(object sender, RoutedEventArgs e) => SetWorkspaceSnap(WorkspaceSnap.IsChecked == true);
+    internal bool SetWorkspaceSnap(bool snap) => ChangeWorkspace(data => WorkspaceLayouts.SetSnap(data, snap));
     private void WorkspaceDone_Click(object sender, RoutedEventArgs e) => SetWorkspaceEditing(false);
     private void WorkspaceHome_Click(object sender, RoutedEventArgs e) => SelectedWorkspace?.ReturnToOrigin();
 
@@ -220,9 +258,11 @@ public partial class OverlayTabs
     internal bool AddWidget(string widgetId)
     {
         if (SelectedWorkspace is not { } view || !catalog.TryGetValue(widgetId, out var entry)) return false;
-        var (left, top) = view.ViewedArea();
+        // At its base size, centered on what the user is looking at, or the nearest free spot (ADR 0108).
+        var (centerX, centerY) = view.ViewedCenter();
+        int step = WorkspaceLayouts.Current(Workspace).Snap ? (int)OverlayWorkspaceView.Pitch : 1;
         return ChangeWorkspace(data => {
-            var placed = WorkspaceLayouts.AddWidget(data, view.TabId, widgetId, entry.Descriptor.DefaultColumns, entry.Descriptor.DefaultRows, false, left, top, view.HalfColumns, view.HalfRows, !entry.Descriptor.AllowMultiple, !entry.Descriptor.AllowMultipleTabs);
+            var placed = WorkspaceLayouts.AddWidget(data, view.TabId, widgetId, entry.Descriptor.BaseWidth, entry.Descriptor.BaseHeight, false, centerX, centerY, view.HalfWidth, view.HalfHeight, !entry.Descriptor.AllowMultiple, !entry.Descriptor.AllowMultipleTabs, step);
             // The app creates the widget's logical store when the widget that asked for one is placed.
             if (entry.Descriptor.UsesData && entry.PluginId != null) PluginData.EnsureStore(data, placed.Id, entry.PluginId, widgetId);
         });
@@ -260,6 +300,8 @@ public partial class OverlayTabs
         }
     }
 
+    private const int MaxBaseSize = 4096;
+
     private bool LoadPlugin(PluginManifest plugin)
     {
         try {
@@ -270,7 +312,9 @@ public partial class OverlayTabs
                 string id = WidgetIds.Of(plugin.Id, widget.Id);
                 var safe = widget with {
                     DefaultColumns = Math.Clamp(widget.DefaultColumns, 1, WorkspaceLayouts.Columns), DefaultRows = Math.Clamp(widget.DefaultRows, 1, WorkspaceLayouts.Rows),
-                    MinColumns = Math.Clamp(widget.MinColumns, 1, WorkspaceLayouts.Columns), MinRows = Math.Clamp(widget.MinRows, 1, WorkspaceLayouts.Rows)
+                    MinColumns = Math.Clamp(widget.MinColumns, 1, WorkspaceLayouts.Columns), MinRows = Math.Clamp(widget.MinRows, 1, WorkspaceLayouts.Rows),
+                    Width = widget.Width > 0 ? Math.Clamp(widget.Width, WorkspaceLayouts.MinWidgetSize, MaxBaseSize) : 0,
+                    Height = widget.Height > 0 ? Math.Clamp(widget.Height, WorkspaceLayouts.MinWidgetSize, MaxBaseSize) : 0
                 };
                 catalog[id] = new(id, safe, plugin.Id, true);
             }

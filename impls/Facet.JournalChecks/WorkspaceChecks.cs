@@ -16,27 +16,34 @@ internal static partial class Program
 #if PLUGIN_CHECKS
         CheckCalendarStore(controller);
 #endif
-        Assert(runtime.Data.Workspace==null && tabs.Items.Count==2 && WorkspaceLayouts.Default().Tabs.Select(t=>t.Id).SequenceEqual([WorkspaceLayouts.DashboardTab,WorkspaceLayouts.SettingsTab]),"a fresh install shows the dashboard and settings, and the layout is not written until edited");
+        Assert(runtime.Data.Workspace==null && tabs.Items.Count==1 && WorkspaceLayouts.Default().Tabs.Select(t=>t.Id).SequenceEqual([WorkspaceLayouts.DashboardTab]),"a fresh install shows the dashboard, and the layout is not written until edited");
         Assert(WorkspaceLayouts.Default().Tabs.All(t=>t.Widgets.Count==0) && !typeof(Controller).Assembly.GetTypes().Any(t=>t.Name.StartsWith("OverlayCalendar") || t.Name.StartsWith("OverlaySchedule") || t.Name=="OverlayDashboardView"),"the plain app has no widgets of its own (ADR 0101)");
-        // The rules below run on the five-tab layout a never-edited install had, with the plugins' widget ids as placeholders.
+        // The rules below run on the four-tab layout a never-edited install had, with the plugins' widget ids as placeholders.
         Assert(runtime.Commit(d=>d.Workspace=WorkspaceLayouts.LegacyDefault()),"the legacy layout is seeded");hud.ApplyWorkspace();Layout();
 
         // Edit mode: moves commit through the store, invalid drops and Escape keep the old place.
         hud.SetWorkspaceEditing(true);Layout();
         Assert(hud.IsEditingWorkspace,"edit mode opens");
         Assert(!hud.AddWidget(WorkspaceLayouts.ClockWidget) && !hud.AddWidget(WorkspaceLayouts.CalendarWidget),"the former built-in widgets are not offered by the app");
-        Assert(hud.AddWorkspaceTab("업무") && tabs.Items.Count==6 && new Store(runtime.Store.Root).Load().Workspace!.Tabs.Any(t=>t.Title=="업무"),"new tab is saved and shown");
+        Assert(hud.AddWorkspaceTab("업무") && tabs.Items.Count==5 && new Store(runtime.Store.Root).Load().Workspace!.Tabs.Any(t=>t.Title=="업무"),"new tab is saved and shown");
         string added=runtime.Data.Workspace!.Tabs.First(t=>t.Title=="업무").Id;
-        Assert(AutomationName(tabs.Items[tabs.Items.Count-1])=="설정" && AutomationName(tabs.Items[tabs.Items.Count-2])=="업무","new tab stays before settings");
-        Assert(hud.RenameWorkspaceTab(added,"작업") && AutomationName(tabs.Items[tabs.Items.Count-2])=="작업","renaming updates the tab header");
+        Assert(AutomationName(tabs.Items[tabs.Items.Count-1])=="업무","new tab goes last");
+        Assert(hud.RenameWorkspaceTab(added,"작업") && AutomationName(tabs.Items[tabs.Items.Count-1])=="작업","renaming updates the tab header");
         Assert(hud.MoveWorkspaceTab(added,-1) && AutomationName(tabs.Items[3])=="작업","tab order follows the layout");
         Assert(hud.SetWorkspaceTabHidden(WorkspaceLayouts.SleepTab,true) && ((TabItem)hud.FindName("SleepTab")).Visibility==Visibility.Collapsed,"built-in tabs can be hidden");
         tabs.SelectedIndex=0;hud.MoveTab(1);
         Assert(ReferenceEquals(tabs.SelectedItem,hud.FindName("ManagementTab")),"next tab goes to the following visible tab");
         hud.MoveTab(1);Assert(AutomationName(tabs.SelectedItem)=="작업","tab cycling skips hidden tabs");
         Assert(hud.SetWorkspaceTabHidden(WorkspaceLayouts.SleepTab,false),"hidden tabs can be restored");
-        Assert(!hud.SetWorkspaceTabHidden(WorkspaceLayouts.SettingsTab,true) && ((TabItem)hud.FindName("SettingsTab")).Visibility==Visibility.Visible,"settings tab cannot be hidden");
         Assert(hud.HandleEscape() && !hud.IsEditingWorkspace,"Escape leaves edit mode");
+
+        // Settings open as a modal from the icon menu instead of a tab (ADR 0108).
+        Assert(hud.FindName("SettingsTab")==null && tabs.Items.OfType<TabItem>().All(t=>AutomationName(t)!="설정"),"settings is not a tab");
+        Assert(hud.FindName("SettingsOpen") is Button && hud.FindName("WorkspaceEdit") is Button && ((FrameworkElement)hud.FindName("WorkspaceBar")).Visibility==Visibility.Visible,"the icon menu shows the edit and settings buttons");
+        hud.SetWorkspaceEditing(true);hud.OpenSettings();
+        Assert(hud.IsSettingsActive && !hud.IsEditingWorkspace && ((FrameworkElement)hud.FindName("SettingsModal")).Visibility==Visibility.Visible,"opening settings shows the modal and leaves edit mode");
+        var settingsTabBefore=tabs.SelectedItem;hud.MoveTab(1);Assert(ReferenceEquals(tabs.SelectedItem,settingsTabBefore),"tab keys stay put under settings");
+        Assert(hud.HandleEscape() && !hud.IsSettingsActive,"Escape closes settings");
 
         // Widget modal: the widget owns the view, the app presents it and decides when it may close.
         var modalLayer=(Grid)hud.FindName("WidgetModal");var modalContent=new TextBlock{Text="내용"};int modalClosed=0;bool allowClose=false,useEscape=true;
@@ -108,7 +115,9 @@ internal static partial class Program
         Assert(hud.AddWidget(widget) && hud.AddWidget(widget),"plugin widgets can be placed repeatedly");
         Layout();
         var items=WorkspaceLayouts.Current(runtime.Data).Tabs.Single(t=>t.Id==added).Widgets;
-        Assert(items.Count==2 && items[0].X==-6 && items[1].X==-3 && items[0].WidgetId==widget,"plugin widgets take free cells");
+        int cell=(int)OverlayWorkspaceView.Pitch;
+        Assert(items.Count==2 && items[0].WidgetId==widget && items[0].Width==3*cell && items[0].Height==cell && Math.Abs(items[0].X+items[0].Width/2)<=cell && Math.Abs(items[0].Y+items[0].Height/2)<=cell
+            && WorkspaceLayouts.IsFree(new(){Widgets=[items[0]]},items[1].X,items[1].Y,items[1].Width,items[1].Height,null),"a new widget is centered on the view at its base size and the next takes the nearest free spot");
         void Capture(string name) {
             var bitmap=new System.Windows.Media.Imaging.RenderTargetBitmap(1440,900,96,96,System.Windows.Media.PixelFormats.Pbgra32);bitmap.Render(hud);
             var png=new System.Windows.Media.Imaging.PngBitmapEncoder();png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
@@ -117,22 +126,60 @@ internal static partial class Program
         hud.SetWorkspaceEditing(true);Layout();
         var editor=hud.SelectedWorkspace!;
         void Drag(string id,double x,double y){editor.BeginDragForCheck(id);editor.UpdateDrag(new Point(x*OverlayWorkspaceView.Pitch,y*OverlayWorkspaceView.Pitch));}
-        Drag(items[1].Id,1,1);editor.FinishDrag();
-        var moved=WorkspaceLayouts.Current(runtime.Data).Tabs.Single(t=>t.Id==added).Widgets[1];
-        Assert(moved.X==-2 && moved.Y==-3,"a drop snaps to cells and saves");
-        Assert(new Store(runtime.Store.Root).Load().Workspace!.Tabs.Single(t=>t.Id==added).Widgets[1].Y==-3,"a drop survives reload");
-        items=WorkspaceLayouts.Current(runtime.Data).Tabs.Single(t=>t.Id==added).Widgets;
-        Drag(items[1].Id,-4,-1);editor.FinishDrag();
-        moved=WorkspaceLayouts.Current(runtime.Data).Tabs.Single(t=>t.Id==added).Widgets[1];
-        Assert(moved.X==-2 && moved.Y==-3,"a drop on another widget keeps the old place");
+        WidgetPlacement Item(int index)=>WorkspaceLayouts.Current(runtime.Data).Tabs.Single(t=>t.Id==added).Widgets[index];
+        int startX=items[1].X,startY=items[1].Y;
+        Drag(items[1].Id,0,4);editor.FinishDrag();
+        Assert(Item(1).X==startX && Item(1).Y==startY+4*cell,"a drop snaps to the grid and saves");
+        Assert(new Store(runtime.Store.Root).Load().Workspace!.Tabs.Single(t=>t.Id==added).Widgets[1].Y==startY+4*cell,"a drop survives reload");
+        startY+=4*cell;
+        Drag(items[1].Id,(Item(0).X-startX)/(double)cell,(Item(0).Y-startY)/(double)cell);editor.FinishDrag();
+        Assert(Item(1).X==startX && Item(1).Y==startY,"a drop on another widget keeps the old place");
+        editor.BeginDragForCheck(items[1].Id);editor.UpdateDrag(new Point(13,7));editor.FinishDrag();
+        Assert(Item(1).X==startX && Item(1).Y==startY,"a small move snaps back to its cell");
+        editor.BeginDragForCheck(items[1].Id);editor.UpdateDrag(new Point(13,7),System.Windows.Input.ModifierKeys.Alt);editor.FinishDrag();
+        Assert(Item(1).X==startX+13 && Item(1).Y==startY+7,"Alt moves by pixels while snapping is on");
+        Assert(hud.SetWorkspaceSnap(false) && !runtime.Data.Workspace!.Snap && ((CheckBox)hud.FindName("WorkspaceSnap")).IsChecked==false,"the snap toggle is saved");
+        editor.BeginDragForCheck(items[1].Id);editor.UpdateDrag(new Point(5,-3));editor.FinishDrag();
+        Assert(Item(1).X==startX+18 && Item(1).Y==startY+4,"with snapping off a widget moves by single pixels");
+        editor.BeginDragForCheck(items[1].Id);editor.UpdateDrag(new Point(40,40),System.Windows.Input.ModifierKeys.Alt);editor.FinishDrag();
+        Assert((Item(1).X-startX-18)%cell==0 || Item(1).X%cell==0,"Alt snaps while snapping is off");
+        Assert(hud.SetWorkspaceSnap(true) && runtime.Data.Workspace!.Snap,"snapping turns back on");
+        startX=Item(1).X;startY=Item(1).Y;
+        // A corner drag stretches the view from its base size; the frame and handles stay at tile size.
+        string first=items[0].Id;
+        editor.BeginDragForCheck(first,true);editor.UpdateDrag(new Point(3*cell,0),System.Windows.Input.ModifierKeys.Shift);
+        var stretched=(Grid)editor.TileForCheck(first)!;Layout();
+        Assert(stretched.Width==6*cell && stretched.Height==2*cell,"Shift keeps the tile's aspect ratio");
+        editor.UpdateDrag(new Point(3*cell,-cell/2.0),System.Windows.Input.ModifierKeys.Alt);Layout();
+        var stretch=stretched.Children.OfType<WidgetStretch>().Single();
+        Assert(stretched.Width==6*cell && stretched.Height==cell/2.0 && stretch.Scale==new Size(2,.5),"a free drag stretches the content live, width and height apart");
+        var resizeHandle=stretched.Children.OfType<Border>().Single(b=>System.Windows.Automation.AutomationProperties.GetName(b)=="위젯 크기 조절");
+        Assert(resizeHandle.ActualWidth==20 && resizeHandle.RenderTransform.Value.IsIdentity && !stretched.Children.OfType<Button>().Any(b=>b.RenderTransform.Value is {IsIdentity:false}),"edit handles are not stretched");
+        editor.CancelDrag();
+        // The tab bar is a widget with one placement on every tab; it moves in edit mode and cannot be removed.
+        var barTile=(Grid)editor.TileForCheck(WorkspaceLayouts.TabBarWidget)!;
+        var strip=hud.TabStripBoundsForCheck;
+        Assert(barTile.Children.OfType<Button>().Count()==0 && barTile.Children.OfType<Border>().Count()==2,"the tab bar tile has handles but no remove button");
+        Assert(Math.Abs(strip.Left+strip.Width/2-720)<=1 && Math.Abs(strip.Top-24)<=1 && strip.Width>100,"the tab bar starts at the top center at its natural size");
+        editor.BeginDragForCheck(WorkspaceLayouts.TabBarWidget);editor.UpdateDrag(new Point(0,2*cell));Layout();
+        Assert(Math.Abs(hud.TabStripBoundsForCheck.Top-strip.Top-2*cell)<=cell,"the tab strip follows its tile while dragging");
+        editor.FinishDrag();Layout();
+        var savedBar=runtime.Data.Workspace!.TabBar!;
+        Assert(savedBar!=null && savedBar.Y%cell==0 && Math.Abs(hud.TabStripBoundsForCheck.Top-(450+savedBar.Y))<=1,"the tab bar placement is saved once and the strip sits on it");
+        editor.BeginDragForCheck(WorkspaceLayouts.TabBarWidget,true);editor.UpdateDrag(new Point(savedBar.Width,0),System.Windows.Input.ModifierKeys.Alt);editor.FinishDrag();Layout();
+        Assert(runtime.Data.Workspace!.TabBar!.Width==savedBar.Width*2 && Math.Abs(hud.TabStripBoundsForCheck.Width-savedBar.Width*2)<=1,"the tab bar stretches like other widgets");
+        tabs.SelectedIndex=0;Layout();
+        Assert(hud.SelectedWorkspace!.TabBarRect==(runtime.Data.Workspace!.TabBar!.X,runtime.Data.Workspace.TabBar.Y,runtime.Data.Workspace.TabBar.Width,runtime.Data.Workspace.TabBar.Height),"every tab shares the tab bar placement");
+        Assert(runtime.Commit(d=>d.Workspace!.TabBar=null),"the tab bar returns to its default place");hud.ApplyWorkspace();
+        tabs.SelectedItem=tabs.Items.OfType<TabItem>().First(t=>AutomationName(t)=="작업");Layout();editor=hud.SelectedWorkspace!;items=WorkspaceLayouts.Current(runtime.Data).Tabs.Single(t=>t.Id==added).Widgets;
         Drag(items[1].Id,-1,0);Assert(editor.IsDragging && hud.HandleEscape() && !editor.IsDragging && hud.IsEditingWorkspace,"Escape cancels a drag and stays in edit mode");
-        Assert(WorkspaceLayouts.Current(runtime.Data).Tabs.Single(t=>t.Id==added).Widgets[1].X==-2,"a cancelled drag saves nothing");
+        Assert(WorkspaceLayouts.Current(runtime.Data).Tabs.Single(t=>t.Id==added).Widgets[1].X==startX,"a cancelled drag saves nothing");
 
         // The board fills the window, ends three screens across, and shows its zoom.
         Assert(editor.ActualWidth==1440 && editor.ActualHeight==900,"the board uses the whole window");
-        Assert(editor.HalfColumns==(int)(1440*1.5/OverlayWorkspaceView.Pitch) && editor.HalfRows==(int)(900*1.5/OverlayWorkspaceView.Pitch),"the board reaches one and a half screens from the origin");
+        Assert(editor.HalfWidth==(int)(1440*1.5) && editor.HalfHeight==(int)(900*1.5),"the board reaches one and a half screens from the origin");
         Drag(items[1].Id,9999,9999);editor.CancelDrag();
-        editor.PanTo(1e6,-1e6);Assert(editor.ViewX==editor.HalfColumns*OverlayWorkspaceView.Pitch*editor.Zoom-720 && editor.ViewY==-(editor.HalfRows*OverlayWorkspaceView.Pitch*editor.Zoom-450),"panning stops at the board's edge");
+        editor.PanTo(1e6,-1e6);Assert(editor.ViewX==editor.HalfWidth*editor.Zoom-720 && editor.ViewY==-(editor.HalfHeight*editor.Zoom-450),"panning stops at the board's edge");
         editor.ReturnToOrigin();
         var zoomBefore=editor.Zoom;editor.ZoomAt(new Point(720,450),.0001);
         Assert(editor.Zoom==WorkspaceLayouts.MinZoom && ((TextBlock)hud.FindName("WorkspaceZoom")).Text=="33%","zoom stops where the whole board shows and is displayed");
@@ -141,7 +188,7 @@ internal static partial class Program
         editor.ZoomAt(new Point(720,450),9);Assert(editor.Zoom==WorkspaceLayouts.MaxZoom,"the next step leaves 100%");
         editor.ZoomAt(new Point(720,450),.0001);Assert(editor.Zoom==1,"zooming out from above stops at 100%");
         var coveredItem=WorkspaceLayouts.Current(runtime.Data).Tabs.Single(t=>t.Id==added).Widgets[0];
-        Assert(editor.IsCellCovered(coveredItem.X,coveredItem.Y) && !editor.IsCellCovered(coveredItem.X,coveredItem.Y+1),"cells under a widget draw no grid lines");
+        Assert(editor.IsCovered(coveredItem.X+1,coveredItem.Y+1) && !editor.IsCovered(coveredItem.X,coveredItem.Y) && !editor.IsCovered(coveredItem.X+1,coveredItem.Y+coveredItem.Height+1),"marks inside a widget are skipped and its edges keep theirs");
 
         // The view: moves only while editing, saves on leaving edit mode and returns on the next launch.
         var homeTools=(FrameworkElement)hud.FindName("WorkspaceTools");
@@ -172,8 +219,6 @@ internal static partial class Program
         Assert(hud.SelectedWorkspace!.Background==null,"a fixed page keeps its pointer input outside edit mode");
         hud.SetWorkspaceEditing(true);Layout();
         hud.RemoveWorkspaceWidgetForCheck(WorkspaceLayouts.ChatTab,pageTab.Widgets[0].Id);
-        tabs.SelectedItem=hud.FindName("SettingsTab");Layout();
-        Assert(hud.SelectedWorkspace==null && ((FrameworkElement)hud.FindName("WorkspaceBar")).Visibility==Visibility.Collapsed,"settings has no board");
         tabs.SelectedItem=tabs.Items.OfType<TabItem>().First(t=>AutomationName(t)=="작업");Layout();
         Layout();Capture("workspace-edit.png");
         tabs.SelectedIndex=0;Layout();Capture("workspace-dashboard-edit.png");
@@ -201,8 +246,7 @@ internal static partial class Program
         var brokenStart=new OverlayTabs();brokenStart.Connect(runtime);
         Assert(!brokenStart.IsPluginEnabled("sample") && brokenStart.HasPluginGrant("sample") && brokenStart.PluginState("sample").Length>0 && runtime.Data.EnabledPlugins!.Single(g=>g.Id=="sample").Fingerprint==kept,"a broken plugin at launch reports it and stays remembered as enabled");
         File.WriteAllBytes(brokenManifest,goodBytes);Assert(reloaded.ReloadPlugin("sample") && reloaded.PluginState("sample").Length==0,"a reload recovers after the files are fixed");
-        Assert(hud.RemoveWorkspaceTab(added) && tabs.Items.Count==5,"added tabs can be deleted");
-        Assert(!hud.RemoveWorkspaceTab(WorkspaceLayouts.SettingsTab) && tabs.Items.Count==5,"the settings tab cannot be deleted");
+        Assert(hud.RemoveWorkspaceTab(added) && tabs.Items.Count==4,"added tabs can be deleted");
         var tabRows=((OverlaySettingsView)hud.FindName("SettingsView")).WorkspacePanel.Children.OfType<Grid>().ToArray();
         Assert(tabRows.Length==4 && tabRows.All(row=>System.Windows.Automation.AutomationProperties.GetName(row.Children.OfType<Button>().Last()).EndsWith("삭제") && !System.Windows.Automation.AutomationProperties.GetName(row.Children.OfType<Button>().Last()).StartsWith("설정")),"the tab list leaves out settings and every row can be deleted");
         Assert(tabRows.All(row=>row.Children.OfType<TextBox>().Single() is var input && input.Margin==new Thickness(0) && input.Height-input.Padding.Top-input.Padding.Bottom-input.BorderThickness.Top-input.BorderThickness.Bottom>=input.FontSize*1.2),"tab name inputs line up with their row and have room for the text");
@@ -213,7 +257,8 @@ internal static partial class Program
         var firstTabs=new OverlayTabs();var firstStrip=(TabControl)firstTabs.FindName("Tabs");
         Assert(firstTabs.SetWorkspaceTabIcon(WorkspaceLayouts.DashboardTab,Facet.Design.IconKind.Music) && ((StackPanel)((TabItem)firstStrip.Items[0]).Header).Children[0] is Facet.Design.Icon{Kind:Facet.Design.IconKind.Music},"choosing an icon updates the tab header");
         Assert(firstTabs.RenameWorkspaceTab(WorkspaceLayouts.DashboardTab,"홈") && AutomationName(firstStrip.Items[0])=="홈","a first tab can be renamed");
-        Assert(firstTabs.RemoveWorkspaceTab(WorkspaceLayouts.DashboardTab) && firstStrip.Items.Count==1 && !firstStrip.Items.Contains(firstTabs.FindName("DashboardTab")),"a first tab can be deleted");
+        Assert(!firstTabs.RemoveWorkspaceTab(WorkspaceLayouts.DashboardTab) && !firstTabs.SetWorkspaceTabHidden(WorkspaceLayouts.DashboardTab,true),"the last visible tab stays");
+        Assert(firstTabs.AddWorkspaceTab("둘") && firstTabs.RemoveWorkspaceTab(WorkspaceLayouts.DashboardTab) && firstStrip.Items.Count==1 && !firstStrip.Items.Contains(firstTabs.FindName("DashboardTab")),"a first tab can be deleted");
 #if PLUGIN_CHECKS
         // The weather plugin runs from its folder alone, with its icons and regions inside the DLL.
         string weatherFolder=Path.Combine(runtime.Store.Root,"plugins","weather");Directory.CreateDirectory(weatherFolder);
@@ -279,7 +324,7 @@ internal static partial class Program
         var regionCombo=drawn.Children.OfType<ComboBox>().Single();
         Assert(settingsView.PluginPanel.Children.OfType<PluginCard>().Count(card=>card.Header.Children.OfType<Button>().First().IsEnabled)==hud.DiscoverPlugins().Count(p=>hud.HasPluginGrant(p.Id)) && hud.DiscoverPlugins().Any(p=>hud.HasPluginGrant(p.Id)),"each enabled plugin has its own reload button");
         Assert((string)regionCombo.SelectedValue==seoulId && drawn.Children.OfType<Button>().Count()==2,"the plugin section draws its declared fields with saved values");
-        tabs.SelectedItem=hud.FindName("SettingsTab");settingsView.ShowSection("플러그인");Layout();Capture("settings-plugins.png");
+        hud.OpenSettings();settingsView.ShowSection("플러그인");Layout();Capture("settings-plugins.png");hud.CloseSettings();
         string busan=WeatherRegions.All.First(r=>r.DisplayName.StartsWith("부산")).Id;regionCombo.SelectedValue=busan;
         Assert(PluginData.WeatherRegion(runtime.Data)==busan,"changing a drawn field saves it");
         Assert(hud.SetPluginEnabled(weatherPlugin,false),"the plugin can be turned off");

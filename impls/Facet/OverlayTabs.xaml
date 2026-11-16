@@ -4,6 +4,29 @@
  xmlns:local="clr-namespace:Facet" xmlns:design="clr-namespace:Facet.Design" xmlns:widgets="clr-namespace:Facet.Widgets;assembly=Facet.Plugins" Cursor="Arrow">
  <UserControl.Resources>
   <DropShadowEffect x:Key="OverlayShadow" Color="Black" Opacity="0.42" BlurRadius="24" ShadowDepth="6" Direction="270"/>
+  <!-- Icon menu buttons: no frame or fill, a soft highlight on hover and while pressed or checked. -->
+  <Style x:Key="IconMenuButton" TargetType="Button">
+   <Setter Property="Foreground" Value="{StaticResource Ink}"/>
+   <Setter Property="Width" Value="40"/>
+   <Setter Property="Height" Value="40"/>
+   <Setter Property="Cursor" Value="Hand"/>
+   <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+   <Setter Property="Template">
+    <Setter.Value>
+     <ControlTemplate TargetType="Button">
+      <Border x:Name="Frame" Background="Transparent" CornerRadius="10">
+       <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+      </Border>
+      <ControlTemplate.Triggers>
+       <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Frame" Property="Background" Value="{StaticResource Hover}"/><Setter Property="Foreground" Value="{StaticResource Mint}"/></Trigger>
+       <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Frame" Property="Background" Value="{StaticResource Hover}"/></Trigger>
+       <Trigger Property="IsPressed" Value="True"><Setter TargetName="Frame" Property="Background" Value="{StaticResource Selected}"/></Trigger>
+       <Trigger Property="Tag" Value="on"><Setter Property="Foreground" Value="{StaticResource Mint}"/><Setter TargetName="Frame" Property="Background" Value="{StaticResource Selected}"/></Trigger>
+      </ControlTemplate.Triggers>
+     </ControlTemplate>
+    </Setter.Value>
+   </Setter>
+  </Style>
  </UserControl.Resources>
  <AdornerDecorator>
  <Grid>
@@ -12,17 +35,19 @@
   <TabControl.Template>
    <ControlTemplate TargetType="TabControl">
     <Grid KeyboardNavigation.TabNavigation="Local">
-     <ContentPresenter x:Name="PART_SelectedContentHost" ContentSource="SelectedContent"
-                       HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+     <!-- The tab strip is the tab bar widget (ADR 0108): OverlayTabs moves and stretches it onto its board placement.
+          It lies under the boards, whose tab bar tile is empty outside edit mode and carries the edit handles in it. -->
      <!-- Keep effects on empty siblings so text never enters an effect bitmap. -->
-     <widgets:CachedShadow x:Name="TabShadow" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="24"
+     <widgets:CachedShadow x:Name="TabShadow" HorizontalAlignment="Left" VerticalAlignment="Top"
              Width="{Binding ActualWidth, ElementName=TabStrip}" Height="{Binding ActualHeight, ElementName=TabStrip}"
              Background="{StaticResource Panel}" CornerRadius="12" Shadow="{StaticResource OverlayShadow}" IsHitTestVisible="False"/>
-     <TabPanel x:Name="TabStrip" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="24"
+     <TabPanel x:Name="TabStrip" HorizontalAlignment="Left" VerticalAlignment="Top"
                IsItemsHost="True" KeyboardNavigation.TabIndex="0" SizeChanged="TabStrip_SizeChanged"/>
      <!-- Above the headers, which would otherwise cover a theme's corner marks. -->
-     <Border x:Name="TabMarks" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="24" IsHitTestVisible="False" Focusable="False" UseLayoutRounding="True" SnapsToDevicePixels="True"
+     <Border x:Name="TabMarks" HorizontalAlignment="Left" VerticalAlignment="Top" IsHitTestVisible="False" Focusable="False" UseLayoutRounding="True" SnapsToDevicePixels="True"
              Width="{Binding ActualWidth, ElementName=TabStrip}" Height="{Binding ActualHeight, ElementName=TabStrip}"/>
+     <ContentPresenter x:Name="PART_SelectedContentHost" ContentSource="SelectedContent"
+                       HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
     </Grid>
    </ControlTemplate>
   </TabControl.Template>
@@ -92,32 +117,22 @@
    <TabItem.Header><StackPanel Orientation="Horizontal"><design:Icon Kind="Sparkles" Width="18" Height="18" Margin="0,0,8,0" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/><TextBlock Text="채팅" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/></StackPanel></TabItem.Header>
    <Grid x:Name="ChatPage"/>
   </TabItem>
-  <TabItem x:Name="SettingsTab" AutomationProperties.Name="설정">
-   <TabItem.Header>
-    <StackPanel Orientation="Horizontal">
-     <design:Icon Kind="Settings" Width="18" Height="18" Margin="0,0,8,0"
-                  Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
-     <TextBlock Text="설정" FontWeight="SemiBold" VerticalAlignment="Center"
-                Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=TabItem}}"/>
-    </StackPanel>
-   </TabItem.Header>
-   <Grid x:Name="SettingsViewport" Margin="24,116,24,92">
-    <local:OverlaySettingsView x:Name="SettingsView"/>
-   </Grid>
-  </TabItem>
  </TabControl>
- <StackPanel x:Name="WorkspaceBar" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,24,24,0" Panel.ZIndex="3" Visibility="Collapsed">
-  <Grid x:Name="WorkspaceRow" HorizontalAlignment="Right">
-  <Button x:Name="WorkspaceEdit" ContentTemplate="{x:Null}" Width="36" Height="36" Padding="0" ToolTip="위젯 편집" AutomationProperties.Name="위젯 편집" HorizontalAlignment="Right" VerticalAlignment="Center" Click="WorkspaceEdit_Click"><design:Icon Kind="Edit" Width="18" Height="18"/></Button>
-  <StackPanel x:Name="WorkspaceTools" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+ <!-- Icon menu: fixed at the top right, never on a board (ADR 0108). Edit tools show to its left while editing. -->
+ <StackPanel x:Name="WorkspaceBar" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,24,24,0" Panel.ZIndex="3">
+  <StackPanel x:Name="WorkspaceRow" Orientation="Horizontal" HorizontalAlignment="Right">
+  <StackPanel x:Name="WorkspaceTools" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed" Margin="0,0,8,0">
    <Border Height="36" Background="{StaticResource Panel}" BorderBrush="{StaticResource Edge}" BorderThickness="1" CornerRadius="8" Padding="12,0" Margin="0,0,8,0">
     <TextBlock x:Name="WorkspaceZoom" VerticalAlignment="Center" MinWidth="40" TextAlignment="Center" AutomationProperties.Name="보드 배율" Typography.NumeralAlignment="Tabular"/>
    </Border>
    <Button x:Name="WorkspaceAddWidget" ContentTemplate="{x:Null}" Width="36" Height="36" Padding="0" ToolTip="위젯 추가" AutomationProperties.Name="위젯 추가" Margin="0,0,8,0" Click="WorkspaceAddWidget_Click"><design:Icon Kind="Add" Width="18" Height="18"/></Button>
    <Button x:Name="WorkspaceHome" ContentTemplate="{x:Null}" Width="36" Height="36" Padding="0" ToolTip="원점으로 돌아가기" AutomationProperties.Name="원점으로 돌아가기" Margin="0,0,8,0" Click="WorkspaceHome_Click"><design:Icon Kind="Target" Width="18" Height="18"/></Button>
+   <CheckBox x:Name="WorkspaceSnap" Content="격자 스냅" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="켜면 위치와 크기가 격자 칸에 붙고, 끄면 1px 단위로 움직입니다. Alt를 누른 채 끌면 그 순간만 반대로 동작합니다." AutomationProperties.Name="격자 스냅" Click="WorkspaceSnap_Click"/>
    <Button x:Name="WorkspaceDone" Content="완료" Height="36" Click="WorkspaceDone_Click"/>
   </StackPanel>
-  </Grid>
+  <Button x:Name="WorkspaceEdit" Style="{StaticResource IconMenuButton}" ToolTip="위젯 편집" AutomationProperties.Name="위젯 편집" Click="WorkspaceEdit_Click"><design:Icon Kind="Edit" Width="20" Height="20"/></Button>
+  <Button x:Name="SettingsOpen" Style="{StaticResource IconMenuButton}" ToolTip="설정" AutomationProperties.Name="설정" Margin="4,0,0,0" Click="SettingsOpen_Click"><design:Icon Kind="Settings" Width="20" Height="20"/></Button>
+  </StackPanel>
   <TextBlock x:Name="WorkspaceMessage" HorizontalAlignment="Right" Margin="0,6,0,0" FontSize="12" Visibility="Collapsed" TextWrapping="Wrap" MaxWidth="480" Foreground="{StaticResource Muted}"/>
   <Popup x:Name="WidgetPicker" PlacementTarget="{Binding ElementName=WorkspaceAddWidget}" Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
    <Border Background="{StaticResource Panel}" BorderBrush="{StaticResource Edge}" BorderThickness="1" CornerRadius="12" Padding="8" MinWidth="200">
@@ -125,6 +140,16 @@
    </Border>
   </Popup>
  </StackPanel>
+ <!-- Settings open as a modal from the icon menu; Escape saves and closes it (ADR 0108). -->
+ <Grid x:Name="SettingsModal" Background="{StaticResource ModalBackdrop}" Visibility="Collapsed" Panel.ZIndex="20" MouseDown="SettingsModal_MouseDown">
+  <!-- The settings view draws its own card, so the frame only places it. -->
+  <Border x:Name="SettingsFrame" Margin="48,72,48,48" MaxWidth="1280"
+          KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.ControlTabNavigation="Cycle" AutomationProperties.Name="설정">
+   <Grid x:Name="SettingsViewport">
+    <local:OverlaySettingsView x:Name="SettingsView"/>
+   </Grid>
+  </Border>
+ </Grid>
  <Grid x:Name="WidgetModal" Background="{StaticResource ModalBackdrop}" Visibility="Collapsed" Panel.ZIndex="25" MouseDown="WidgetModal_MouseDown">
   <Border x:Name="WidgetModalFrame" Margin="24" Padding="16" HorizontalAlignment="Center" VerticalAlignment="Center" Background="{StaticResource Panel}" BorderBrush="{StaticResource Edge}" BorderThickness="1" CornerRadius="12" KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.ControlTabNavigation="Cycle"/>
  </Grid>

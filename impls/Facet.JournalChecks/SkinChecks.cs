@@ -268,7 +268,7 @@ internal static partial class Program
             if(((SolidColorBrush)ui.FindResource("Panel")).Color!=expected)throw new Exception("token kept the default color");
             var tip=new ToolTip { Style=(Style)ui.FindResource(typeof(ToolTip)) };
             if(((SolidColorBrush)tip.Background).Color!=expected)throw new Exception("shared style kept the default color");
-            // Switching while running: tokens, shared styles, the backdrop and the settings tab all follow the saved skin.
+            // Switching while running: tokens, shared styles, the backdrop and the settings modal all follow the saved skin.
             Color Panel()=>((SolidColorBrush)ui.FindResource("Panel")).Color;
             Color Shared()=>((SolidColorBrush)new ToolTip { Style=(Style)ui.FindResource(typeof(ToolTip)) }.Background).Color;
             var layers=(Grid)controller.Overlay.Content;
@@ -283,11 +283,11 @@ internal static partial class Program
             var space=((SolidColorBrush)Skins.Load("space")["Panel"]).Color;
             if(Panel()!=space || Shared()!=space)throw new Exception("a running switch kept the previous colors");
             var after=layers.Children.OfType<OverlayTabs>().Single();
-            if(ReferenceEquals(before,after) || !after.IsSettingsActive)throw new Exception("the switch did not rebuild the overlay on the settings tab");
+            if(ReferenceEquals(before,after) || !after.IsSettingsActive)throw new Exception("the switch did not rebuild the overlay with settings open");
             if(after.SettingsSection!="스킨")throw new Exception("the switch left the skin tab of the settings");
             if(Skins.Visuals==null || layers.Children.Count!=5 || layers.Children[2] is not OverlayTabs)throw new Exception("the switch did not add the theme backdrop below the tabs");
             var overlay=controller.Overlay;
-            // The settings tab may not be laid out in this window, so its rows are walked logically.
+            // The settings modal may not be laid out in this window, so its rows are walked logically.
             IEnumerable<DependencyObject> Logical(DependencyObject root)=>new[]{root}.Concat(LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>().SelectMany(Logical));
             CheckBox? ReticleBox(OverlayTabs tabs)=>Logical((OverlaySettingsView)tabs.FindName("SettingsView")).OfType<CheckBox>().FirstOrDefault(box=>Equals(box.Content,"중앙 조준선"));
             if(ReticleBox(after) is not { IsChecked:true })throw new Exception("the space skin's settings did not offer the reticle checked");

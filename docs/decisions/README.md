@@ -150,3 +150,5 @@
 - [0105 — MCP 서버와 CLI 제거](0105-remove-mcp-and-cli.md)
 - [0106 — 월드 페이지에 클릭 위치 전달, 고양이 방 스킨](0106-world-click-position-and-cat-room.md)
 - [0107 — 고양이 위젯 형태 (`hudStyle: cat`)](0107-cat-widget-form.md)
+- [0108 — 위젯 기본 크기와 늘이기 배치, 오른쪽 위 아이콘 메뉴](0108-widget-pixel-size-and-icon-menu.md)
+- [0109 — 스킨 위젯 레이어: 플러그인은 데이터와 동작, 스킨은 외형과 상호작용](0109-skin-widget-layer.md)

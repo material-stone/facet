@@ -35,7 +35,7 @@ internal static partial class Program
         Assert(ResolvedCursor(label)==Cursors.Arrow,"diagram legend text resolves arrow");
         var dial=(OverlayScheduleDial)board.FindName("ScheduleDial");dial.MovePointer(new Point(0,0));
         Assert(ResolvedCursor(dial)==Cursors.Arrow,"diagram space outside the interactive circle resolves arrow");
-        tabs.SelectedItem=hud.FindName("SettingsTab");Layout();var settings=(OverlaySettingsView)hud.FindName("SettingsView");
+        hud.OpenSettings();Layout();var settings=(OverlaySettingsView)hud.FindName("SettingsView");
         var groups=(StackPanel)settings.FindName("Groups");
         var labels=groups.Children.OfType<StackPanel>().SelectMany(group=>group.Children.OfType<Grid>())
             .Select(row=>((StackPanel)row.Children[0]).Children[0]).OfType<TextBlock>().ToArray();

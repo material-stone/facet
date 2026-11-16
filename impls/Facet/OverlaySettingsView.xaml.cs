@@ -108,13 +108,13 @@ public partial class OverlaySettingsView : UserControl
         startup = Toggle("Windows 로그인 시 자동 실행", "Windows에 로그인하면 오버레이를 열지 않고 트레이에서 앱을 시작합니다.", _ => false, (_,_) => { });
 
         Group("탭");
-        Range("격자 칸 크기", "위젯을 배치하는 칸 한 변의 크기입니다(100% 확대 기준). 칸이 커지면 위젯도 함께 커집니다.", WorkspaceGrid.MinCellSize, WorkspaceGrid.MaxCellSize, 4, s=>WorkspaceGrid.CellSize(s), (s,v)=>s.GridCellSize=(int)v, v=>$"{v:0} px");
+        Range("격자 칸 크기", "위젯 편집에서 스냅을 켰을 때 위치와 크기가 붙는 칸 한 변의 크기입니다(100% 확대 기준). 위젯 크기는 바뀌지 않습니다.", WorkspaceGrid.MinCellSize, WorkspaceGrid.MaxCellSize, 1, s=>WorkspaceGrid.CellSize(s), (s,v)=>s.GridCellSize=(int)v, v=>$"{v:0} px");
         var gridStyles = new ComboBox { ItemsSource=WorkspaceGrid.Styles.Select(style=>new { style.Id, style.Name }).ToList(), DisplayMemberPath="Name", SelectedValuePath="Id" };
         Add("격자 모양", "위젯 편집 중 빈 칸을 보여 주는 방식입니다. 점은 칸 모서리, 선은 칸 경계, 십자는 모서리에 + 표시를 그립니다.", gridStyles,
             ()=>WorkspaceGrid.Styles.FirstOrDefault(style=>style.Id==gridStyles.SelectedValue as string).Name ?? "",
             s=>gridStyles.SelectedValue=WorkspaceGrid.Style(s), s=>s.GridStyle=gridStyles.SelectedValue as string ?? WorkspaceGrid.Dots);
         gridStyles.SelectionChanged += (_,_)=>Changed();
-        Add("탭 구성", "설정 외의 탭을 추가·삭제하고 순서·표시·이름을 바꿉니다. 위젯 배치는 각 탭의 위젯 편집 버튼에서 바꿉니다. 변경은 바로 저장됩니다.", WorkspacePanel, ()=>"", _=>{}, _=>{});
+        Add("탭 구성", "탭을 추가·삭제하고 순서·표시·이름을 바꿉니다. 위젯 배치는 각 탭의 위젯 편집 버튼에서 바꿉니다. 변경은 바로 저장됩니다.", WorkspacePanel, ()=>"", _=>{}, _=>{});
 
         Group("스킨");
         var skins = SkinPanel;

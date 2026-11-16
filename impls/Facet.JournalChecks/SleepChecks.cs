@@ -81,7 +81,7 @@ internal static partial class Program
         Assert(records.Entries.Count==2 && records.Entries[1].Note=="이전 기록" && records.Entries[1].Bed=="01:50" && records.Entries[0].AwakeMinutes==null && records.Removed.Single().Note=="지운 기록","every record, the archive, old fields and nulls reach the store");
         Assert(!File.ReadAllText(pluginStore.PathName,System.Text.Encoding.Latin1).Contains("FinalWake"),"the sleep store is encrypted");
         var tabs=loaded.Workspace!.Tabs;
-        Assert(tabs[0].Widgets.Any(w=>w.Id=="builtin.sleep" && w.WidgetId==LegacySleep.DurationWidget && w.X==20) && tabs.Single(t=>t.Id==WorkspaceLayouts.SleepTab).Widgets.Single().WidgetId==LegacySleep.PatternWidget,"the graph keeps its place and the sleep tab gets the pattern widget");
+        Assert(tabs[0].Widgets.Any(w=>w.Id=="builtin.sleep" && w.WidgetId==LegacySleep.DurationWidget && w.X==20*WorkspaceGrid.LegacyCellSize(loaded.Settings)) && tabs.Single(t=>t.Id==WorkspaceLayouts.SleepTab).Widgets.Single().WidgetId==LegacySleep.PatternWidget,"the graph keeps its place (now in pixels) and the sleep tab gets the pattern widget");
         Assert(loaded.Settings.SleepGraphTransparencyPercent==null && PluginData.Setting(loaded,LegacySleep.Plugin,LegacySleep.TransparencyKey)=="40","the background setting moves to the plugin");
         var again=new Store(root).Load();
         Assert(new SleepRecords(pluginStore).Entries.Count==2 && again.Workspace!.Tabs.Single(t=>t.Id==WorkspaceLayouts.SleepTab).Widgets.Count==1,"a second load moves nothing");

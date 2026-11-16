@@ -208,12 +208,12 @@ internal static partial class Program
             else if(keys.SequenceEqual(new byte[]{0x24}))board.GoToCalendarToday();
             else throw new Exception("Unsupported calendar test input.");
         }
-        Assert(tabs.Items.Count>=2 && tabs.SelectedIndex==0 && ReferenceEquals(tabs.Items[^1],hud.FindName("SettingsTab")),"dashboard opens first and settings stays rightmost");
+        Assert(tabs.Items.Count>=1 && tabs.SelectedIndex==0 && hud.FindName("SettingsTab")==null,"dashboard opens first and settings is not a tab");
         var dashboard=(TabItem)tabs.Items[0];
         Assert(System.Windows.Automation.AutomationProperties.GetName(dashboard)=="대시보드","dashboard has an accessible header");
         // The calendar widget sits on the dashboard here; another tab does not get its keys.
-        tabs.SelectedItem=hud.FindName("SettingsTab");Assert(!board.IsEditingDay && !hud.HandleWidgetKey(System.Windows.Input.Key.PageDown,System.Windows.Input.ModifierKeys.None) && !hud.HandleWidgetKey(System.Windows.Input.Key.Home,System.Windows.Input.ModifierKeys.None),"a tab without the calendar does not handle calendar commands");tabs.SelectedIndex=0;
-        Input(0x11,0xDB);Assert(ReferenceEquals(tabs.SelectedItem,hud.FindName("SettingsTab")),"previous tab wraps to rightmost settings");
+        hud.OpenSettings();Assert(!board.IsEditingDay && !hud.HandleWidgetKey(System.Windows.Input.Key.PageDown,System.Windows.Input.ModifierKeys.None) && !hud.HandleWidgetKey(System.Windows.Input.Key.Home,System.Windows.Input.ModifierKeys.None),"the settings modal takes no calendar keys");hud.CloseSettings();tabs.SelectedIndex=0;
+        Input(0x11,0xDB);Assert(tabs.SelectedItem is TabItem{Visibility:Visibility.Visible},"previous tab wraps among the visible tabs");
         Input(0x11,0xDD);Assert(tabs.SelectedIndex==0 && !board.IsEditingDay,"next tab wraps to the dashboard without opening a day");
         Assert(hud.HandleWidgetKey(System.Windows.Input.Key.Home,System.Windows.Input.ModifierKeys.None),"the selected tab routes calendar keys to its widget");
 
