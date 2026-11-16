@@ -99,6 +99,33 @@ try {
         }
         Write-Host ('Refreshed installed plugin: ' + $built.Name)
     }
+    # Skins work the same way: registry/skins/<folder> overwrites the installed skin with the same id in <data>/skins,
+    # keeping the installed version in skin.json so a released update is still offered.
+    $dataSkins = Join-Path $env:LOCALAPPDATA 'MaterialStone/Facet/skins'
+    $installedSkins = @{}
+    if (Test-Path -LiteralPath $dataSkins) {
+        foreach ($folder in Get-ChildItem -LiteralPath $dataSkins -Directory) {
+            $manifest = Join-Path $folder.FullName 'skin.json'
+            if (-not (Test-Path -LiteralPath $manifest)) { continue }
+            try { $installedSkins[[string](Get-Content -LiteralPath $manifest -Raw -Encoding UTF8 | ConvertFrom-Json).id] = $folder.FullName } catch { }
+        }
+    }
+    $skinSources = Join-Path $projectRoot 'registry/skins'
+    foreach ($source in @(if (Test-Path -LiteralPath $skinSources) { Get-ChildItem -LiteralPath $skinSources -Directory })) {
+        $sourceManifest = Join-Path $source.FullName 'skin.json'
+        if (-not (Test-Path -LiteralPath $sourceManifest)) { continue }
+        $text = [IO.File]::ReadAllText($sourceManifest, [Text.Encoding]::UTF8)
+        $id = [string]($text | ConvertFrom-Json).id
+        $installed = $installedSkins[$id]
+        if (-not $installed) { continue }
+        try {
+            $version = [string](Get-Content -LiteralPath (Join-Path $installed 'skin.json') -Raw -Encoding UTF8 | ConvertFrom-Json).version
+            Copy-Item -Path (Join-Path $source.FullName '*') -Destination $installed -Recurse -Force -Exclude 'skin.json' -ErrorAction Stop
+            $text = [regex]::new('"version"\s*:\s*"[^"]*"').Replace($text, '"version": "' + $version + '"', 1)
+            [IO.File]::WriteAllText((Join-Path $installed 'skin.json'), $text, [Text.UTF8Encoding]::new($false))
+            Write-Host ('Refreshed installed skin: ' + $id)
+        } catch { Write-Warning ('Could not refresh installed skin; close Facet and rebuild: ' + $id) }
+    }
     foreach ($file in @('Facet.exe', 'Facet.dll', 'Facet.Core.dll', 'Facet.Plugins.dll', 'Facet.deps.json', 'Facet.runtimeconfig.json')) {
         if (-not (Test-Path -LiteralPath (Join-Path $releasePath $file) -PathType Leaf)) { throw ('Published release is incomplete: ' + $file) }
     }
