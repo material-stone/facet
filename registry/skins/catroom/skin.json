@@ -28,6 +28,17 @@
       "heading": { "file": "Jua-Regular.ttf", "family": "Jua" }
     },
     "world": { "page": "world.html", "scenes": ["room"] },
+    "widgets": [
+      "facet.app/tabs@1",
+      "facet.clock/time@1",
+      "facet.clock/weekday@1",
+      "facet.clock/date-time@1",
+      "facet.weather/now@1",
+      "facet.schedule/agenda@1",
+      "facet.condition/current@1",
+      "facet.condition/history@1",
+      "facet.sleep/week@1"
+    ],
     "hudWidgets": true,
     "hudStyle": "soft",
     "panelMarkLength": 0,

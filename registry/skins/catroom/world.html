@@ -2,8 +2,471 @@
 <html lang="ko"><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
 <title>Facet world</title>
-<style>html,body{margin:0;height:100%;background:#fbdfd0;overflow:hidden}canvas{display:block;width:100vw;height:100vh}</style>
-</head><body><canvas id="cv" aria-hidden="true"></canvas><script>
+<style>html,body{margin:0;height:100%;background:#fbdfd0;overflow:hidden}canvas{display:block;width:100vw;height:100vh}
+#wl{position:fixed;inset:0;pointer-events:none;overflow:hidden;contain:strict;
+  --hl:0 0 0 .16em #fff7ef,0 0 .7em .22em rgba(255,214,140,.9);--hlf:drop-shadow(0 0 .1em #fff7ef) drop-shadow(0 0 .4em rgba(255,206,120,.95));
+  --wsh:.3em .4em .5em rgba(110,65,40,.22);--ol:#5a4238}
+#wl *{box-sizing:border-box}
+#wl.still *,#wl.still *::before,#wl.still *::after{animation-play-state:paused!important}
+.wg{position:absolute;left:0;top:0;transform-origin:0 0;pointer-events:auto;color:#4a3a33;line-height:1.2;user-select:none;
+  font-family:"Jua","Gowun Dodum","Malgun Gothic","Apple SD Gothic Neo",sans-serif;-webkit-font-smoothing:antialiased}
+.wg>.in{position:absolute;inset:0}
+.wg.fresh>.in{animation:wpop .7s cubic-bezier(.34,1.56,.64,1) both}
+@keyframes wpop{from{opacity:0;scale:.6}to{opacity:1;scale:1}}
+.wg.shake>.in{animation:wshake .4s ease-in-out}
+@keyframes wshake{25%{translate:-.25em 0}75%{translate:.25em 0}}
+.wg [data-k]{transition:translate .35s cubic-bezier(.34,1.56,.64,1),scale .25s cubic-bezier(.34,1.56,.64,1),box-shadow .2s,filter .2s}
+.wg .prs{scale:.94!important}
+.tagl{display:inline-block;background:#fff7ef;border:.16em solid var(--ol);border-radius:.45em;padding:0 .5em;font-size:1em;color:#4a3a33;box-shadow:var(--wsh);rotate:-2deg;white-space:nowrap}
+.tip{position:absolute;left:50%;bottom:100%;translate:-50% -.3em;background:#fff7ef;border:.12em solid var(--ol);border-radius:.5em;padding:0 .45em;white-space:nowrap;font-size:.9em;opacity:0;scale:.6;transition:opacity .2s,scale .3s cubic-bezier(.34,1.56,.64,1);pointer-events:none;z-index:3}
+.hov>.tip{opacity:1;scale:1}
+/* Clock family: cheese cat face with a dial plate, weekday tag and tail pendulum */
+.ck{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
+.ck .cl{display:flex;flex-direction:column;align-items:center;height:100%}
+.ck.col .cl{width:auto}
+.chead{position:relative;flex:none}
+.chead svg{display:block;width:100%;height:100%;overflow:visible;filter:drop-shadow(.3em .4em .25em rgba(110,65,40,.22))}
+.cl.hov .chead svg{filter:drop-shadow(.3em .4em .25em rgba(110,65,40,.22)) var(--hlf)}
+.cl.hov{translate:0 -.2em}
+.ctime{position:absolute;left:0;right:0;top:78%;translate:0 -50%;text-align:center;line-height:1;color:#4a3a33;letter-spacing:-.02em;white-space:nowrap}
+.ctime .dg{display:inline-block}.ctime .dg.pop{animation:dpop .55s cubic-bezier(.34,1.56,.64,1)}
+.ctime .col{display:inline-block;animation:colb 1s steps(1) infinite}
+@keyframes colb{50%{opacity:.15}}
+@keyframes dpop{0%{scale:.4;translate:0 .3em}100%{scale:1;translate:0 0}}
+.cday{position:relative;z-index:1;background:#fff7ef;border:.16em solid var(--ol);border-radius:.6em;padding:0 .6em;white-space:nowrap;box-shadow:var(--wsh)}
+.ctail{position:relative;z-index:0;transform-origin:50% 0;animation:pend 1s ease-in-out infinite alternate}
+.ctail svg{display:block;width:100%;overflow:visible}
+@keyframes pend{from{rotate:14deg}to{rotate:-14deg}}
+.kp{animation:look 1s ease-in-out infinite alternate}
+@keyframes look{from{transform:translateX(-2.5px)}to{transform:translateX(2.5px)}}
+.ear{transform-box:view-box;transform-origin:0 0}
+.ears.pop .ear{animation:earpop .7s cubic-bezier(.34,1.56,.64,1)}
+@keyframes earpop{0%,100%{transform:translate(-23.5px,-19px) rotate(-39.6deg) scaleY(1) rotate(39.6deg) translate(23.5px,19px)}35%{transform:translate(-23.5px,-19px) rotate(-39.6deg) scaleY(1.26) rotate(39.6deg) translate(23.5px,19px)}}
+.ck.row .cl{flex-direction:row;gap:.5em;width:100%;justify-content:center}
+.ck.row .side{display:flex;flex-direction:column;align-items:flex-start;gap:.25em;min-width:0}
+.ck.row .big{font-size:1.5em;line-height:1;white-space:nowrap}
+.ck .big,.ck .sub{text-shadow:0 0 .12em #fff7ef,0 0 .25em #fff7ef,0 0 .4em #fff7ef}
+.ck.row .ctail{position:absolute;left:var(--tx);top:var(--ty)}
+/* Weather: wooden sign hanging from a nail on two strings */
+.wx{position:absolute;inset:0;display:flex;justify-content:center;align-items:flex-start}
+.wx .nail{position:absolute;left:50%;top:.15em;width:.55em;height:.55em;translate:-50% 0;border-radius:50%;background:#a9753f;border:.12em solid var(--ol);z-index:2}
+.swing{position:absolute;left:50%;top:.42em;transform-origin:50% 0;animation:idle 3.4s ease-in-out infinite alternate}
+@keyframes idle{from{rotate:-1.6deg}to{rotate:1.6deg}}
+.sign{position:relative;translate:-50% 0;margin-top:1.55em;display:flex;align-items:center;gap:.4em;padding:.15em .75em .15em .5em;border:.16em solid var(--ol);border-radius:.5em;
+  background:repeating-linear-gradient(0deg,rgba(169,117,63,.18) 0 .12em,transparent .12em .7em),#d6a46b;white-space:nowrap;transform-origin:50% -1.55em;box-shadow:var(--wsh)}
+.sign::before{content:"";position:absolute;left:18%;right:18%;top:-1.6em;height:1.45em;pointer-events:none;
+  background:linear-gradient(to top left,transparent calc(50% - .07em),#5a4238 calc(50% - .07em) calc(50% + .07em),transparent calc(50% + .07em)) left/50% 100% no-repeat,
+  linear-gradient(to top right,transparent calc(50% - .07em),#5a4238 calc(50% - .07em) calc(50% + .07em),transparent calc(50% + .07em)) right/50% 100% no-repeat}
+.sign.hov{box-shadow:var(--hl),var(--wsh)}
+.sign svg{width:2.1em;height:2.1em;flex:none;overflow:visible}
+.sign.loading svg{animation:spin 1.6s linear infinite;opacity:.7}
+@keyframes spin{to{rotate:360deg}}
+.sign .wt{display:flex;flex-direction:column;line-height:1.05}
+.sign .wt b{font-weight:400;font-size:1.25em}
+.sign .wt small{font-size:.72em;color:#5a4238;opacity:.85}
+.sign .tmp{font-size:1.6em;line-height:1;margin-left:.1em}
+/* Agenda: cork board with sticky notes */
+.cork{position:absolute;inset:.25em;display:flex;flex-direction:column;gap:.45em;padding:.5em .7em .6em;border-radius:.5em;border:.4em solid #c48f57;outline:.16em solid var(--ol);
+  background:radial-gradient(#d6a46b 14%,transparent 16%) 0 0/.8em .8em,radial-gradient(#d6a46b 10%,transparent 12%) .4em .4em/.8em .8em,#ecc49b;box-shadow:var(--wsh)}
+.cork .tagl{align-self:flex-start}
+.notes{flex:1;min-height:0;display:flex;gap:.9em;align-items:stretch}
+.cork.col .notes{flex-direction:column;gap:.55em}
+.note{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;padding:.3em .6em;border:.16em solid var(--ol);border-radius:.15em .15em .5em .15em;box-shadow:var(--wsh);rotate:var(--r,0deg)}
+.note.hov{translate:0 -.2em;scale:1.03;box-shadow:var(--hl),var(--wsh)}
+.note .tm{font-size:.85em;opacity:.8;white-space:nowrap}
+.note .tx{font-size:1.15em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative}
+.n1{background:#ffe08a;--r:-1.6deg}.n2{background:#f4a7b0;--r:1.2deg}.n3{background:#9fd9c3;--r:-.6deg}.n0{background:#fff7ef;opacity:.75;--r:.8deg}
+.note.done .tx,.note.done .tm{opacity:.55}
+.note .strike{position:absolute;left:.4em;top:62%;width:calc(100% - 2.6em);height:.16em;border-radius:.1em;background:#5a4238;rotate:-1.2deg}
+.note .stamp{position:absolute;right:.25em;top:50%;width:1.45em;translate:0 -50%;opacity:.9;rotate:-25deg}
+.note .stamp svg{display:block;width:100%}
+.note .pin{position:absolute;left:50%;top:-.45em;width:.7em;height:.7em;translate:-50% 0;border-radius:50%;background:#e8798a;border:.12em solid var(--ol)}
+.note.cur{animation:wob 2.4s ease-in-out infinite}
+@keyframes wob{0%,100%{rotate:2.2deg}50%{rotate:-.8deg}}
+.note .clip{position:absolute;left:-.25em;top:-.55em;width:.6em;height:1.3em;border-radius:.3em;background:#9fd9c3;border:.15em solid var(--ol);rotate:-12deg}
+.note em{font-style:normal;font-size:.8em;background:#fff7ef;border-radius:.4em;padding:0 .3em;margin-left:.3em;white-space:nowrap}
+.note em.end{background:#e8798a;color:#fff7ef}
+/* Mood tokens on a wooden shelf */
+.mood{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:0 .2em .55em}
+.mood .tagl{align-self:flex-start;margin-bottom:.2em}
+.toks{display:flex;justify-content:space-between;align-items:flex-end;padding:0 .2em;position:relative;z-index:1}
+.tok{position:relative;width:2.6em;height:2.6em;padding:.1em;border-radius:50%;background:#fff7ef;border:.16em solid var(--ol);box-shadow:var(--wsh)}
+.tok.hov{translate:0 -.25em;box-shadow:var(--hl),var(--wsh)}
+.tok.on{background:#f4a7b0;scale:1.12}
+.tok.on.prs{scale:1.02!important}
+.tok svg{width:100%;height:100%;display:block;overflow:visible}
+.tok.hit{animation:tokpop .5s cubic-bezier(.34,1.56,.64,1)}
+@keyframes tokpop{0%{scale:1}30%{scale:1.3 .8}60%{scale:.95 1.15}100%{scale:1.12}}
+.ring{position:absolute;inset:-.2em;border-radius:50%;border:.2em solid #f4a7b0;pointer-events:none;animation:ringo .6s ease-out forwards}
+@keyframes ringo{from{scale:.8;opacity:1}to{scale:2.1;opacity:0}}
+.plank{height:.7em;margin:0 -.1em;border:.16em solid var(--ol);border-radius:.3em;background:linear-gradient(#d6a46b 55%,#c48f57 55%);box-shadow:var(--wsh);position:relative}
+.plank::before,.plank::after{content:"";position:absolute;top:100%;width:.7em;height:.55em;background:#a9753f;border:.14em solid var(--ol);border-top:0;border-radius:0 0 .5em .5em}
+.plank::before{left:12%}.plank::after{right:12%}
+/* Condition history: churu tubes in a tray */
+.churu{position:absolute;inset:0;display:flex;flex-direction:column;gap:.2em;padding:.2em .2em .3em}
+.churu .tagl{align-self:flex-start}
+.tray{flex:1;min-height:0;display:flex;align-items:flex-end;padding:0 .9em}
+.tube{position:relative;flex:1;min-width:0;height:100%;padding-top:1.2em;display:flex;flex-direction:column;justify-content:flex-end;align-items:center}
+.tube i{display:block;position:relative;width:min(2.4em,90%);height:var(--h);min-height:1.1em;border:.16em solid var(--ol);border-radius:.3em .3em .55em .55em;
+  background:repeating-linear-gradient(-35deg,#ffe08a 0 .45em,#f2a65a .45em .9em);transform-origin:50% 100%;box-shadow:var(--wsh);transition:translate .35s cubic-bezier(.34,1.56,.64,1),box-shadow .2s}
+.fresh .tube i{animation:grow .8s cubic-bezier(.34,1.56,.64,1) both;animation-delay:calc(.3s + var(--i)*.08s)}
+.tube i::before{content:"";position:absolute;left:-.16em;right:-.16em;top:-.7em;height:.7em;border:.16em solid var(--ol);border-radius:.15em .15em 0 0;
+  background:repeating-linear-gradient(90deg,#fff1df 0 .22em,#f0dcc4 .22em .32em);clip-path:polygon(0 0,100% 0,100% 30%,88% 50%,100% 70%,100% 100%,0 100%)}
+.tube i::after{content:"";position:absolute;left:.12em;right:.12em;top:.55em;height:.12em;background:repeating-linear-gradient(90deg,#5a4238 0 .18em,transparent .18em .36em)}
+.tube .dot{position:absolute;left:50%;bottom:.35em;width:.6em;height:.6em;translate:-50% 0;border-radius:50%;border:.12em solid var(--ol);background:var(--kc,#fff7ef)}
+.tube.today i{background:repeating-linear-gradient(-35deg,#f4a7b0 0 .45em,#e8798a .45em .9em)}
+.tube.none i{background:#fff7ef;opacity:.55;border-style:dashed}
+.tube .tip{bottom:calc((100% - 1.2em) * var(--hn) + 1.1em)}
+.tube.hov i{translate:0 -.15em;box-shadow:var(--hl),var(--wsh)}
+@keyframes grow{from{scale:1 0}to{scale:1 1}}
+.trayb{height:.65em;border:.16em solid var(--ol);border-radius:.3em;background:#c48f57;box-shadow:var(--wsh);margin:0 .2em}
+.days{display:flex;padding:0 .7em;margin:.1em .2em 0;background:#fff7ef;border:.14em solid var(--ol);border-radius:1em}
+.days b{flex:1;min-width:0;text-align:center;font-weight:400;font-size:.95em;white-space:nowrap}.days b.today{color:#e8798a}
+/* Sleep week: curled cats on mint cushions on a bench */
+.napw{position:absolute;inset:0;display:flex;flex-direction:column;padding:.2em .2em 0}
+.napw .tagl{align-self:flex-start}
+.naps{flex:1;min-height:0;display:flex;justify-content:space-around;align-items:flex-end;padding:0 .4em;position:relative;z-index:1}
+.nap{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+.nap svg{display:block;width:auto;overflow:visible}
+.nap.hov svg{translate:0 -.15em;filter:var(--hlf)}
+.nap svg{transition:translate .35s cubic-bezier(.34,1.56,.64,1),filter .2s}
+.nap.empty svg{opacity:.5}
+.bench{height:.8em;margin:0 -.1em;border:.16em solid var(--ol);border-radius:.3em;background:linear-gradient(#d6a46b 55%,#c48f57 55%);box-shadow:var(--wsh);position:relative}
+.legs{position:relative;height:2.2em}
+.legs::before,.legs::after{content:"";position:absolute;top:0;width:.8em;height:100%;background:#a9753f;border:.14em solid var(--ol);border-top:0;border-radius:0 0 .3em .3em}
+.legs::before{left:6%}.legs::after{right:6%}
+.nap .nl{position:absolute;left:50%;top:calc(100% + 1.05em);translate:-50% 0;text-align:center;font-weight:400;font-size:.85em;line-height:1.1;color:#fff7ef;text-shadow:0 0 .2em #5a4238,0 0 .1em #5a4238,0 0 .1em #5a4238;white-space:nowrap;pointer-events:none}
+.nap .nl small{display:block;font-size:.85em}
+.nap.today .nl{color:#ffe08a}
+.br{transform-box:fill-box;transform-origin:50% 100%;animation:breathe 3s ease-in-out infinite;animation-delay:var(--bd,0s)}
+@keyframes breathe{50%{transform:scale(1.03,1.07)}}
+.zz{position:absolute;right:6%;font-size:.8em;color:#5a4238;opacity:.7;animation:zz 2.6s ease-in-out infinite;animation-delay:var(--bd,0s)}
+@keyframes zz{0%{translate:0 .3em;opacity:0}40%{opacity:.75}100%{translate:.3em -.5em;opacity:0}}
+/* Tab strip: cream paper tabs on a wooden rail */
+.tabs{position:absolute;inset:0;display:flex;align-items:flex-end;gap:.25em;padding:0 .3em}
+.tabs::after{content:"";position:absolute;left:0;right:0;bottom:0;height:.4em;background:#c48f57;border:.12em solid var(--ol);border-radius:.25em;z-index:0}
+.tab{position:relative;z-index:1;flex:0 1 auto;min-width:0;height:84%;display:flex;align-items:center;justify-content:center;gap:.35em;padding:0 .6em;margin-bottom:.25em;
+  background:#fff7ef;border:.12em solid var(--ol);border-bottom:0;border-radius:.7em .7em 0 0;color:#8a6e62;white-space:nowrap;box-shadow:.15em -.05em .3em rgba(110,65,40,.14)}
+.tab span{overflow:hidden;text-overflow:ellipsis}
+.tab svg{flex:none;width:1.2em;height:1.2em;overflow:visible}
+.tab.sel{background:#f9d5c6;color:#4a3a33;height:100%;margin-bottom:0}
+.tab.sel::after{content:"";position:absolute;left:50%;bottom:.3em;width:1.6em;height:.18em;translate:-50% 0;border-radius:.1em;background:#e8798a}
+.tab.hov{box-shadow:var(--hl);translate:0 -.1em}
+@media (prefers-reduced-motion:reduce){#wl *,#wl *::before,#wl *::after{animation:none!important;transition:none!important}}
+</style>
+</head><body><canvas id="cv" aria-hidden="true"></canvas><div id="wl" aria-hidden="true"></div><script>
+/* ---------- Widget layer (ADR 0109): the app sends widget state, this page draws it in the cat-room look ---------- */
+(function(){
+'use strict';
+const layer=document.getElementById('wl');
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const OL='#5a4238';
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const num=v=>typeof v==='number'&&isFinite(v);
+function post(msg){if(window.chrome&&chrome.webview)chrome.webview.postMessage(msg)}
+
+/* ---- Drawing parts (ported from the approved mockup) ---- */
+function heartD(cx,cy,s){return `M${cx},${cy+s*.35} C${cx-s*1.1},${cy-s*.35} ${cx-s*.45},${cy-s*1.05} ${cx},${cy-s*.45} C${cx+s*.45},${cy-s*1.05} ${cx+s*1.1},${cy-s*.35} ${cx},${cy+s*.35}Z`}
+function catHead(o){
+  o=o||{};const sw=o.sw||4,dy=o.plate?-6:0;
+  const ear=`<g class="ear"><path d="M-38,-7 L-31,-47 L-9,-31 L-20,-10Z" fill="#f2a65a" stroke="${OL}" stroke-width="${sw}" stroke-linejoin="round"/><path d="M-30,-20 L-28,-38 L-17,-30Z" fill="#f4a7b0"/></g>`;
+  const fl=o.flat?' transform="rotate(-42 -22 -22)"':'';
+  const head=`M0,-32 C24.6,-32 41,-16.6 41,6.6 C41,23.3 23.8,32 0,32 C-23.8,32 -41,23.3 -41,6.6 C-41,-16.6 -24.6,-32 0,-32Z`;
+  let s=`<g class="ears"><g${fl}>${ear}</g><g transform="scale(-1,1)"><g${fl}>${ear}</g></g></g>`;
+  s+=`<path d="${head}" fill="#f2a65a" stroke="${OL}" stroke-width="${sw}" stroke-linejoin="round"/>`;
+  s+=`<path d="M-9,-28 L-7,-19 M0,-30 L0,-20 M9,-28 L7,-19" stroke="#d9843a" stroke-width="${sw*1.1}" stroke-linecap="round" fill="none"/>`;
+  s+=`<path d="${head}" fill="none" stroke="${OL}" stroke-width="${sw}" stroke-linejoin="round"/>`;
+  s+=`<g transform="translate(0,${o.plate?0:3})">`;
+  s+=o.plate?`<ellipse cx="0" cy="27" rx="35" ry="15.5" fill="#fff7ef" stroke="${OL}" stroke-width="${sw}"/>`:`<ellipse cx="0" cy="12" rx="14" ry="8" fill="#fff1df"/>`;
+  s+=`<ellipse cx="-27" cy="${11+dy}" rx="6" ry="3.6" fill="#f4a7b0"/><ellipse cx="27" cy="${11+dy}" rx="6" ry="3.6" fill="#f4a7b0"/>`;
+  const ny=5+dy;s+=`<path d="M-4,${ny} L4,${ny} L0,${ny+4}Z" fill="#e8798a" stroke="${OL}" stroke-width="${sw*.4}" stroke-linejoin="round"/>`;
+  const st2=`stroke="#4a3a33" stroke-width="${sw}" stroke-linecap="round" fill="none"`;
+  const dot=x=>`<ellipse cx="${x}" cy="${-3+dy}" rx="5.5" ry="6.5" fill="#4a3a33"/><circle cx="${x-1.8}" cy="${-5.8+dy}" r="1.9" fill="#fff"/>`;
+  switch(o.eyes){
+    case 'angry':s+=dot(-17)+dot(17)+`<path d="M-27,-16 L-10,-9 M27,-16 L10,-9" ${st2}/>`;break;
+    case 'tear':s+=dot(-17)+dot(17)+`<path d="M-21,5 Q-26,13 -21,15.5 Q-16,13 -21,5Z M21,5 Q16,13 21,15.5 Q26,13 21,5Z" fill="#9fd9c3" stroke="${OL}" stroke-width="${sw*.4}"/>`;break;
+    case 'flat':s+=`<path d="M-23,-3 H-11 M11,-3 H23" ${st2}/>`;break;
+    case 'sleepy':s+=`<path d="M-23,-4 Q-17,3 -11,-4 M11,-4 Q17,3 23,-4" ${st2}/>`;break;
+    case 'happy':s+=`<path d="M-23,0 Q-17,-10 -11,0 M11,0 Q17,-10 23,0" ${st2}/>`;break;
+    case 'heart':s+=`<path d="${heartD(-17,-1,9)} ${heartD(17,-1,9)}" fill="#e8798a" stroke="${OL}" stroke-width="${sw*.4}"/>`;break;
+    default:s+=o.kp?`<g class="kp">${dot(-17)+dot(17)}</g>`:dot(-17)+dot(17);
+  }
+  const ms=`stroke="${OL}" stroke-width="${sw*.6}" stroke-linecap="round" stroke-linejoin="round" fill="none"`;
+  switch(o.mouth){
+    case 'w':s+=`<path d="M-7,15 Q-3.5,20 0,15 Q3.5,20 7,15" ${ms}/>`;break;
+    case 'frown':s+=`<path d="M-7,19 Q0,13 7,19" ${ms}/>`;break;
+    case 'flat':s+=`<path d="M-6,17 H6" ${ms}/>`;break;
+    case 'wobble':s+=`<path d="M-8,18 Q-4,15 0,18 Q4,21 8,18" ${ms}/>`;break;
+    case 'o':s+=`<ellipse cx="0" cy="17" rx="3.4" ry="4" fill="#e8798a" stroke="${OL}" stroke-width="${sw*.5}"/>`;break;
+    case 'open':s+=`<path d="M-8,13 Q0,29 8,13Z" fill="#e8798a" stroke="${OL}" stroke-width="${sw*.6}" stroke-linejoin="round"/><path d="M-4.5,19.5 Q0,25 4.5,19.5 Q0,17.5 -4.5,19.5Z" fill="#f4a7b0"/>`;break;
+  }
+  if(!o.plate)s+=`<path d="M-34,${9+dy} L-47,${6.5+dy} M-34,${14+dy} L-47,${16.5+dy} M34,${9+dy} L47,${6.5+dy} M34,${14+dy} L47,${16.5+dy}" stroke="${OL}" stroke-width="${sw*.4}" stroke-linecap="round" opacity=".8"/>`;
+  s+='</g>';
+  if(o.sparkle)s+=`<path d="M40,-40 L42,-34 L48,-32 L42,-30 L40,-24 L38,-30 L32,-32 L38,-34Z M-44,-30 L-43,-27 L-40,-26 L-43,-25 L-44,-22 L-45,-25 L-48,-26 L-45,-27Z" fill="#ffe08a" stroke="${OL}" stroke-width="${sw*.35}" stroke-linejoin="round"/>`;
+  if(o.zz)s+=`<text x="34" y="-30" font-size="20" fill="${OL}" font-family="sans-serif">z</text>`;
+  return s;
+}
+const PAW=`<svg viewBox="0 0 24 24"><ellipse cx="12" cy="15.5" rx="5.2" ry="4.3" fill="#e8798a"/><circle cx="5.6" cy="10" r="2.2" fill="#e8798a"/><circle cx="9.4" cy="6.4" r="2.3" fill="#e8798a"/><circle cx="14.6" cy="6.4" r="2.3" fill="#e8798a"/><circle cx="18.4" cy="10" r="2.2" fill="#e8798a"/></svg>`;
+const TAIL=`<svg viewBox="0 0 20 44"><path d="M10,0 C10,13 4,19 6,28 C8,35 14,37 12,40" stroke="${OL}" stroke-width="9" stroke-linecap="round" fill="none"/><path d="M10,0 C10,13 4,19 6,28 C8,35 14,37 12,40" stroke="#f2a65a" stroke-width="6.2" stroke-linecap="round" fill="none"/><path d="M8.6,17.6 L5.2,19.8 M6.2,29.3 L10,30.4 M11.5,36.2 L13.4,38.4" stroke="#d9843a" stroke-width="2.6" stroke-linecap="round"/></svg>`;
+const CLOUD=(y,f)=>`<path d="M6.5,${y} H17.5 A4,4 0 0 0 17.5,${y-8} A5.5,5.5 0 0 0 7,${y-9} A4.5,4.5 0 0 0 6.5,${y}Z" fill="${f||'#fff7ef'}" stroke="${OL}" stroke-width="1.6" stroke-linejoin="round"/>`;
+const SUN=(cx,cy,r)=>`<g stroke="${OL}" stroke-width="1.6" stroke-linecap="round">${[0,1,2,3,4,5,6,7].map(i=>{const a=i*Math.PI/4,c=Math.cos(a),s=Math.sin(a);return `<path d="M${(cx+c*(r+2)).toFixed(1)},${(cy+s*(r+2)).toFixed(1)} L${(cx+c*(r+4.4)).toFixed(1)},${(cy+s*(r+4.4)).toFixed(1)}"/>`}).join('')}</g><circle cx="${cx}" cy="${cy}" r="${r}" fill="#ffe08a" stroke="${OL}" stroke-width="1.6"/>`;
+const WICON={
+  clear:`<svg viewBox="0 0 24 24">${SUN(12,12,5.6)}</svg>`,
+  partly:`<svg viewBox="0 0 24 24">${SUN(9,8,4.4)}<g transform="translate(2,3)">${CLOUD(17)}</g></svg>`,
+  cloud:`<svg viewBox="0 0 24 24">${CLOUD(18.5)}<g transform="translate(-3,-5) scale(.6)" opacity=".9">${CLOUD(18.5,'#f0dcc4')}</g></svg>`,
+  fog:`<svg viewBox="0 0 24 24">${CLOUD(13)}<path d="M4,16.5 H20 M6,19.5 H18 M8,22.5 H16" stroke="${OL}" stroke-width="1.6" stroke-linecap="round"/></svg>`,
+  rain:`<svg viewBox="0 0 24 24">${CLOUD(14.5)}<path d="M8,17.5 L7,20.5 M12.5,17.5 L11.5,20.5 M17,17.5 L16,20.5" stroke="#4e86c2" stroke-width="2" stroke-linecap="round"/></svg>`,
+  snow:`<svg viewBox="0 0 24 24">${CLOUD(14)}<g fill="#fff7ef" stroke="${OL}" stroke-width="1"><circle cx="8" cy="18.5" r="1.6"/><circle cx="12.5" cy="20" r="1.6"/><circle cx="17" cy="18.5" r="1.6"/></g></svg>`,
+  night:`<svg viewBox="0 0 24 24"><path d="M15,3.5 A8.5,8.5 0 1 0 20.5,16 A7,7 0 0 1 15,3.5Z" fill="#ffe08a" stroke="${OL}" stroke-width="1.6" stroke-linejoin="round"/><path d="M19,3 L19.7,5 L21.7,5.7 L19.7,6.4 L19,8.4 L18.3,6.4 L16.3,5.7 L18.3,5Z" fill="#fff7ef" stroke="${OL}" stroke-width=".8"/></svg>`,
+  unknown:`<svg viewBox="0 0 24 24">${CLOUD(18.5)}<text x="12" y="16.6" text-anchor="middle" font-size="8" font-family="sans-serif" fill="${OL}">?</text></svg>`};
+const MOOD={good:{eyes:'happy',mouth:'open',sparkle:true},okay:{eyes:'dot',mouth:'w'},tired:{eyes:'flat',mouth:'flat'},
+  sleepy:{eyes:'sleepy',mouth:'o',zz:true},unwell:{eyes:'tear',mouth:'wobble'},stressed:{flat:true,eyes:'angry',mouth:'frown'}};
+const KCOL={good:'#9fd9c3',okay:'#ffe08a',tired:'#f0dcc4',sleepy:'#bcd3e3',unwell:'#f4a7b0',stressed:'#e8798a'};
+const KNAME={good:'좋음',okay:'보통',tired:'피곤',sleepy:'졸림',unwell:'아픔',stressed:'스트레스'};
+const ic=d=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+const TICON={
+  Home:ic('<path d="M4,11 L12,4 L20,11 V20 H14 V14 H10 V20 H4Z"/>'),
+  Dashboard:ic('<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>'),
+  Calendar:ic('<rect x="4" y="5.5" width="16" height="14.5" rx="2.5"/><path d="M4,10 H20 M8.5,3.5 V7 M15.5,3.5 V7"/>'),
+  Clock:ic('<circle cx="12" cy="12" r="8"/><path d="M12,7.5 V12 L15,14"/>'),
+  Moon:ic('<path d="M15,3.5 A8.5,8.5 0 1 0 20.5,16 A7,7 0 0 1 15,3.5Z"/>'),
+  Star:ic('<path d="M12,3.5 L14.6,9 L20.5,9.6 L16,13.6 L17.3,19.5 L12,16.5 L6.7,19.5 L8,13.6 L3.5,9.6 L9.4,9Z"/>'),
+  Heart:ic(`<path d="${heartD(12,13.5,9)}"/>`),
+  Sparkles:ic('<path d="M10,3.5 L11.8,9.2 L17.5,11 L11.8,12.8 L10,18.5 L8.2,12.8 L2.5,11 L8.2,9.2Z M18,14 L18.8,16.2 L21,17 L18.8,17.8 L18,20 L17.2,17.8 L15,17 L17.2,16.2Z"/>'),
+  Check:ic('<path d="M5,12.5 L10,17.5 L19,7"/>'),
+  Settings:ic('<circle cx="12" cy="12" r="3"/><path d="M12,3 V5.5 M12,18.5 V21 M3,12 H5.5 M18.5,12 H21 M5.6,5.6 L7.4,7.4 M16.6,16.6 L18.4,18.4 M5.6,18.4 L7.4,16.6 M16.6,7.4 L18.4,5.6"/>'),
+  Note:ic('<path d="M6,4 H15 L19,8 V20 H6Z M15,4 V8 H19 M9,12 H16 M9,16 H14"/>'),
+  Book:ic('<path d="M5,5 Q9,3.5 12,6 Q15,3.5 19,5 V19 Q15,17.5 12,20 Q9,17.5 5,19Z M12,6 V20"/>'),
+  Coffee:ic('<path d="M5,9 H16 V14 A5,5 0 0 1 11,19 H10 A5,5 0 0 1 5,14Z M16,10 H18 A2.5,2.5 0 0 1 18,15 H16 M8,3.5 V6 M11.5,3.5 V6"/>'),
+  Music:ic('<path d="M9,17.5 V5.5 L19,3.5 V15.5"/><circle cx="6.5" cy="17.5" r="2.5"/><circle cx="16.5" cy="15.5" r="2.5"/>')};
+const DAYS=['일','월','화','수','목','금','토'];
+
+/* ---- Per-type renderers: each returns innerHTML for the base-size box; font size is in base px ---- */
+function fontFor(type,bw,bh){
+  switch(type){
+    case 'facet.app/tabs@1':return clamp(bh*.36,8,40);
+    case 'facet.clock/time@1':return Math.min(bw,bh)/12;
+    case 'facet.clock/weekday@1':case 'facet.clock/date-time@1':return Math.min(bh/6.5,bw/12);
+    case 'facet.weather/now@1':return Math.min(bh/6.2,bw/20);
+    case 'facet.schedule/agenda@1':return Math.min(bh/9.5,bw/22);
+    case 'facet.condition/current@1':return Math.min(bh/5.6,bw/17.5);
+    case 'facet.condition/history@1':return Math.min(bh/10,bw/26);
+    case 'facet.sleep/week@1':return Math.min(bh/12,bw/32);
+  }
+  return 16;
+}
+function timeHTML(t,old){
+  t=String(t||'--:--');
+  return [...t].map((ch,i)=>ch===':'?'<span class="col">:</span>':`<span class="dg${old&&old[i]!==ch&&!reduce?' pop':''}">${esc(ch)}</span>`).join('');
+}
+function weekdayName(s){return s.weekday||(num(s.weekdayIndex)?DAYS[s.weekdayIndex]+'요일':'')}
+const RENDER={
+  'facet.app/tabs@1'(s){
+    const tabs=Array.isArray(s.tabs)?s.tabs:[];
+    return `<div class="tabs">${tabs.map(t=>{const name=String(t.name||'');
+      const icon=TICON[t.icon]||`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#f4a7b0" stroke="${OL}" stroke-width="1.8"/><text x="12" y="16.2" text-anchor="middle" font-size="11" fill="${OL}" font-family="sans-serif">${esc(name.slice(0,1))}</text></svg>`;
+      return `<div class="tab${t.selected?' sel':''}" data-k="tab:${esc(t.id)}" data-a="select" data-args='${esc(JSON.stringify({id:t.id}))}'>${icon}<span>${esc(name)}</span></div>`}).join('')}</div>`;
+  },
+  'facet.weather/now@1'(s){
+    const c=s.condition&&WICON[s.condition]?s.condition:'unknown';
+    const t=num(s.temperature)?(Math.round(s.temperature*10)/10)+'°':'';
+    const sub=[num(s.humidity)?'습도 '+Math.round(s.humidity)+'%':'',s.place||''].filter(Boolean).join(' · ')||s.status||'';
+    return `<div class="wx"><span class="nail"></span><div class="swing"><div class="sign${s.loading?' loading':''}" data-k="sign" data-a="refresh" data-args="{}">${WICON[c]}`+
+      `<span class="wt"><b>${esc(s.label||(s.loading?'불러오는 중':'날씨 확인 중'))}</b>${sub?`<small>${esc(sub)}</small>`:''}</span>${t?`<span class="tmp">${esc(t)}</span>`:''}</div></div></div>`;
+  },
+  'facet.schedule/agenda@1'(s,bw,bh){
+    const slot=(e,cls,kind)=>{if(!e)return '';
+      const tm=[e.start,e.end].filter(Boolean).join('–');
+      let extra='';
+      if(kind==='cur'){extra+='<em>지금</em>';if(num(e.minutesLeft))extra+=`<em class="${e.ending?'end':''}">${e.minutesLeft}분 남음</em>`}
+      return `<div class="note ${cls}${kind==='prev'?' done':''}${kind==='cur'?' cur':''}" data-k="note:${kind}">`+(kind==='cur'?'<span class="clip"></span>':'<span class="pin"></span>')+
+        `<span class="tm">${esc(tm)}${extra}</span><span class="tx">${esc(e.title||'')}</span>`+(kind==='prev'?`<span class="strike"></span><span class="stamp">${PAW}</span>`:'')+'</div>'};
+    let notes=slot(s.previous,'n1','prev')+slot(s.current,'n2','cur')+slot(s.next,'n3','next');
+    if(!notes)notes='<div class="note n0" data-k="note:none"><span class="pin"></span><span class="tx">남은 일정 없음 · 낮잠 시간</span></div>';
+    return `<div class="cork${bw/bh<2.4?' col':''}"><span class="tagl">오늘 할 일</span><div class="notes">${notes}</div></div>`;
+  },
+  'facet.condition/current@1'(s){
+    const kinds=Array.isArray(s.kinds)?s.kinds:[];
+    const toks=kinds.map(k=>`<div class="tok${s.current===k.id?' on':''}" data-k="tok:${esc(k.id)}" data-a="record" data-args='${esc(JSON.stringify({kind:k.id}))}'>`+
+      `<span class="tip">${esc(k.label||KNAME[k.id]||k.id)}</span><svg viewBox="-50 -56 100 98">${catHead(Object.assign({sw:5},MOOD[k.id]||MOOD.okay))}</svg></div>`).join('');
+    return `<div class="mood"><span class="tagl">오늘 기분${s.currentLabel?' · '+esc(s.currentLabel):''}</span><div class="toks">${toks}</div><div class="plank"></div></div>`;
+  },
+  'facet.condition/history@1'(s){
+    const days=Array.isArray(s.days)?s.days:[];
+    const tubes=days.map((d,i)=>{const lv=num(d.level)?clamp(d.level,0,6):0,h=lv?Math.round(lv/6*100):0;
+      return `<div class="tube${d.isToday?' today':''}${lv?'':' none'}" style="--h:${h}%;--hn:${(h/100).toFixed(2)}" data-k="tube:${esc(d.date)}" data-a="edit" data-args='${esc(JSON.stringify({date:d.date}))}'>`+
+        `<span class="tip">${esc(d.label||'')} ${lv?esc(KNAME[d.kind]||'')+' '+lv+'/6':'기록 없음'}</span><i style="--i:${i};--kc:${KCOL[d.kind]||'#fff7ef'}">${lv?'<span class="dot"></span>':''}</i></div>`}).join('');
+    const labels=days.map(d=>`<b${d.isToday?' class="today"':''}>${d.isToday?'오늘':esc(d.label||'')}</b>`).join('');
+    return `<div class="churu"><span class="tagl">7일 컨디션 · 츄르</span><div class="tray">${tubes}</div><div class="trayb"></div><div class="days">${labels}</div></div>`;
+  },
+  'facet.sleep/week@1'(s,bw,bh,fs){
+    const days=Array.isArray(s.days)?s.days:[];
+    const colEm=bw/Math.max(1,days.length||7)/fs, availEm=bh/fs-1.6-.8-2.2-.6;
+    const base=Math.max(.5,Math.min(availEm,colEm*42/64*1.2)/1.7);
+    const cats=days.map((d,i)=>{const h=num(d.hours)?d.hours:null,sc=h==null?.9:clamp(.8+(h-5)/4*.9,.8,1.7),ht=sc*base;
+      const svg=napSVG(h!=null,i).replace('<svg ',`<svg style="height:${ht.toFixed(2)}em" `);
+      return `<div class="nap${h==null?' empty':''}${d.isToday?' today':''}" data-k="nap:${esc(d.date)}" data-a="edit" data-args='${esc(JSON.stringify({date:d.date}))}'>`+
+        `<span class="tip">${esc(d.label||'')} ${h!=null?h+'시간':'기록 없음'}</span>${h!=null&&d.isToday?`<span class="zz" style="bottom:${(ht*.8).toFixed(2)}em">zZ</span>`:''}${svg}`+
+        `<b class="nl">${d.isToday?'오늘':esc(d.label||'')}${h!=null?`<small>${h}시간</small>`:''}</b></div>`}).join('');
+    return `<div class="napw"><span class="tagl">7일 낮잠</span><div class="naps">${cats}</div><div class="bench"></div><div class="legs"></div></div>`;
+  }
+};
+function napSVG(cat,i){
+  const cushion=`<ellipse cx="32" cy="35" rx="30" ry="6.5" fill="#9fd9c3" stroke="${OL}" stroke-width="2.2"/><ellipse cx="32" cy="33.6" rx="24" ry="3.6" fill="#bfe3d4"/>`;
+  if(!cat)return `<svg viewBox="0 0 64 42">${cushion}</svg>`;
+  return `<svg viewBox="0 0 64 42">${cushion}<g class="br" style="--bd:${(i*.37).toFixed(2)}s"><ellipse cx="28" cy="25" rx="19" ry="10.5" fill="#f2a65a" stroke="${OL}" stroke-width="2.2"/><path d="M21,15.4 L23,20 M28,14.6 L28.6,19.6 M35,15.4 L34.6,20" stroke="#d9843a" stroke-width="2.2" stroke-linecap="round"/><ellipse cx="28" cy="25" rx="19" ry="10.5" fill="none" stroke="${OL}" stroke-width="2.2"/>
+<path d="M38.05,20.55 L40,9.5 L47.4,17.6Z M44.25,17.6 L51,9.5 L52.25,20.75Z" fill="#f2a65a" stroke="${OL}" stroke-width="2" stroke-linejoin="round"/>
+<path d="M45.5,16 C51.1,16 54.9,19.5 54.9,24.8 C54.9,28.6 51,30.6 45.5,30.6 C40,30.6 36.1,28.6 36.1,24.8 C36.1,19.5 39.9,16 45.5,16Z" fill="#f2a65a" stroke="${OL}" stroke-width="2.2" stroke-linejoin="round"/><path d="M41,23 Q42.6,24.8 44.2,23 M47,23 Q48.6,24.8 50.2,23" stroke="#4a3a33" stroke-width="1.3" stroke-linecap="round" fill="none"/>
+<path d="M10,27 Q11,37 28,35.5 Q40,34.5 48,29.5" stroke="${OL}" stroke-width="7.6" stroke-linecap="round" fill="none"/><path d="M10,27 Q11,37 28,35.5 Q40,34.5 48,29.5" stroke="#f2a65a" stroke-width="5.2" stroke-linecap="round" fill="none"/><path d="M42,32.4 L45,31" stroke="#d9843a" stroke-width="5.2"/></g></svg>`;
+}
+
+/* Clock family keeps its DOM and only patches text, so the pendulum and eye animations never restart on the 1 s tick. */
+const CLOCKS={'facet.clock/time@1':1,'facet.clock/weekday@1':1,'facet.clock/date-time@1':1};
+function buildClock(r){
+  const type=r.type,in_=r.inner,face=`<svg viewBox="-50 -54 100 104">${catHead({kp:true,plate:true,sw:3.4})}</svg>`;
+  if(type==='facet.clock/time@1'){
+    in_.innerHTML=`<div class="ck col"><div class="cl" data-k="clock"><div class="chead" style="height:8em;width:7.7em">${face}<div class="ctime" style="font-size:1.45em"></div></div>`+
+      `<div class="cday" style="margin-top:-.75em"></div><div class="ctail" style="width:1.5em;margin-top:-.45em">${TAIL}</div></div></div>`;
+  }else{
+    const dt=type==='facet.clock/date-time@1';
+    in_.innerHTML=`<div class="ck row"><div class="cl" data-k="clock"><div class="chead" style="height:5.7em;width:5.5em">${face}<div class="ctime" style="font-size:${dt?1:1.5}em"></div></div>`+
+      `<div class="side">${dt?'<span class="big"></span>':''}<span class="cday"></span>${dt?'':'<span class="sub" style="font-size:.85em;padding-left:.3em"></span>'}</div></div></div>`;
+  }
+  r.parts={time:in_.querySelector('.ctime'),day:in_.querySelector('.cday'),big:in_.querySelector('.big'),sub:in_.querySelector('.sub'),ears:in_.querySelector('.ears')};
+  r.clk={};
+}
+function patchClock(r,s){
+  const p=r.parts,c=r.clk,type=r.type;
+  const wd=weekdayName(s),t=s.time||'--:--';
+  const plate=type==='facet.clock/weekday@1'?(wd.slice(0,1)||'?'):t;
+  if(c.plate!==plate){p.time.innerHTML=type==='facet.clock/weekday@1'?esc(plate):timeHTML(plate,c.plate);c.plate=plate}
+  if(c.wd!==wd){p.day.textContent=wd;c.wd=wd}
+  if(p.big&&c.big!==s.dateLabel){p.big.textContent=s.dateLabel||'';c.big=s.dateLabel}
+  if(p.sub&&c.sub!==s.dateLabel){p.sub.textContent=s.dateLabel||'';c.sub=s.dateLabel}
+  // Ears perk up on the hour.
+  if(num(s.hour)){if(c.hour!=null&&c.hour!==s.hour)pop(p.ears);c.hour=s.hour}
+}
+function pop(el){if(!el||reduce)return;el.classList.remove('pop');void el.getBoundingClientRect();el.classList.add('pop')}
+
+/* ---- Widget records ---- */
+const recs=new Map();
+let hover=null,press=null,visible=true;
+function sync(list){
+  const seen=new Set();
+  for(const w of list){
+    if(!w||typeof w.id!=='string'||typeof w.type!=='string')continue;
+    const bw=num(w.baseWidth)&&w.baseWidth>0?w.baseWidth:Math.max(1,w.width||1),bh=num(w.baseHeight)&&w.baseHeight>0?w.baseHeight:Math.max(1,w.height||1);
+    seen.add(w.id);
+    let r=recs.get(w.id);
+    if(!r||r.type!==w.type){
+      if(r)r.el.remove();
+      const el=document.createElement('div');el.className='wg'+(reduce?'':' fresh');
+      const inner=document.createElement('div');inner.className='in';el.appendChild(inner);layer.appendChild(el);
+      r={id:w.id,type:w.type,el,inner,key:null,geo:'',size:''};recs.set(w.id,r);
+      if(!reduce)setTimeout(()=>el.classList.remove('fresh'),1600);
+    }
+    const x=num(w.x)?w.x:0,y=num(w.y)?w.y:0,width=num(w.width)?w.width:bw,height=num(w.height)?w.height:bh;
+    r.x=x;r.y=y;r.sx=width/bw;r.sy=height/bh;r.bw=bw;r.bh=bh;
+    const geo=x+','+y+','+width+','+height+','+bw+','+bh;
+    if(geo!==r.geo){r.geo=geo;r.el.style.width=bw+'px';r.el.style.height=bh+'px';r.el.style.transform=`translate(${x}px,${y}px) scale(${r.sx},${r.sy})`}
+    const size=bw+'x'+bh,fs=fontFor(w.type,bw,bh);
+    if(size!==r.size){r.size=size;r.el.style.fontSize=fs+'px';r.key=null;r.parts=null}
+    const st=w.state&&typeof w.state==='object'?w.state:null;
+    const key=JSON.stringify(st);
+    if(key===r.key)continue;
+    r.key=key;r.state=st;
+    try{
+      if(CLOCKS[w.type]){if(!r.parts)buildClock(r);patchClock(r,st||{})}
+      else if(RENDER[w.type]){r.inner.innerHTML=st?RENDER[w.type](st,bw,bh,fs):'';}
+      else r.inner.innerHTML='';
+      if(w.type==='facet.weather/now@1')r.sign=r.inner.querySelector('.sign');
+      if(hover&&hover.id===r.id)setHover(r,hover.k,true);
+    }catch(err){r.inner.innerHTML=''}
+  }
+  for(const [id,r] of recs)if(!seen.has(id)){r.el.remove();recs.delete(id);if(hover&&hover.id===id)hover=null;if(press&&press.id===id)press=null}
+}
+
+/* ---- Pointer: the page gets no native input, so hover/press/click come from { pointer } in base coordinates ---- */
+function keyAt(r,x,y){
+  const px=r.x+x*r.sx,py=r.y+y*r.sy;
+  for(const el of document.elementsFromPoint(px,py)){
+    if(!r.el.contains(el))continue;
+    const k=el.closest('[data-k]');
+    return k&&r.el.contains(k)?k.getAttribute('data-k'):null;
+  }
+  return null;
+}
+function find(r,k){if(!k)return null;for(const el of r.inner.querySelectorAll('[data-k]'))if(el.getAttribute('data-k')===k)return el;return null}
+function setHover(r,k,force){
+  const prev=hover;
+  if(!force&&prev&&prev.id===(r&&r.id)&&prev.k===k)return;
+  if(prev){const pr=recs.get(prev.id),el=pr&&find(pr,prev.k);if(el)el.classList.remove('hov')}
+  hover=r&&k?{id:r.id,k}:null;
+  if(hover){const el=find(r,k);if(el)el.classList.add('hov');
+    if(!force&&k==='sign')kick(r,(Math.random()<.5?-1:1)*22)}
+}
+function setPress(on){
+  if(!press)return;const r=recs.get(press.id),el=r&&find(r,press.k);if(el)el.classList.toggle('prs',on);
+}
+function pointer(p){
+  const r=recs.get(p.id);if(!r)return;
+  const x=num(p.x)?p.x:0,y=num(p.y)?p.y:0;
+  if(p.kind==='leave'){setPress(false);press=null;setHover(null,null);return}
+  if(p.kind==='wheel')return;
+  const k=keyAt(r,x,y);
+  if(p.kind==='move'){setHover(r,k);if(press)setPress(press.id===r.id&&press.k===k);return}
+  if(p.kind==='down'){if(p.button!==0)return;setHover(r,k);press=k?{id:r.id,k}:null;setPress(true);return}
+  if(p.kind==='up'){
+    const was=press;setPress(false);press=null;
+    if(!was||p.button!==0||was.id!==r.id||was.k!==k)return;
+    activate(r,find(r,k),k);
+  }
+}
+function activate(r,el,k){
+  if(!el)return;
+  if(k==='clock'){pop(r.parts&&r.parts.ears);return}
+  if(k==='sign')kick(r,(r.sw&&r.sw.v>=0?1:-1)*60);
+  if(el.classList.contains('tok')&&!reduce){
+    r.inner.querySelectorAll('.tok.on').forEach(t=>t.classList.remove('on'));el.classList.add('on');
+    el.classList.remove('hit');void el.offsetWidth;el.classList.add('hit');
+    const ring=document.createElement('span');ring.className='ring';el.appendChild(ring);ring.addEventListener('animationend',()=>ring.remove());
+  }
+  const name=el.getAttribute('data-a');if(!name)return;
+  let args={};try{args=JSON.parse(el.getAttribute('data-args')||'{}')}catch(e){}
+  post({type:'action',id:r.id,name,args});
+}
+function actionResult(a){
+  if(!a||a.ok!==false)return;
+  const r=recs.get(a.id);if(!r||reduce)return;
+  r.el.classList.remove('shake');void r.el.offsetWidth;r.el.classList.add('shake');
+  setTimeout(()=>r.el.classList.remove('shake'),450);
+}
+
+/* ---- Weather sign sway: a damped spring, animated only while it moves and the page is visible ---- */
+let swRaf=0,swLast=0;
+function kick(r,imp){if(reduce||!r)return;r.sw=r.sw||{a:0,v:0};r.sw.v+=imp;if(!swRaf&&visible){swLast=performance.now();swRaf=requestAnimationFrame(swStep)}}
+function swStep(now){
+  const dt=clamp((now-swLast)/1000,0,.05);swLast=now;let live=false;
+  for(const r of recs.values()){const s=r.sw;if(!s||!r.sign)continue;
+    s.v+=(-s.a*38-s.v*3.2)*dt;s.a+=s.v*dt;
+    if(Math.abs(s.a)<.05&&Math.abs(s.v)<.05){s.a=0;s.v=0}else live=true;
+    r.sign.style.rotate=s.a.toFixed(2)+'deg'}
+  swRaf=live&&visible?requestAnimationFrame(swStep):0;
+}
+
+function setVisible(v){visible=v;layer.classList.toggle('still',!v);if(v&&!swRaf)for(const r of recs.values())if(r.sw&&(r.sw.a||r.sw.v)){swLast=performance.now();swRaf=requestAnimationFrame(swStep);break}}
+window.__catWidgets={
+  receive(m){
+    if(Array.isArray(m.widgets))sync(m.widgets);
+    if(m.pointer)pointer(m.pointer);
+    if(m.actionResult)actionResult(m.actionResult);
+    if(m.visible!==undefined)setVisible(!!m.visible);
+  },
+  get count(){return recs.size}
+};
+})();
+</script><script>
 (function(){
 'use strict';
 const cv=document.getElementById('cv'),c=cv.getContext('2d');
@@ -876,6 +1339,7 @@ function start(){
 function receive(m){
   try{
     if(!m)return;
+    if(window.__catWidgets)window.__catWidgets.receive(m);   // widget layer works independently of the room
     if(m.scenes&&!started)start();   // single scene ("room"); the list itself is not needed
     if(!started)return;
     if(m.weather)setWeather(m.weather,!visible);
