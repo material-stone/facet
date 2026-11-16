@@ -34,6 +34,8 @@ public sealed class WidgetPlacement
     public int Y { get; set; }
     public int Width { get; set; }
     public int Height { get; set; }
+    // null follows the widget's own default; true or false is the user's choice for this placement.
+    public bool? Panel { get; set; }
 }
 
 public sealed class PluginGrant
@@ -107,7 +109,7 @@ public static class WorkspaceLayouts
                     int x = item.X - (centerOldGrid ? Columns / 2 : 0), y = item.Y - (centerOldGrid ? Rows / 2 : 0);
                     if (!string.IsNullOrWhiteSpace(item.Id) && !string.IsNullOrWhiteSpace(item.WidgetId) && InBounds(x, y, item.Width, item.Height) && IsFree(kept, x, y, item.Width, item.Height, null)
                         && !result.Tabs.Concat([kept]).SelectMany(t => t.Widgets).Any(w => w.Id == item.Id))
-                        kept.Widgets.Add(new() { Id = item.Id, WidgetId = item.WidgetId, X = x, Y = y, Width = item.Width, Height = item.Height });
+                        kept.Widgets.Add(new() { Id = item.Id, WidgetId = item.WidgetId, X = x, Y = y, Width = item.Width, Height = item.Height, Panel = item.Panel });
                 }
             }
             result.Tabs.Add(kept);
@@ -168,6 +170,13 @@ public static class WorkspaceLayouts
         var item = tab.Widgets.FirstOrDefault(w => w.Id == placementId) ?? throw new ArgumentException("위젯을 찾을 수 없습니다.");
         if (!CanPlace(tab, placementId, x, y, width, height)) throw new ArgumentException("다른 위젯과 겹칩니다.");
         item.X = x; item.Y = y; item.Width = width; item.Height = height;
+    }
+
+    // panel null returns the placement to its widget's default background panel.
+    public static void SetPanel(AppData data, string tabId, string placementId, bool? panel)
+    {
+        var item = Tab(Editable(data), tabId).Widgets.FirstOrDefault(w => w.Id == placementId) ?? throw new ArgumentException("위젯을 찾을 수 없습니다.");
+        item.Panel = panel;
     }
 
     // Reads rows down from the area's top-left, then the whole board within halfColumns and halfRows of the origin.
