@@ -4,6 +4,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Shapes;
 using System.Windows.Input;
 using Facet.Plugins;
+using Facet.Widgets;
 
 namespace Facet.ConditionPlugin;
 
@@ -25,6 +26,9 @@ public sealed class ConditionHistory : UserControl, IDisposable
     internal event Action? Changed;
     internal ConditionLive? Live { get; set; }
     private readonly bool compact;
+    private readonly bool cat;
+    private readonly ChuruTray tray = new() { IsHitTestVisible = false };
+    internal IReadOnlyList<int> CatLevels => tray.Levels;
     private ConditionEntry? pressedRecord;
     private Point pressedPoint;
 
@@ -43,11 +47,11 @@ public sealed class ConditionHistory : UserControl, IDisposable
         PopupKeys.TakeFocus(RecordPopup, Editor);
         Editor.PreviewKeyDown += (_,e) => { if (e.Key != Key.Escape) return; if(!Editor.HandleEscape())RecordPopup.IsOpen = false; e.Handled = true; };
         bar.MouseLeftButtonDown += (_,e) => {
-            var point=e.GetPosition(bar);var span=SpanAt(point.X);if(span==null)return;
+            var point=CatPoint(e.GetPosition(bar));var span=SpanAt(point.X);if(span==null)return;
             pressedRecord=new(){At=span.RecordedAt,Kind=span.Kind};pressedPoint=point;bar.CaptureMouse();e.Handled=true;
         };
         bar.MouseLeftButtonUp += (_,e) => {
-            var pressed=pressedRecord;var point=e.GetPosition(bar);pressedRecord=null;
+            var pressed=pressedRecord;var point=CatPoint(e.GetPosition(bar));pressedRecord=null;
             if(bar.IsMouseCaptured)bar.ReleaseMouseCapture();
             var span=SpanAt(point.X);
             if(pressed==null || span==null || point.Y<0 || point.Y>=bar.ActualHeight || pressed.At!=span.RecordedAt || pressed.Kind!=span.Kind ||
@@ -85,6 +89,13 @@ public sealed class ConditionHistory : UserControl, IDisposable
             Grid.SetRow(root, 1); Grid.SetRow(range, 2);
             form.Children.Add(heading); form.Children.Add(root); form.Children.Add(range);
             Content = form;
+            if (WidgetTheme.IsCatHud) {
+                // Churu tubes on a tray fill the middle row; the tray draws its own day row (ADR 0107).
+                cat = true;
+                root.Children.Remove(bar); root.Visibility = Visibility.Collapsed; range.Visibility = Visibility.Collapsed;
+                bar.Height = double.NaN; bar.MinHeight = 64; bar.Margin = new(0,2,0,0);
+                Grid.SetRow(bar, 1); form.Children.Add(bar);
+            }
         }
         else Content = root;
         range.SetResourceReference(TextBlock.ForegroundProperty, compact ? "Ink" : "Muted");
@@ -135,9 +146,49 @@ public sealed class ConditionHistory : UserControl, IDisposable
         return Spans.FirstOrDefault(item=>stamp>=item.Start && stamp<item.End);
     }
 
+    // Level 1-6 of a condition for the tube height; the higher, the better the day.
+    private static int Level(string kind) => kind switch { "good" => 6, "okay" => 5, "sleepy" => 3, "tired" => 3, "unwell" => 2, "stressed" => 1, _ => 3 };
+
+    // The span that covers most of a day, or null for a day with no record.
+    private ConditionSpan? Dominant(int day, out DateTimeOffset from, out DateTimeOffset to)
+    {
+        from = Start.AddDays(day); to = Start.AddDays(day + 1);
+        DateTimeOffset a = from, b = to;
+        return Spans.Where(s => s.End > a && s.Start < b).MaxBy(s => (s.End < b ? s.End : b) - (s.Start > a ? s.Start : a));
+    }
+
+    // In the cat form a press anywhere on a day's tube means that day's main record.
+    private Point CatPoint(Point point)
+    {
+        if (!cat || bar.ActualWidth <= 0 || End <= Start) return point;
+        int day = Math.Clamp((int)(point.X / bar.ActualWidth * 7), 0, 6);
+        if (Dominant(day, out var from, out var to) is not { } span) return point;
+        var a = span.Start > from ? span.Start : from; var b = span.End < to ? span.End : to;
+        double mid = ((a - Start).TotalSeconds + (b - a).TotalSeconds / 2) / (End - Start).TotalSeconds * bar.ActualWidth;
+        return new Point(Math.Clamp(mid, 0, bar.ActualWidth - .01), Math.Clamp(point.Y, 0, Math.Max(0, bar.ActualHeight - .01)));
+    }
+
+    private void DrawCat()
+    {
+        var levels = new int[7]; var tips = new List<string>();
+        var korean = CultureInfo.GetCultureInfo("ko-KR");
+        for (int i = 0; i < 7; i++) {
+            var span = Dominant(i, out _, out _);
+            levels[i] = span == null ? 0 : Level(span.Kind);
+            tips.Add(shownDate.AddDays(i-6).ToString("M.d ddd", korean) + " · " + (span == null ? "기록 없음" : ConditionIcons.Find(span.Kind)!.Name));
+        }
+        tray.Show(levels, Enumerable.Range(0, 7).Select(i => i == 6 ? "오늘" : shownDate.AddDays(i-6).ToString("ddd", korean)).ToArray());
+        tray.Width = bar.ActualWidth; tray.Height = bar.ActualHeight;
+        bar.Children.Add(tray);
+        bar.Cursor = Cursors.Hand;
+        bar.ToolTip = string.Join(Environment.NewLine, tips) + Environment.NewLine + "눌러서 그날 기록 수정·삭제";
+        AutomationProperties.SetName(bar, "최근 7일 컨디션. " + string.Join("; ", tips));
+    }
+
     private void Draw()
     {
         bar.Children.Clear(); if (End <= Start || bar.ActualWidth <= 0) return;
+        if (cat) { DrawCat(); return; }
         double X(DateTimeOffset time) => Math.Clamp((time-Start).TotalSeconds/(End-Start).TotalSeconds, 0, 1)*bar.ActualWidth;
         bar.Clip = new RectangleGeometry(new Rect(0,0,bar.ActualWidth,bar.ActualHeight),Radius,Radius);
         foreach (var span in Spans) {
@@ -166,5 +217,65 @@ public sealed class ConditionHistory : UserControl, IDisposable
         }
         AutomationProperties.SetName(bar,$"최근 7일 컨디션, {Start:M월 d일}부터 {End.AddDays(-1):M월 d일}까지. " +
             string.Join("; ",Spans.Select(span=>$"{ConditionIcons.Find(span.Kind)!.Name}, {span.Start.ToLocalTime():M월 d일 HH:mm}부터 {span.End.ToLocalTime():M월 d일 HH:mm}까지")));
+    }
+}
+
+// Seven churu tubes on a wooden tray over a cream day row; a tube's height is the day's condition and today is pink.
+internal sealed class ChuruTray : FrameworkElement
+{
+    private int[] levels = new int[7];
+    private string[] days = new string[7];
+    internal IReadOnlyList<int> Levels => levels;
+
+    internal void Show(int[] values, string[] names) { levels = values; days = names; InvalidateVisual(); }
+
+    protected override void OnRender(DrawingContext dc)
+    {
+        double w = ActualWidth, h = ActualHeight;
+        if (w < 40 || h < 30) return;
+        double pill = Math.Clamp(h * .17, 13, 22), board = Math.Clamp(pill * .5, 6, 11), stroke = Math.Clamp(h * .022, 1.6, 2.6);
+        double pillTop = h - pill - 3, boardTop = pillTop - board - 3;
+        double inner = w - 16, gap = inner / 7 * .26, tube = (inner - gap * 6) / 7;
+        double cap = Math.Clamp(tube * .42, 5, 12), maxBody = boardTop - 2 - cap - 4;
+        var stripes = Stripes(Cat.Butter, Cat.Fur, tube); var today = Stripes(Cat.Pink, Cat.DarkPink, tube);
+        for (int i = 0; i < 7; i++) {
+            double x = 8 + i * (tube + gap);
+            if (levels[i] <= 0 || maxBody < 6) {
+                dc.PushOpacity(.35);
+                dc.DrawRoundedRectangle(null, new Pen(Cat.Outline, stroke) { DashStyle = DashStyles.Dash }, new Rect(x, boardTop - 8, tube, 8), 3, 3);
+                dc.Pop();
+                continue;
+            }
+            double body = Math.Max(cap, maxBody * levels[i] / 6), top = boardTop - body;
+            var shape = new RectangleGeometry(new Rect(x, top, tube, body), Math.Min(4, tube * .25), Math.Min(4, tube * .25));
+            Cat.Shape(dc, shape, i == 6 ? today : stripes, stroke, shadow: true);
+            // The tear line just under the cap.
+            dc.DrawLine(new Pen(Cat.Outline, Math.Max(1, stroke * .55)) { DashStyle = new DashStyle([1.6, 1.6], 0) }, new Point(x + stroke, top + cap * .55), new Point(x + tube - stroke, top + cap * .55));
+            // The crimped seal cap with a tear notch on the right.
+            double cx = x - stroke * .5, cw = tube + stroke, cy = top - cap;
+            var seal = Cat.G(FormattableString.Invariant($"M{cx},{cy + cap} L{cx},{cy + cap * .2} Q{cx},{cy} {cx + cap * .2},{cy} L{cx + cw - cap * .2},{cy} Q{cx + cw},{cy} {cx + cw},{cy + cap * .2} L{cx + cw},{cy + cap * .35} L{cx + cw - cap * .35},{cy + cap * .55} L{cx + cw},{cy + cap * .75} L{cx + cw},{cy + cap}Z"));
+            dc.DrawGeometry(Cat.Cream, new Pen(Cat.Outline, stroke) { LineJoin = PenLineJoin.Round }, seal);
+            var crimp = new Pen(Cat.Sub, Math.Max(.8, stroke * .45));
+            for (double k = cx + cw * .2; k < cx + cw * .72; k += Math.Max(2.5, cw * .14)) dc.DrawLine(crimp, new Point(k, cy + cap * .25), new Point(k, cy + cap * .8));
+        }
+        Cat.Plate(dc, new Rect(3, boardTop, w - 6, board), 3, Cat.WoodMid, stroke);
+        var row = new Rect(4, pillTop, w - 8, pill);
+        Cat.Plate(dc, row, pill / 2, Cat.CreamLight, Math.Max(1.4, stroke * .8), shadow: false);
+        double font = Math.Clamp(pill * .62, 8, 14);
+        for (int i = 0; i < 7; i++) {
+            if (days[i] == null) continue;
+            var text = Cat.Text(this, days[i], font, i == 6 ? Cat.DarkPink : Cat.Ink);
+            Cat.Centered(dc, text, new Point(8 + i * (tube + gap) + tube / 2, pillTop + pill / 2));
+        }
+    }
+
+    private static Brush Stripes(Brush light, Brush dark, double tube)
+    {
+        double step = Math.Max(4, tube * .28);
+        Color a = ((SolidColorBrush)light).Color, b = ((SolidColorBrush)dark).Color;
+        var brush = new LinearGradientBrush(new GradientStopCollection { new(a, 0), new(a, .5), new(b, .5), new(b, 1) }, new Point(0, 0), new Point(step, -step * .7))
+        { MappingMode = BrushMappingMode.Absolute, SpreadMethod = GradientSpreadMethod.Repeat };
+        brush.Freeze();
+        return brush;
     }
 }

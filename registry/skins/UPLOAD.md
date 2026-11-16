@@ -70,7 +70,7 @@ my-skin/
 | `hudWidgets` | true/false | 위젯을 HUD 형태로 표시 |
 | `world` | `{ "page": "world.html", "scenes": [...] }` | 스킨에 포함한 HTML 페이지를 실시간 배경으로 띄웁니다. `scenes`는 페이지에 그대로 전달되며 배경을 누를 때마다 다음으로 넘어갑니다. 배경을 누르면 `{ next: true, x, y }`가 전달되고, `x`·`y`는 화면 기준 0~1 비율의 누른 위치입니다. |
 | `fonts` | `{ "body": { "file", "family" }, "heading": {...} }` | 스킨에 포함한 글꼴. `file`은 `.ttf`·`.otf` 이름, `family`는 글꼴 안의 이름입니다. |
-| `hudStyle` | `tactical`, `soft` | HUD 위젯 모양. `soft`는 둥근 패널 형태입니다. `hudWidgets`와 함께 씁니다. |
+| `hudStyle` | `tactical`, `soft`, `cat` | HUD 위젯 모양. `soft`는 둥근 패널 형태, `cat`은 고양이 방 소품 형태(없는 위젯은 `soft`)입니다. `hudWidgets`와 함께 씁니다. |
 | `options` | 목록 | 설정에 나타날 선택 항목. `id`(소문자·숫자·`-`, 32자까지), `name`이 필수이고 `description`, `default`를 쓸 수 있습니다. |
 
 이미지는 스킨 폴더 바로 아래의 PNG만 씁니다. 이름은 영문 소문자·숫자·`_`·`-`이고, 한 변은 8192픽셀까지입니다.

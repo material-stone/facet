@@ -24,7 +24,7 @@ public sealed class WeatherPlugin : IFacetPlugin
     public void Register(IWidgetRegistry registry)
     {
         registry.AddWidget(new WidgetDescriptor("weather", "날씨 (플러그인)", context => new WeatherView(context))
-        { Description = "현재 날씨와 습도", DefaultColumns = 4, DefaultRows = 1, MinColumns = 3, MinRows = 1, AllowMultiple = false, AllowMultipleTabs = true, UsesData = true, HasHudPanel = true });
+        { Description = "현재 날씨와 습도", DefaultColumns = 4, DefaultRows = 1, MinColumns = 3, MinRows = 1, AllowMultiple = false, AllowMultipleTabs = true, UsesData = true, HasHudPanel = true, HasCatPanel = false });
         var regions = new List<SettingOption> { new("", "Windows 자동 위치") };
         regions.AddRange(WeatherAssets.Regions.Select(r => new SettingOption(r.Id, r.DisplayName)));
         registry.AddSettings(new PluginSettingsSection([

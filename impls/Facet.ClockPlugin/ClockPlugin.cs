@@ -15,7 +15,7 @@ public sealed class ClockPlugin : IFacetPlugin
     public void Register(IWidgetRegistry registry)
     {
         registry.AddWidget(new WidgetDescriptor("clock", "날짜와 시계", context => new ClockView(context))
-        { Description = "날짜, 요일과 현재 시각", DefaultColumns = 3, DefaultRows = 1, MinColumns = 2, MinRows = 1, AllowMultiple = false, AllowMultipleTabs = true, UsesData = true, HasHudPanel = true });
+        { Description = "날짜, 요일과 현재 시각", DefaultColumns = 3, DefaultRows = 1, MinColumns = 2, MinRows = 1, AllowMultiple = false, AllowMultipleTabs = true, UsesData = true, HasHudPanel = true, HasCatPanel = false });
         // Each placement keeps its own alignment, mode and style, so both can be placed more than once.
         registry.AddWidget(new WidgetDescriptor("weekday", "요일", context => new ClockFaceView(context, "요일", FaceChoices.Weekday))
         { Description = "오늘 요일, 아날로그·디지털 선택", DefaultColumns = 2, DefaultRows = 1, MinColumns = 1, MinRows = 1, AllowMultiple = true, AllowMultipleTabs = true, UsesData = true });

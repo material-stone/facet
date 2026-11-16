@@ -28,6 +28,12 @@ public static class Hud
     public static Grid Header(TextBlock title)
     {
         var row = new Grid();
+        if (WidgetTheme.IsCatHud) {
+            var tag = new CatTag { Margin = new(-2, -2, 0, 2) };
+            WhenChanged(() => tag.Text = title.Text, title);
+            row.Children.Add(tag);
+            return row;
+        }
         if (WidgetTheme.IsSoftHud) {
             title.FontSize = 15; title.FontFamily = NumberFont; title.FontWeight = FontWeights.Normal; title.VerticalAlignment = VerticalAlignment.Center;
             title.SetResourceReference(TextBlock.ForegroundProperty, "Mint");
@@ -81,6 +87,7 @@ public sealed class HudPanel : FrameworkElement
 
     protected override void OnRender(DrawingContext context)
     {
+        if (WidgetTheme.IsCatHud) { RenderCat(context); return; }
         if (WidgetTheme.IsSoftHud) { RenderSoft(context); return; }
         if (TryFindResource("Mint") is not SolidColorBrush mint) return;
         double w = ActualWidth, h = ActualHeight;
@@ -109,6 +116,14 @@ public sealed class HudPanel : FrameworkElement
         context.DrawGeometry(null, Mint(255, 2), marks);
     }
 
+    // A cream plate with the cat form's thick outline and soft shadow (ADR 0107).
+    private void RenderCat(DrawingContext context)
+    {
+        double w = ActualWidth - 8, h = ActualHeight - 8;
+        if (w <= 0 || h <= 0) return;
+        Cat.Plate(context, new Rect(2, 2, w, h), 16, Cat.CreamLight, 3);
+    }
+
     private void RenderSoft(DrawingContext context)
     {
         if (TryFindResource("Panel") is not Brush plate || TryFindResource("Mint") is not SolidColorBrush mint) return;
@@ -125,9 +140,16 @@ public sealed class HudClockFace : StackPanel
     private readonly TextBlock date = new(), time = Hud.Text("", 72, "Mint", mono: true), seconds = Hud.Text("", 26, "Mint", mono: true);
     private readonly DayRuler ruler = new() { Height = 44, Margin = new(0, 2, 0, 0) };
 
+    private readonly CatClock? cat;
+
     public HudClockFace()
     {
         Width = 328;
+        if (WidgetTheme.IsCatHud) {
+            Width = double.NaN;
+            Children.Add(cat = new CatClock());
+            return;
+        }
         if (WidgetTheme.IsSoftHud) {
             time.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
             time.Margin = new(0, 4, 0, 0); date.FontSize = 16; date.Margin = new(0, 4, 0, 0); date.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
@@ -141,10 +163,11 @@ public sealed class HudClockFace : StackPanel
         Children.Add(Hud.Header(date)); Children.Add(line); Children.Add(ruler);
     }
 
-    public string TimeLine => time.Text;
+    public string TimeLine => cat?.TimeLine ?? time.Text;
 
     public void Show(DateTime now)
     {
+        cat?.Show(now);
         date.Text = now.ToString("M월 d일 dddd", Korean);
         time.Text = now.ToString("HH:mm", Korean);
         seconds.Text = now.ToString("ss", Korean);
@@ -162,9 +185,14 @@ public sealed class HudWeatherFace : Grid
 
     private readonly TextBlock softDetail = Hud.Text("", 14, "Muted");
     private readonly bool soft = WidgetTheme.IsSoftHud;
+    private readonly CatSign? sign;
 
     public HudWeatherFace()
     {
+        if (WidgetTheme.IsCatHud) {
+            Children.Add(sign = new CatSign());
+            return;
+        }
         if (soft) {
             temperature.SetResourceReference(TextBlock.ForegroundProperty, "Ink"); temperature.FontSize = 48; temperature.LineHeight = 56;
             condition.VerticalAlignment = VerticalAlignment.Center; condition.HorizontalAlignment = HorizontalAlignment.Right; condition.FontFamily = Hud.NumberFont;
@@ -215,6 +243,7 @@ public sealed class HudWeatherFace : Grid
         if (soft) {
             condition.Text = description;
             temperature.Text = double.TryParse(temperatureLine.Replace("°C", ""), NumberStyles.Float, CultureInfo.InvariantCulture, out double degrees) ? Math.Round(degrees, MidpointRounding.AwayFromZero).ToString("0", CultureInfo.InvariantCulture) + "°" : "--";
+            sign?.Show(description, temperature.Text, humidityLine);
             softDetail.Text = place + " · 습도 " + humidityLine;
             return;
         }

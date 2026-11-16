@@ -23,12 +23,12 @@ public sealed class ConditionPlugin : IFacetPlugin
             var view = new ConditionSelector { Record = (kind, at) => records.Commit(entries => ConditionTracking.Record(entries, kind, at)) };
             view.Live = new(view, records, view.Refresh);
             return view;
-        }) { Description = "현재 컨디션 기록", DefaultColumns = 2, DefaultRows = 1, MinColumns = 1, MinRows = 1, AllowMultiple = false, AllowMultipleTabs = false, HasHudPanel = true });
+        }) { Description = "현재 컨디션 기록", DefaultColumns = 2, DefaultRows = 1, MinColumns = 1, MinRows = 1, AllowMultiple = false, AllowMultipleTabs = false, HasHudPanel = true, HasCatPanel = false });
         registry.AddWidget(new WidgetDescriptor("history", "7일 컨디션", _ => {
             var view = new ConditionHistory(WidgetTheme.IsHud) { Commit = records.Commit };
             view.Live = new(view, records, view.Refresh);
             return view;
-        }) { Description = "최근 7일 컨디션", DefaultColumns = 9, DefaultRows = 2, MinColumns = 4, MinRows = 1, AllowMultiple = false, AllowMultipleTabs = false, HasHudPanel = true });
+        }) { Description = "최근 7일 컨디션", DefaultColumns = 9, DefaultRows = 2, MinColumns = 4, MinRows = 1, AllowMultiple = false, AllowMultipleTabs = false, HasHudPanel = true, HasCatPanel = false });
         registry.AddAgentTool(new("facet_set_condition", "현재(또는 지정 시각) 컨디션을 기록합니다. kind: good, okay, tired, sleepy, unwell, stressed.",
             """{"type":"object","properties":{"kind":{"type":"string","enum":["good","okay","tired","sleepy","unwell","stressed"]},"at":{"type":"string","description":"시간대 포함 ISO 8601. 생략하면 지금"}},"required":["kind"],"additionalProperties":false}""",
             arguments => Task.FromResult(SetCondition(arguments, DateTimeOffset.Now))));

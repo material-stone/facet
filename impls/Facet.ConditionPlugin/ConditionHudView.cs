@@ -41,13 +41,28 @@ public sealed class ConditionHudView : UserControl, IDisposable
             var name = Hud.Text(style.Name, 13); name.VerticalAlignment = VerticalAlignment.Center;
             row.Children.Add(name);
             var button = new Button { Content = row, ContentTemplate = null, Template = template, Height = 36, Margin = new(3), Cursor = Cursors.Hand, Tag = style.Id, Focusable = false, IsTabStop = false };
-            if (soft) { button.Content = Cube(style.Id, style.Name); button.Height = double.NaN; button.Margin = new(1); button.ToolTip = style.Name; }
+            if (WidgetTheme.IsCatHud) { var token = new CatToken(style.Id); tokens[style.Id] = token; button.Content = token; button.Height = double.NaN; button.Margin = new(1); button.ToolTip = style.Name; }
+            else if (soft) { button.Content = Cube(style.Id, style.Name); button.Height = double.NaN; button.Margin = new(1); button.ToolTip = style.Name; }
             AutomationProperties.SetName(button, style.Name + "으로 기록");
             button.Click += (_, _) => Select(style.Id, DateTimeOffset.Now);
             tiles.Children.Add(button); options.Add(button);
         }
         Options = options.AsReadOnly();
         var body = new StackPanel();
+        if (WidgetTheme.IsCatHud) {
+            // Cat faces on a wooden shelf (ADR 0107).
+            var heading = Hud.Header("오늘 기분");
+            var fill = new Grid();
+            fill.RowDefinitions.Add(new() { Height = GridLength.Auto }); fill.RowDefinitions.Add(new() { Height = GridLength.Auto }); fill.RowDefinitions.Add(new() { Height = GridLength.Auto }); fill.RowDefinitions.Add(new() { Height = GridLength.Auto });
+            var shelf = new CatShelf { Height = 16, Margin = new(-4,-3,-4,0) };
+            Grid.SetRow(tiles, 1); Grid.SetRow(shelf, 2); Grid.SetRow(error, 3);
+            fill.Children.Add(heading); fill.Children.Add(tiles); fill.Children.Add(shelf); fill.Children.Add(error);
+            fill.VerticalAlignment = VerticalAlignment.Center;
+            Content = fill;
+            SetResourceReference(ForegroundProperty, "Ink");
+            error.SetResourceReference(TextBlock.ForegroundProperty, "Danger");
+            return;
+        }
         if (soft) {
             var heading = Hud.Header("컨디션"); heading.Margin = new(0,0,0,2);
             // The cubes take all spare height, in one row with their labels below.
@@ -68,6 +83,7 @@ public sealed class ConditionHudView : UserControl, IDisposable
 
     // An isometric voxel with its label below; the current condition lifts and its label takes the accent.
     private readonly Dictionary<string, (TranslateTransform Lift, TextBlock Label)> cubes = new();
+    private readonly Dictionary<string, CatToken> tokens = new();
     private Grid Cube(string kind, string name)
     {
         var color = ConditionIcons.Color(kind);
@@ -105,6 +121,7 @@ public sealed class ConditionHudView : UserControl, IDisposable
         var style = ConditionIcons.Find(ConditionTracking.Current(entries, now)?.Kind);
         state.Text = style?.Name ?? "기록하기";
         if (style != null && !soft) state.Foreground = ConditionIcons.Color(style.Id); else if (style != null) state.SetResourceReference(TextBlock.ForegroundProperty, "Ink"); else state.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        foreach (var (kind, token) in tokens) token.Selected = kind == style?.Id;
         foreach (var (kind, cube) in cubes) {
             bool current = kind == style?.Id;
             cube.Lift.Y = current ? -9 : 0;
@@ -122,4 +139,65 @@ public sealed class ConditionHudView : UserControl, IDisposable
     }
 
     public void Dispose() => Live?.Dispose();
+}
+
+// A round cream token with a cat face for one condition; the current one turns pink, grows and pops once.
+internal sealed class CatToken : FrameworkElement
+{
+    private static readonly Dictionary<string, CatFace> Faces = new() {
+        ["good"] = new("heart", "w", Sparkle: true), ["okay"] = new("happy", "open"), ["sleepy"] = new("flat", "w"),
+        ["tired"] = new("flat", "flat"), ["unwell"] = new("tear", "wobble"), ["stressed"] = new("angry", "frown", FlatEars: true) };
+    private readonly CatFace face;
+    private bool selected;
+    private double popStart = -10;
+    private readonly System.Windows.Threading.DispatcherTimer pop = new() { Interval = TimeSpan.FromMilliseconds(33) };
+
+    internal CatToken(string kind)
+    {
+        face = Faces.GetValueOrDefault(kind) ?? new CatFace("dot", "w");
+        pop.Tick += (_, _) => { if (Cat.Seconds - popStart > .5) pop.Stop(); InvalidateVisual(); };
+        Unloaded += (_, _) => pop.Stop();
+        MouseEnter += (_, _) => InvalidateVisual(); MouseLeave += (_, _) => InvalidateVisual();
+    }
+
+    internal bool Selected
+    {
+        get => selected;
+        set { if (value && !selected && IsLoaded) { popStart = Cat.Seconds; pop.Start(); } selected = value; InvalidateVisual(); }
+    }
+
+    protected override Size MeasureOverride(Size available) { double side = double.IsInfinity(available.Width) ? 44 : Math.Min(available.Width, 72); return new(side, side * .95); }
+
+    protected override void OnRender(DrawingContext dc)
+    {
+        double w = ActualWidth, h = ActualHeight, d = Math.Min(w * .84, h * .82);
+        if (d < 8) return;
+        double p = Cat.Seconds - popStart, scale = selected ? 1.12 : 1;
+        if (p is >= 0 and < .5) scale *= 1 + .18 * Math.Sin(p / .5 * Math.PI) * (1 - p / .5);
+        double lift = IsMouseOver ? d * .08 : 0, r = d / 2, stroke = Math.Max(1.5, d * .055);
+        var center = new Point(w / 2, h - r * scale - stroke - lift);
+        dc.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, w, h));
+        dc.PushTransform(new ScaleTransform(scale, scale, center.X, center.Y));
+        var circle = new EllipseGeometry(center, r, r);
+        Cat.Shape(dc, circle, selected ? Cat.Pink : Cat.CreamLight, stroke, shadow: true);
+        dc.PushTransform(new TranslateTransform(center.X, center.Y + r * .1));
+        dc.PushTransform(new ScaleTransform(r * .78 / 50, r * .78 / 50));
+        Cat.Head(dc, face, 5, shadow: false);
+        dc.Pop(); dc.Pop(); dc.Pop();
+    }
+}
+
+// The wooden shelf under the tokens, on two brackets.
+internal sealed class CatShelf : FrameworkElement
+{
+    public CatShelf() { IsHitTestVisible = false; }
+
+    protected override void OnRender(DrawingContext dc)
+    {
+        double w = ActualWidth, h = ActualHeight;
+        if (w < 10 || h < 6) return;
+        double board = Math.Min(8, h * .5);
+        foreach (double x in new[] { w * .14, w * .86 }) Cat.Plate(dc, new Rect(x - 4, 1, 8, h - 3), 3, Cat.WoodDark, 2, shadow: false);
+        Cat.Plate(dc, new Rect(2, 0, w - 6, board), 3, Cat.WoodMid, 2.4);
+    }
 }

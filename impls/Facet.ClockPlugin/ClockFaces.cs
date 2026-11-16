@@ -49,7 +49,7 @@ public sealed class ClockFaceView : Decorator, IDisposable
         this.choices = choices; data = context.Data;
         AutomationProperties.SetName(this, name);
         Choice = FaceChoices.Find(choices, data?.Get(FaceChoices.ModeKey), data?.Get(FaceChoices.StyleKey));
-        face = Choice.Create();
+        face = Create(Choice);
         button = new ClockFitButton(face, () => context.Modal, value => data?.Set(ClockFitButton.AlignmentKey, value) == true, name + " 설정", BuildFacePicker)
         { Alignment = data?.Get(ClockFitButton.AlignmentKey) ?? ClockFitButton.DefaultAlignment };
         Child = button;
@@ -57,6 +57,9 @@ public sealed class ClockFaceView : Decorator, IDisposable
         timer.Tick += (_, _) => Tick();
         IsVisibleChanged += (_, _) => { if (IsVisible) Tick(); else timer.Stop(); };
     }
+
+    // The cat skin draws every time face as the cat clock (ADR 0107); the saved choice returns with another skin.
+    private ClockFace Create(FaceChoice choice) => WidgetTheme.IsCatHud && ReferenceEquals(choices, FaceChoices.Time) ? new CatTimeFace() : choice.Create();
 
     public FaceChoice Choice { get; private set; }
     public ClockFace Face => face;
@@ -72,7 +75,7 @@ public sealed class ClockFaceView : Decorator, IDisposable
             return false;
         }
         Choice = choice;
-        face = choice.Create();
+        face = Create(choice);
         button.Face = face;
         ShowTime(DateTime.Now);
         return true;
@@ -267,4 +270,19 @@ public sealed class DigitalClockFace() : ClockFace(220, 92)
         var noon = Label(Now.Hour < 12 ? "오전" : "오후", 16, Muted);
         dc.DrawText(noon, new Point((220 - noon.Width) / 2, 70));
     }
+}
+
+// The cat clock as a time face: hosts the shared CatClock and hands it the time on each Show.
+public sealed class CatTimeFace : ClockFace
+{
+    private readonly CatClock clock = new();
+
+    public CatTimeFace() : base(CatClock.DesignWidth, CatClock.DesignHeight) { AddVisualChild(clock); }
+
+    public override string Text => Now.ToString("HH:mm", Korean);
+    protected override int VisualChildrenCount => 1;
+    protected override Visual GetVisualChild(int index) => clock;
+    protected override Size MeasureOverride(Size available) { clock.Measure(available); return clock.DesiredSize; }
+    protected override Size ArrangeOverride(Size size) { clock.Arrange(new Rect(size)); return size; }
+    protected override void OnRender(DrawingContext dc) => clock.Show(Now);
 }

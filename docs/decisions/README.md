@@ -149,3 +149,4 @@
 - [0104 — 플러그인 소스 공개, 채팅·음악 플러그인 제거](0104-public-plugin-sources-without-chat-and-music.md)
 - [0105 — MCP 서버와 CLI 제거](0105-remove-mcp-and-cli.md)
 - [0106 — 월드 페이지에 클릭 위치 전달, 고양이 방 스킨](0106-world-click-position-and-cat-room.md)
+- [0107 — 고양이 위젯 형태 (`hudStyle: cat`)](0107-cat-widget-form.md)

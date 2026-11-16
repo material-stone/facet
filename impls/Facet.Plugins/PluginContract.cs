@@ -10,6 +10,9 @@ public static class WidgetTheme
     public const string SoftHudKey = "Facet.SoftHudWidgets";
     // A HUD skin can ask for rounded plates and plain numbers instead of the tactical look (ADR 0090).
     public static bool IsSoftHud => IsHud && Application.Current?.TryFindResource(SoftHudKey) is true;
+    public const string CatHudKey = "Facet.CatHudWidgets";
+    // The cat room skin asks for cat-shaped widgets; IsSoftHud stays true so a widget without a cat form shows its soft form (ADR 0107).
+    public static bool IsCatHud => IsSoftHud && Application.Current?.TryFindResource(CatHudKey) is true;
 }
 
 // Entry point: a public class with a parameterless constructor in the plugin.json assembly.
@@ -104,6 +107,8 @@ public sealed record WidgetDescriptor(string Id, string Title, Func<WidgetContex
     public bool HasPanel { get; init; }
     // HUD themes replace HasPanel with this: only a widget with a HUD form sits on a HudPanel.
     public bool HasHudPanel { get; init; }
+    // The cat form (ADR 0107) keeps the HUD panel as a cream plate; false leaves a widget that draws its own prop without one.
+    public bool HasCatPanel { get; init; } = true;
 }
 
 // InstanceId is stable across restarts and differs per placement, even for the same widget on another tab.

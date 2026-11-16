@@ -22,7 +22,7 @@ public sealed class SleepPlugin : IFacetPlugin
             var view = new SleepDurationChart { Editing = new(records, context.Modal) };
             view.Live = new(view, records, view.Refresh, null);
             return new SleepFit { Child = view };
-        }) { Description = "최근 7일 수면 시간 그래프", DefaultColumns = 9, DefaultRows = 3, MinColumns = 4, MinRows = 2, AllowMultiple = false, AllowMultipleTabs = false, HasHudPanel = true });
+        }) { Description = "최근 7일 수면 시간 그래프", DefaultColumns = 9, DefaultRows = 3, MinColumns = 4, MinRows = 2, AllowMultiple = false, AllowMultipleTabs = false, HasHudPanel = true, HasCatPanel = false });
         registry.AddSettings(new PluginSettingsSection([
             new SliderSetting(TransparencyKey, "수면 패턴 배경 투명도", 0, 100, 0) { Description = "수면 패턴 위젯의 배경만 조절합니다. 0%는 불투명, 100%는 투명입니다." }]));
         registry.AddAgentTool(new("facet_record_sleep", "기상일 기준으로 수면을 기록합니다. 전달한 항목만 기존 기록에 덮어씁니다.",

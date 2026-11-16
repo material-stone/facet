@@ -9,7 +9,7 @@ namespace Facet.Design;
 // A choice a theme offers in settings. The theme only names it; the code behind the slot acts on it.
 internal sealed record ThemeOption(string Id,string Name,string? Description=null,bool Default=true);
 
-internal sealed record ThemeManifest(string? Background,double BackgroundOpacity,int Stars,string? Frame,int FrameSlice,double FramePadding,double NebulaSpeed=0,double NebulaBrightness=1,double PanelMarkLength=0,double PanelCornerRadius=0,double TabCornerRadius=ThemeVisuals.DefaultTabCornerRadius,bool Voyage=false,bool HudWidgets=false,ThemeOption[]? ThemeOptions=null,string[]? WorldScenes=null,bool SoftHud=false,string? WorldPage=null,ThemeFont? BodyFont=null,ThemeFont? HeadingFont=null)
+internal sealed record ThemeManifest(string? Background,double BackgroundOpacity,int Stars,string? Frame,int FrameSlice,double FramePadding,double NebulaSpeed=0,double NebulaBrightness=1,double PanelMarkLength=0,double PanelCornerRadius=0,double TabCornerRadius=ThemeVisuals.DefaultTabCornerRadius,bool Voyage=false,bool HudWidgets=false,ThemeOption[]? ThemeOptions=null,string[]? WorldScenes=null,bool SoftHud=false,string? WorldPage=null,ThemeFont? BodyFont=null,ThemeFont? HeadingFont=null,bool CatHud=false)
 {
     private sealed class Raw
     {
@@ -56,8 +56,8 @@ internal sealed record ThemeManifest(string? Background,double BackgroundOpacity
         if(options.Any(option=>option==null || option.Id==null || !Regex.IsMatch(option.Id,"^[a-z0-9-]{1,32}$") || string.IsNullOrWhiteSpace(option.Name)) || options.Select(option=>option.Id).Distinct().Count()!=options.Length) return null;
         if(raw.World is { } world && (world.Page==null || !Regex.IsMatch(world.Page,"^[a-z0-9_-]{1,64}\\.html$") || world.Scenes is not { Length:>0 } scenes || scenes.Any(scene=>scene==null || !Regex.IsMatch(scene,"^[a-z0-9-]{1,32}$")) || scenes.Distinct().Count()!=scenes.Length)) return null;
         if(!ValidFont(raw.Fonts?.Body) || !ValidFont(raw.Fonts?.Heading)) return null;
-        if(raw.HudStyle is not (null or "tactical" or "soft")) return null;
-        return new(raw.Background,opacity,stars,raw.Frame,slice,padding,nebulaSpeed,nebulaBrightness,markLength,cornerRadius,tabRadius,raw.Voyage ?? false,raw.HudWidgets ?? false,options,raw.World?.Scenes,raw.HudStyle=="soft",raw.World?.Page,raw.Fonts?.Body,raw.Fonts?.Heading);
+        if(raw.HudStyle is not (null or "tactical" or "soft" or "cat")) return null;
+        return new(raw.Background,opacity,stars,raw.Frame,slice,padding,nebulaSpeed,nebulaBrightness,markLength,cornerRadius,tabRadius,raw.Voyage ?? false,raw.HudWidgets ?? false,options,raw.World?.Scenes,raw.HudStyle is "soft" or "cat",raw.World?.Page,raw.Fonts?.Body,raw.Fonts?.Heading,raw.HudStyle=="cat");
     }
 }
 
@@ -83,6 +83,8 @@ internal sealed class ThemeVisuals
     // NavigateToString refuses anything larger.
     private const int MaxWorldPageBytes=1900000;
     internal bool SoftHud { get; private init; }
+    // The cat form is a soft form too, so widgets without a cat form fall back to soft (ADR 0107).
+    internal bool CatHud { get; private init; }
     internal ThemeOption[] Options { get; private init; }=[];
     internal const string ReticleOption="reticle";
     internal static string OptionKey(string skin,string option)=>skin+"."+option;
@@ -138,6 +140,7 @@ internal sealed class ThemeVisuals
                 WorldScenes=manifest.WorldScenes,
                 WorldPageHtml=worldPage,
                 SoftHud=manifest.SoftHud,
+                CatHud=manifest.CatHud,
                 Options=manifest.ThemeOptions ?? [],
                 Frame=frameImage!=null ? new(frameImage,manifest.FrameSlice,manifest.FramePadding) : null
             };

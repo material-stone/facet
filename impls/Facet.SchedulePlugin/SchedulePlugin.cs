@@ -16,7 +16,7 @@ public sealed class SchedulePlugin : IFacetPlugin
         registry.AddWidget(new WidgetDescriptor(CalendarWidget, "달력·일정", context => new ScheduleBoard(records, context.Layer))
         { Description = "달력과 날짜별 일정·할 일·기록", DefaultColumns = 14, DefaultRows = 8, MinColumns = 8, MinRows = 5, AllowMultiple = false, AllowMultipleTabs = false });
         registry.AddWidget(new WidgetDescriptor(AgendaWidget, "오늘 일정", _ => new AgendaView(records))
-        { Description = "오늘 주요 일정과 할 일", DefaultColumns = 9, DefaultRows = 2, MinColumns = 3, MinRows = 2, AllowMultiple = false, AllowMultipleTabs = false, HasHudPanel = true });
+        { Description = "오늘 주요 일정과 할 일", DefaultColumns = 9, DefaultRows = 2, MinColumns = 3, MinRows = 2, AllowMultiple = false, AllowMultipleTabs = false, HasHudPanel = true, HasCatPanel = false });
         foreach (var tool in Tools(records)) registry.AddAgentTool(tool);
     }
 
