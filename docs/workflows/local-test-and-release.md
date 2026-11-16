@@ -6,12 +6,13 @@
 
 - 앱 본체: 실행한 checkout의 `artifacts/Facet` (`Facet.Launcher.exe` → `latest.json`의 release).
 - 플러그인: `%LOCALAPPDATA%\MaterialStone\Facet\plugins\<name>`. `artifacts/Facet/plugins`가 아닙니다.
+- 스킨: `%LOCALAPPDATA%\MaterialStone\Facet\skins\<folder>`. 원본은 `registry/skins/<folder>`입니다.
 - 플러그인·스킨 목록: `main`의 `registry/index.json`. 앱은 GitHub API로 먼저 읽어 머지 즉시 반영되고, API가 막히면(시간당 60회 제한) 몇 분 캐시되는 raw 주소로 대신 읽습니다.
 
 ## 커밋 없이 로컬에서 확인
 
 1. 작업한 checkout(worktree 포함)에서 `scripts/build.ps1`을 실행합니다.
-2. build는 이미 설치된 first-party 플러그인 폴더에 새 DLL을 덮어씁니다. `plugin.json`은 그대로 두어 설치 버전이 registry 버전과 비교되게 합니다.
+2. build는 이미 설치된 first-party 플러그인 폴더에 새 DLL을, 같은 id로 설치된 스킨 폴더에 `registry/skins`의 파일을 덮어씁니다. 플러그인 `plugin.json`은 그대로 두고, 스킨 `skin.json`은 새 내용에 설치된 `version`만 유지해 설치 버전이 registry 버전과 비교되게 합니다.
 3. Facet을 완전히 종료하고 다시 켭니다. worktree에서 빌드했다면 그 worktree의 `artifacts\Facet\Facet.Launcher.exe`로 켜야 앱 본체 변경도 보입니다.
 4. 원래 상태로 되돌리려면 플러그인 화면에서 해당 플러그인을 다시 설치하거나 업데이트합니다.
 
