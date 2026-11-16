@@ -100,6 +100,7 @@ internal static partial class Program
         Assert(clockView.DateLine=="2026년 10월 24일 토요일" && clockView.TimeLine=="오전 09:08:07","the clock plugin shows the dashboard clock's date and time");
         clockView.Dispose();
         ClockFaceChecks();
+        SystemMonitorChecks();
 #endif
         const string widget="plugin.sample.greeting";
         tabs.SelectedItem=tabs.Items.OfType<TabItem>().First(t=>AutomationName(t)=="작업");

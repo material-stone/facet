@@ -387,6 +387,7 @@ internal static partial class Program
         if(args.Contains("--hud-preview")) return RunHudPreview(args);
 #if PLUGIN_CHECKS
         if(args.Contains("--clock-face-preview")) return RunClockFacePreview(args);
+        if(args.Contains("--sysmon-preview")) return RunSystemMonitorPreview(args);
 #endif
 #endif
         string qa=Path.GetFullPath(Path.Combine(".test-data","journal-"+Guid.NewGuid().ToString("N"))); Directory.CreateDirectory(qa);

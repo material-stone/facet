@@ -81,8 +81,8 @@ try {
     # The sleep plugin ships the same way, to <data>/plugins/sleep (ADR 0083).
     dotnet publish impls/Facet.SleepPlugin/Facet.SleepPlugin.csproj -c Release -o (Join-Path $deployRoot 'plugins/sleep') --nologo -m:1 /nodeReuse:false
     if ($LASTEXITCODE -ne 0) { throw 'Sleep plugin publish failed. The previous release remains selected.' }
-    # The clock and weather plugins ship the same way, to <data>/plugins/clock and weather.
-    foreach ($plugin in @(@('Facet.ClockPlugin', 'clock'), @('Facet.WeatherPlugin', 'weather'))) {
+    # The clock, weather and system monitor plugins ship the same way, to <data>/plugins/clock, weather and sysmon.
+    foreach ($plugin in @(@('Facet.ClockPlugin', 'clock'), @('Facet.WeatherPlugin', 'weather'), @('Facet.SystemMonitorPlugin', 'sysmon'))) {
         dotnet publish "impls/$($plugin[0])/$($plugin[0]).csproj" -c Release -o (Join-Path $deployRoot "plugins/$($plugin[1])") --nologo -m:1 /nodeReuse:false
         if ($LASTEXITCODE -ne 0) { throw "$($plugin[0]) publish failed. The previous release remains selected." }
     }
