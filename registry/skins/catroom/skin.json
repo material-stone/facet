@@ -1,0 +1,37 @@
+{
+  "id": "catroom",
+  "name": "고양이 방",
+  "version": "1.0.0",
+  "description": "햇살 드는 방에서 치즈 고양이가 산책하고 낮잠 자고 방울과 털실로 노는 실시간 배경. 창밖은 시간과 날씨를 따라 바뀌고, 고양이를 누르면 골골거립니다.",
+  "colors": {
+    "Bg": "#FFF4EA",
+    "OverlayBackdrop": "#33FBE3D3",
+    "ModalBackdrop": "#995A4238",
+    "DangerSoft": "#FBD3D8",
+    "Panel": "#EBFFF7EF",
+    "Edge": "#C9A48E",
+    "Ink": "#4A3A33",
+    "Muted": "#8A6E62",
+    "ScheduleNow": "#E8798A",
+    "Mint": "#D9843A",
+    "Danger": "#E05A6E",
+    "CalendarSunday": "#E05A6E",
+    "CalendarSaturday": "#4E86C2",
+    "Input": "#FFFDF9",
+    "Selected": "#F9D5C6",
+    "Hover": "#FCE6DA",
+    "OnAccent": "#FFF7EF"
+  },
+  "theme": {
+    "fonts": {
+      "body": { "file": "GowunDodum-Regular.ttf", "family": "Gowun Dodum" },
+      "heading": { "file": "Jua-Regular.ttf", "family": "Jua" }
+    },
+    "world": { "page": "world.html", "scenes": ["room"] },
+    "hudWidgets": true,
+    "hudStyle": "soft",
+    "panelMarkLength": 0,
+    "panelCornerRadius": 18,
+    "tabCornerRadius": 14
+  }
+}

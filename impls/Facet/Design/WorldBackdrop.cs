@@ -25,7 +25,7 @@ internal static class WorldWeather
 }
 
 // A layered WPF window cannot show an HWND child, so the world lives in its own window kept right below the overlay.
-// It never takes input or focus: the overlay catches every click and forwards "next".
+// It never takes input or focus: the overlay catches every click and forwards "next" with where it was pressed.
 internal sealed class WorldBackdrop : IDisposable
 {
     private const int GwlExStyle=-20,WsExNoActivate=0x08000000,WsExToolWindow=0x80,WsExTransparent=0x20;
@@ -93,7 +93,8 @@ internal sealed class WorldBackdrop : IDisposable
         if(!GetWindowRect(handle,out var rect)) return;
         SetWindowPos(new WindowInteropHelper(window).Handle,handle,rect.Left,rect.Top,rect.Right-rect.Left,rect.Bottom-rect.Top,SwpNoActivate|SwpNoOwnerZOrder);
     }
-    internal void Next()=>Post(new { next=true });
+    // x and y are the click as fractions of the overlay, so a page can react where it was pressed (ADR 0106).
+    internal void Next(double x,double y)=>Post(new { next=true,x=Math.Round(Math.Clamp(x,0,1),4),y=Math.Round(Math.Clamp(y,0,1),4) });
 
     private async Task StartAsync()
     {

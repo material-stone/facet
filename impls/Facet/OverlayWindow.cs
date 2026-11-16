@@ -66,7 +66,11 @@ public sealed class OverlayWindow : Window
         // On release: a carousel swipe or a board pan has already handled the event by then.
         MouseLeftButtonUp += (_, e) => {
             // Boards and pages have no background outside edit mode, so a press on empty space lands on the window itself.
-            if (!IsQuickLaunch && e.OriginalSource is Visual emptySpace && !tabs.IsAncestorOf(emptySpace)) world?.Next();
+            if (!IsQuickLaunch && e.OriginalSource is Visual emptySpace && !tabs.IsAncestorOf(emptySpace) && ActualWidth > 0 && ActualHeight > 0)
+            {
+                var at = e.GetPosition(this);
+                world?.Next(at.X / ActualWidth, at.Y / ActualHeight);
+            }
             if (!IsQuickLaunch && e.OriginalSource is Visual source && !tabs.IsAncestorOf(source)) (themeBackdrop as Panel)?.Children.OfType<Design.SpaceVoyage>().FirstOrDefault()?.Scan();
         };
         PreviewKeyDown += (_, e) =>
