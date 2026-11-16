@@ -148,3 +148,4 @@
 - [0103 — 스킨 탭을 목록 하나로 합침](0103-skin-tab-single-list.md)
 - [0104 — 플러그인 소스 공개, 채팅·음악 플러그인 제거](0104-public-plugin-sources-without-chat-and-music.md)
 - [0105 — MCP 서버와 CLI 제거](0105-remove-mcp-and-cli.md)
+- [0106 — 시스템 모니터 플러그인](0106-system-monitor-plugin.md)
