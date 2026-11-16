@@ -73,6 +73,9 @@ internal sealed class OverlayWorkspaceView : UserControl
     internal Func<WidgetPlacement, (int Columns, int Rows)>? MinimumSize;
     internal Func<WidgetPlacement, bool>? FillsHeight;
     internal Func<WidgetPlacement, bool>? HasPanel;
+    internal Func<WidgetPlacement, bool>? DefaultPanel;
+    // null clears the placement's choice so it follows the widget's default again.
+    internal Action<string, bool?>? PanelChanged;
     internal Func<string, int, int, int, int, bool>? CommitMove;
     internal Action<string>? RemoveRequested;
 
@@ -327,6 +330,15 @@ internal sealed class OverlayWorkspaceView : UserControl
         System.Windows.Automation.AutomationProperties.SetName(remove, "위젯 제거");
         remove.Click += (_, _) => RemoveRequested?.Invoke(item.Id);
         tile.Children.Add(remove);
+        if (PanelChanged != null) {
+            var toggle = new System.Windows.Controls.Primitives.ToggleButton { Content = "▣", IsChecked = panel, Width = 28, Height = 28, Padding = new(0), Margin = new(4, 4, 36, 4), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, ToolTip = "배경 패널 켜기/끄기" };
+            System.Windows.Automation.AutomationProperties.SetName(toggle, "배경 패널");
+            toggle.Click += (_, _) => {
+                bool next = toggle.IsChecked == true;
+                PanelChanged(item.Id, next == (DefaultPanel?.Invoke(item) == true) ? null : next);
+            };
+            tile.Children.Add(toggle);
+        }
         var handle = new Border { Width = 20, Height = 20, Margin = new(2), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new(4), Background = (Brush)FindResource("Mint"), Cursor = Cursors.SizeNWSE };
         System.Windows.Automation.AutomationProperties.SetName(handle, "위젯 크기 조절");
         handle.MouseLeftButtonDown += (_, e) => BeginDrag(item, true, handle, e);

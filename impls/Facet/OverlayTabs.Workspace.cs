@@ -55,10 +55,15 @@ public partial class OverlayTabs
         CreateView = item => CreateWidgetView(tabId, item),
         MinimumSize = item => catalog.TryGetValue(item.WidgetId, out var entry) ? (entry.Descriptor.MinColumns, entry.Descriptor.MinRows) : (1, 1),
         FillsHeight = item => !catalog.TryGetValue(item.WidgetId, out var entry) || entry.Fill,
-        HasPanel = item => catalog.TryGetValue(item.WidgetId, out var entry) && (WidgetTheme.IsHud ? entry.Descriptor.HasHudPanel : entry.Descriptor.HasPanel),
+        HasPanel = item => item.Panel ?? DefaultPanel(item),
+        DefaultPanel = DefaultPanel,
+        PanelChanged = (id, panel) => ChangeWorkspace(data => WorkspaceLayouts.SetPanel(data, tabId, id, panel)),
         CommitMove = (id, x, y, width, height) => ChangeWorkspace(data => WorkspaceLayouts.MoveWidget(data, tabId, id, x, y, width, height)),
         RemoveRequested = id => RemovePlacement(tabId, id)
     };
+
+    private bool DefaultPanel(WidgetPlacement item) =>
+        catalog.TryGetValue(item.WidgetId, out var entry) && (WidgetTheme.IsHud ? entry.Descriptor.HasHudPanel : entry.Descriptor.HasPanel);
 
     private FrameworkElement CreateWidgetView(string tabId, WidgetPlacement item)
     {
