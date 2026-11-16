@@ -115,13 +115,20 @@ public sealed class OverlayWindow : Window
         if (Design.Skins.Visuals is not { WorldScenes: { } scenes, WorldPageHtml: { } page }) return;
         var weather = new WeatherClient(locate: token => WeatherRegions.ResolveAsync(PluginData.WeatherRegion(app.Data), token));
         world = new Design.WorldBackdrop(page, scenes, weather.FetchAsync);
-        world.Failed += () => { world = null; Background = Brushes.Transparent; ApplyProgress((double)GetValue(TransitionProgressProperty)); };
+        world.Failed += () => { world = null; tabs.SetSkinWorld(false); Background = Brushes.Transparent; ApplyProgress((double)GetValue(TransitionProgressProperty)); };
+        // The widget layer (ADR 0109): the tabs say where skin-drawn widgets are and the page asks for their actions.
+        var current = world;
+        world.ActionRequested = json => tabs.RunSkinAction(json);
+        tabs.SkinFrames = json => { if (ReferenceEquals(world, current)) current.Widgets(json); };
+        tabs.SkinPointerOut = json => { if (ReferenceEquals(world, current)) current.Pointer(json); };
+        tabs.SetSkinWorld(true);
         // Nearly invisible, but it makes every pixel of this layered window take the click instead of the app behind.
         Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
     }
     private void RemoveWorld()
     {
         world?.Dispose(); world = null; Background = Brushes.Transparent;
+        tabs.SetSkinWorld(false); tabs.SkinFrames = null; tabs.SkinPointerOut = null;
     }
     private void UpdateWorld() => world?.SetVisible(IsVisible && requestedVisible && !IsQuickLaunch && requestedStrength > 0, this);
     internal void ApplyGrid() => tabs.ApplyWorkspace();

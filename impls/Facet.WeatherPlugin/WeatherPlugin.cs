@@ -24,7 +24,7 @@ public sealed class WeatherPlugin : IFacetPlugin
     public void Register(IWidgetRegistry registry)
     {
         registry.AddWidget(new WidgetDescriptor("weather", "날씨 (플러그인)", context => new WeatherView(context))
-        { Description = "현재 날씨와 습도", DefaultColumns = 4, DefaultRows = 1, MinColumns = 3, MinRows = 1, AllowMultiple = false, AllowMultipleTabs = true, UsesData = true, HasHudPanel = true, HasCatPanel = false });
+        { Description = "현재 날씨와 습도", DefaultColumns = 4, DefaultRows = 1, MinColumns = 3, MinRows = 1, AllowMultiple = false, AllowMultipleTabs = true, UsesData = true, HasHudPanel = true });
         var regions = new List<SettingOption> { new("", "Windows 자동 위치") };
         regions.AddRange(WeatherAssets.Regions.Select(r => new SettingOption(r.Id, r.DisplayName)));
         registry.AddSettings(new PluginSettingsSection([
@@ -56,6 +56,15 @@ public sealed record WeatherReading(double? Temperature, int? Humidity, int? Cod
         61 or 63 or 65 => "비", 66 or 67 => "어는 비", 71 or 73 or 75 or 77 => "눈",
         80 or 81 or 82 => "소나기", 85 or 86 => "눈 소나기", 95 => "뇌우", 96 or 99 => "우박 동반 뇌우",
         _ => "날씨 미확인"
+    };
+
+    // The skin's weather keys (ADR 0109): clear, partly, cloud, fog, rain, snow, or night for a clear night.
+    public string SkinKey => Code switch {
+        0 or 1 => IsDay ? "clear" : "night",
+        2 => "partly", 3 => "cloud", 45 or 48 => "fog",
+        71 or 73 or 75 or 77 or 85 or 86 => "snow",
+        51 or 53 or 55 or 56 or 57 or 61 or 63 or 65 or 66 or 67 or 80 or 81 or 82 or 95 or 96 or 99 => "rain",
+        _ => "partly"
     };
 
     public string? IconName => Code switch {
@@ -137,7 +146,7 @@ public static class WeatherAssets
 }
 
 // Fills its tile. The region comes from the plugin's settings section; each reading is published in the widget's store.
-public sealed class WeatherView : Grid, IDisposable
+public sealed class WeatherView : Grid, IDisposable, IWidgetState
 {
     private sealed class LocationUnavailableException(string message) : Exception(message);
 
@@ -209,9 +218,29 @@ public sealed class WeatherView : Grid, IDisposable
         context.Settings.Changed += SettingChanged;
         timer.Tick += (_, _) => _ = RefreshAsync();
         IsVisibleChanged += (_, _) => {
-            if (IsVisible) { timer.Start(); _ = RefreshAsync(); }
+            if (IsVisible || changed != null) { timer.Start(); _ = RefreshAsync(); }
             else timer.Stop();
         };
+    }
+
+    // A skin can draw the weather from this state (ADR 0109); while one listens the reading keeps refreshing even when hidden.
+    public string Type => "facet.weather/now@1";
+    public string Json() => JsonSerializer.Serialize(new {
+        condition = reading?.SkinKey, label = condition.Text, temperature = reading?.Temperature is double t ? Math.Round(t, 1) : (double?)null,
+        humidity = reading?.Humidity, place = place.Text, status = status.Text, loading = pending != null,
+        observedAt = reading?.ObservedAt.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture)
+    });
+    private Action? changed;
+    public event Action? Changed {
+        add { changed += value; if (!timer.IsEnabled) { timer.Start(); _ = RefreshAsync(); } }
+        remove { changed -= value; if (changed == null && !IsVisible) timer.Stop(); }
+    }
+    // refresh {} fetches now, like pressing the tile.
+    public async Task<string?> Act(string name, string argsJson)
+    {
+        if (name != "refresh") throw new ArgumentException("알 수 없는 동작입니다: " + name);
+        await RefreshAsync(force: true);
+        return null;
     }
 
     // A uniform Viewbox on a wider tile would leave all spare width on the right. Widening the content to the
@@ -276,7 +305,7 @@ public sealed class WeatherView : Grid, IDisposable
         return row;
     }
 
-    private void ShowPlace() { place.Text = Region?.DisplayName ?? "현재 위치"; FitContent(); }
+    private void ShowPlace() { place.Text = Region?.DisplayName ?? "현재 위치"; FitContent(); changed?.Invoke(); }
 
     private async Task<(double Latitude, double Longitude)> LocateAsync(WeatherRegion? region, CancellationToken token)
     {
@@ -299,6 +328,7 @@ public sealed class WeatherView : Grid, IDisposable
         if (!force && (pending != null || now < nextAttempt)) return;
         pending?.Cancel();
         spinner.Visibility = Visibility.Visible;
+        changed?.Invoke();
         var request = new CancellationTokenSource(TimeSpan.FromSeconds(25)); pending = request;
         try {
             var (latitude, longitude) = await LocateAsync(Region, request.Token);
@@ -316,7 +346,7 @@ public sealed class WeatherView : Grid, IDisposable
             if (reading == null) condition.Text = "날씨 미확인";
         }
         finally {
-            if (ReferenceEquals(pending, request)) { pending = null; spinner.Visibility = Visibility.Collapsed; FitContent(); }
+            if (ReferenceEquals(pending, request)) { pending = null; spinner.Visibility = Visibility.Collapsed; FitContent(); changed?.Invoke(); }
             request.Dispose();
         }
     }

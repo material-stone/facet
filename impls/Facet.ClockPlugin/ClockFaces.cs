@@ -36,7 +36,7 @@ public static class FaceChoices
 }
 
 // A widget that shows one face picked per placement, with alignment, mode and style saved in its store.
-public sealed class ClockFaceView : Decorator, IDisposable
+public sealed class ClockFaceView : Decorator, IDisposable, IWidgetState
 {
     private readonly IReadOnlyList<FaceChoice> choices;
     private readonly IWidgetData? data;
@@ -47,19 +47,34 @@ public sealed class ClockFaceView : Decorator, IDisposable
     public ClockFaceView(WidgetContext context, string name, IReadOnlyList<FaceChoice> choices)
     {
         this.choices = choices; data = context.Data;
+        Type = ReferenceEquals(choices, FaceChoices.Weekday) ? "facet.clock/weekday@1" : "facet.clock/time@1";
         AutomationProperties.SetName(this, name);
         Choice = FaceChoices.Find(choices, data?.Get(FaceChoices.ModeKey), data?.Get(FaceChoices.StyleKey));
-        face = Create(Choice);
+        face = Choice.Create();
         button = new ClockFitButton(face, () => context.Modal, value => data?.Set(ClockFitButton.AlignmentKey, value) == true, name + " 설정", BuildFacePicker)
         { Alignment = data?.Get(ClockFitButton.AlignmentKey) ?? ClockFitButton.DefaultAlignment };
         Child = button;
         ShowTime(DateTime.Now);
         timer.Tick += (_, _) => Tick();
-        IsVisibleChanged += (_, _) => { if (IsVisible) Tick(); else timer.Stop(); };
+        IsVisibleChanged += (_, _) => { if (IsVisible || changed != null) Tick(); else timer.Stop(); };
     }
 
-    // The cat skin draws every time face as the cat clock (ADR 0107); the saved choice returns with another skin.
-    private ClockFace Create(FaceChoice choice) => WidgetTheme.IsCatHud && ReferenceEquals(choices, FaceChoices.Time) ? new CatTimeFace() : choice.Create();
+    // A skin can draw this face from its state (ADR 0109); while one listens the clock keeps ticking even when hidden.
+    public string Type { get; }
+    public string Json() => ClockState.Json(DateTime.Now, Choice.Mode, Choice.Style);
+    private Action? changed;
+    public event Action? Changed { add { changed += value; Tick(); } remove { changed -= value; if (changed == null && !IsVisible) timer.Stop(); } }
+    // select {mode, style} picks a face like the settings picker does.
+    public Task<string?> Act(string name, string argsJson)
+    {
+        if (name != "select") throw new ArgumentException("알 수 없는 동작입니다: " + name);
+        using var args = System.Text.Json.JsonDocument.Parse(argsJson);
+        string? mode = args.RootElement.TryGetProperty("mode", out var m) ? m.GetString() : null, style = args.RootElement.TryGetProperty("style", out var st) ? st.GetString() : null;
+        if (choices.FirstOrDefault(c => c.Mode == mode && c.Style == style) is not { } choice) throw new ArgumentException("알 수 없는 모양입니다.");
+        bool saved = Select(choice);
+        changed?.Invoke();
+        return Task.FromResult<string?>(saved ? "true" : "false");
+    }
 
     public FaceChoice Choice { get; private set; }
     public ClockFace Face => face;
@@ -75,7 +90,7 @@ public sealed class ClockFaceView : Decorator, IDisposable
             return false;
         }
         Choice = choice;
-        face = Create(choice);
+        face = choice.Create();
         button.Face = face;
         ShowTime(DateTime.Now);
         return true;
@@ -118,6 +133,7 @@ public sealed class ClockFaceView : Decorator, IDisposable
     {
         var now = DateTime.Now;
         ShowTime(now);
+        changed?.Invoke();
         timer.Interval = TimeSpan.FromMilliseconds(1000 - now.Millisecond);
         timer.Start();
     }
@@ -270,19 +286,4 @@ public sealed class DigitalClockFace() : ClockFace(220, 92)
         var noon = Label(Now.Hour < 12 ? "오전" : "오후", 16, Muted);
         dc.DrawText(noon, new Point((220 - noon.Width) / 2, 70));
     }
-}
-
-// The cat clock as a time face: hosts the shared CatClock and hands it the time on each Show.
-public sealed class CatTimeFace : ClockFace
-{
-    private readonly CatClock clock = new();
-
-    public CatTimeFace() : base(CatClock.DesignWidth, CatClock.DesignHeight) { AddVisualChild(clock); }
-
-    public override string Text => Now.ToString("HH:mm", Korean);
-    protected override int VisualChildrenCount => 1;
-    protected override Visual GetVisualChild(int index) => clock;
-    protected override Size MeasureOverride(Size available) { clock.Measure(available); return clock.DesiredSize; }
-    protected override Size ArrangeOverride(Size size) { clock.Arrange(new Rect(size)); return size; }
-    protected override void OnRender(DrawingContext dc) => clock.Show(Now);
 }

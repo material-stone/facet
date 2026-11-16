@@ -19,10 +19,11 @@ public sealed class SleepPlugin : IFacetPlugin
             return new SleepFit { Child = view };
         }) { Description = "기상일별 잠 시도~기상 구간과 기록", DefaultColumns = 9, DefaultRows = 7, MinColumns = 5, MinRows = 4, AllowMultiple = false, AllowMultipleTabs = false });
         registry.AddWidget(new WidgetDescriptor("duration", "최근 7일 수면량", context => {
-            var view = new SleepDurationChart { Editing = new(records, context.Modal) };
-            view.Live = new(view, records, view.Refresh, null);
-            return new SleepFit { Child = view };
-        }) { Description = "최근 7일 수면 시간 그래프", DefaultColumns = 9, DefaultRows = 3, MinColumns = 4, MinRows = 2, AllowMultiple = false, AllowMultipleTabs = false, HasHudPanel = true, HasCatPanel = false });
+            var editing = new SleepEditing(records, context.Modal);
+            var view = new SleepDurationChart { Editing = editing };
+            view.Live = new(view, records, view.Refresh, null) { State = () => SleepState.Week(records.Entries, DateOnly.FromDateTime(DateTime.Now)) };
+            return new SleepDurationFit(view.Live, editing) { Child = view };
+        }) { Description = "최근 7일 수면 시간 그래프", DefaultColumns = 9, DefaultRows = 3, MinColumns = 4, MinRows = 2, AllowMultiple = false, AllowMultipleTabs = false, HasHudPanel = true });
         registry.AddSettings(new PluginSettingsSection([
             new SliderSetting(TransparencyKey, "수면 패턴 배경 투명도", 0, 100, 0) { Description = "수면 패턴 위젯의 배경만 조절합니다. 0%는 불투명, 100%는 투명입니다." }]));
         registry.AddAgentTool(new("facet_record_sleep", "기상일 기준으로 수면을 기록합니다. 전달한 항목만 기존 기록에 덮어씁니다.",
@@ -71,6 +72,7 @@ internal sealed class SleepLive : IDisposable
 {
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(30) };
     private readonly SleepRecords records;
+    internal SleepRecords Records => records;
     private readonly Action<IReadOnlyList<SleepEntry>, DateOnly> refresh;
     private readonly FrameworkElement view;
     private readonly IPluginSettings? settings;
@@ -85,12 +87,29 @@ internal sealed class SleepLive : IDisposable
         Update();
     }
 
-    private void Update() => refresh(records.Entries, DateOnly.FromDateTime(DateTime.Now));
+    private void Update() { refresh(records.Entries, DateOnly.FromDateTime(DateTime.Now)); Publish(); }
     private void SettingChanged(string key) => Update();
 
     private void VisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
-        if (view.IsVisible) { Update(); timer.Start(); } else timer.Stop();
+        if (view.IsVisible || watchers != null) { Update(); timer.Start(); } else timer.Stop();
+    }
+
+    // A skin listening to the widget's state (ADR 0109) keeps it updating while the view is hidden; Changed fires only on a new state.
+    private Action? watchers;
+    private string published = "";
+    internal Func<string>? State { get; init; }
+    internal void Watch(Action? handler, bool add)
+    {
+        if (add) { watchers += handler; published = State?.Invoke() ?? ""; timer.Start(); }
+        else { watchers -= handler; if (watchers == null && !view.IsVisible) timer.Stop(); }
+    }
+    private void Publish()
+    {
+        if (watchers == null || State == null) return;
+        string json = State();
+        if (json == published) return;
+        published = json; watchers();
     }
 
     public void Dispose()
@@ -103,7 +122,7 @@ internal sealed class SleepLive : IDisposable
 }
 
 // Shows a view at its natural size, shrinking it uniformly to fit: plugin widgets get the exact tile, and these are taller than small tiles.
-internal sealed class SleepFit : Decorator, IDisposable
+internal class SleepFit : Decorator, IDisposable
 {
     private double scale = 1;
 
@@ -129,6 +148,35 @@ internal sealed class SleepFit : Decorator, IDisposable
     }
 
     public void Dispose() => (Child as IDisposable)?.Dispose();
+}
+
+// The duration chart's fit, which also publishes the week to a skin (ADR 0109).
+internal sealed class SleepDurationFit(SleepLive live, SleepEditing editing) : SleepFit, IWidgetState
+{
+    public string Type => SleepState.WeekType;
+    public string Json() => SleepState.Week(live.Records.Entries, DateOnly.FromDateTime(DateTime.Now));
+    public event Action? Changed { add => live.Watch(value, true); remove => live.Watch(value, false); }
+    // edit {date}: opens the record editor for that wake date, like clicking the day.
+    public Task<string?> Act(string name, string argsJson)
+    {
+        if (name != "edit") throw new ArgumentException("알 수 없는 동작입니다: " + name);
+        using var args = System.Text.Json.JsonDocument.Parse(argsJson);
+        if (args.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object || !args.RootElement.TryGetProperty("date", out var value) || value.ValueKind != System.Text.Json.JsonValueKind.String
+            || !DateOnly.TryParseExact(value.GetString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)) throw new ArgumentException("date는 yyyy-MM-dd 형식이어야 합니다.");
+        return Task.FromResult<string?>(editing.Open(date) ? "true" : "false");
+    }
+}
+
+internal static class SleepState
+{
+    internal const string WeekType = "facet.sleep/week@1";
+    // hours is the day's sleep rounded to a tenth, or null when it is not recorded or cannot be computed.
+    internal static string Week(IReadOnlyList<SleepEntry> entries, DateOnly today) => System.Text.Json.JsonSerializer.Serialize(new {
+        days = SleepTracking.Week(entries, today).Select(day => new {
+            date = day.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), label = day.Date.ToString("ddd", CultureInfo.GetCultureInfo("ko-KR")),
+            hours = SleepTracking.Minutes(day) is double minutes ? Math.Round(minutes / 60, 1) : (double?)null, recorded = day.Entry != null, isToday = day.Date == today
+        })
+    });
 }
 
 // Opens the shared record editor over the overlay for one widget.

@@ -49,6 +49,7 @@ public partial class OverlayTabs : UserControl, IWidgetLayer
             UpdateWorkspaceBar();
             SelectedWorkspace?.RefreshTabBar();
             PlaceTabStrip();
+            RequestSkinFrame();
         };
     }
 

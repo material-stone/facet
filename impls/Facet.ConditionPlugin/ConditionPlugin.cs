@@ -17,18 +17,18 @@ public sealed class ConditionPlugin : IFacetPlugin
         registry.AddWidget(new WidgetDescriptor("current", "컨디션", _ => {
             if (WidgetTheme.IsHud) {
                 var hud = new ConditionHudView { Record = (kind, at) => records.Commit(entries => ConditionTracking.Record(entries, kind, at)) };
-                hud.Live = new(hud, records, hud.Refresh);
+                hud.Live = new(hud, records, hud.Refresh) { State = hud.Json };
                 return hud;
             }
             var view = new ConditionSelector { Record = (kind, at) => records.Commit(entries => ConditionTracking.Record(entries, kind, at)) };
-            view.Live = new(view, records, view.Refresh);
+            view.Live = new(view, records, view.Refresh) { State = view.Json };
             return view;
-        }) { Description = "현재 컨디션 기록", DefaultColumns = 2, DefaultRows = 1, MinColumns = 1, MinRows = 1, AllowMultiple = false, AllowMultipleTabs = false, HasHudPanel = true, HasCatPanel = false });
+        }) { Description = "현재 컨디션 기록", DefaultColumns = 2, DefaultRows = 1, MinColumns = 1, MinRows = 1, AllowMultiple = false, AllowMultipleTabs = false, HasHudPanel = true });
         registry.AddWidget(new WidgetDescriptor("history", "7일 컨디션", _ => {
             var view = new ConditionHistory(WidgetTheme.IsHud) { Commit = records.Commit };
-            view.Live = new(view, records, view.Refresh);
+            view.Live = new(view, records, view.Refresh) { State = view.Json };
             return view;
-        }) { Description = "최근 7일 컨디션", DefaultColumns = 9, DefaultRows = 2, MinColumns = 4, MinRows = 1, AllowMultiple = false, AllowMultipleTabs = false, HasHudPanel = true, HasCatPanel = false });
+        }) { Description = "최근 7일 컨디션", DefaultColumns = 9, DefaultRows = 2, MinColumns = 4, MinRows = 1, AllowMultiple = false, AllowMultipleTabs = false, HasHudPanel = true });
         registry.AddAgentTool(new("facet_set_condition", "현재(또는 지정 시각) 컨디션을 기록합니다. kind: good, okay, tired, sleepy, unwell, stressed.",
             """{"type":"object","properties":{"kind":{"type":"string","enum":["good","okay","tired","sleepy","unwell","stressed"]},"at":{"type":"string","description":"시간대 포함 ISO 8601. 생략하면 지금"}},"required":["kind"],"additionalProperties":false}""",
             arguments => Task.FromResult(SetCondition(arguments, DateTimeOffset.Now))));
@@ -76,11 +76,29 @@ internal sealed class ConditionLive : IDisposable
         Update();
     }
 
-    private void Update() => refresh(records.Entries, DateTimeOffset.Now);
+    private void Update() { refresh(records.Entries, DateTimeOffset.Now); Publish(); }
 
     private void VisibilityChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
-        if (view.IsVisible) { Update(); timer.Start(); } else timer.Stop();
+        if (view.IsVisible || watchers != null) { Update(); timer.Start(); } else timer.Stop();
+    }
+
+    internal IReadOnlyList<ConditionEntry> Entries => records.Entries;
+    // A skin listening to the widget's state (ADR 0109) keeps it updating while the view is hidden; Changed fires only on a new state.
+    private Action? watchers;
+    private string published = "";
+    internal Func<string>? State { get; init; }
+    internal void Watch(Action? handler, bool add)
+    {
+        if (add) { watchers += handler; published = State?.Invoke() ?? ""; timer.Start(); }
+        else { watchers -= handler; if (watchers == null && !view.IsVisible) timer.Stop(); }
+    }
+    private void Publish()
+    {
+        if (watchers == null || State == null) return;
+        string json = State();
+        if (json == published) return;
+        published = json; watchers();
     }
 
     public void Dispose()

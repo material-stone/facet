@@ -380,6 +380,7 @@ internal static partial class Program
         if(args.Contains("--skin-preview")) return RunSkinPreview(args);
         if(args.Contains("--voyage-preview")) return RunVoyagePreview(args);
         if(args.Contains("--world-net-check")) return RunWorldNetCheck();
+        if(args.Contains("--world-widgets-check")) return RunWorldWidgetsCheck();
         if(args.Contains("--world-skin-check")) return RunWorldSkinCheck(args[1]);
         // Manual look at a skin in the real app: prepares a throwaway data folder for Facet --data-dir.
         if(args.Contains("--seed-skin")) { var seeded=new Store(args[1]);var seedData=seeded.Load();seedData.Settings.Skin=args[2];seeded.Save(seedData);return 0; }
@@ -430,6 +431,10 @@ internal static partial class Program
             else {
                 CheckOverlayOnly(controller,qa);
                 CheckSkins(controller,qa);
+                CheckSkinWidgets(controller,qa);
+#if PLUGIN_CHECKS
+                CheckWidgetStates();
+#endif
                 CheckPortablePlugins(qa);
         CheckDataBackup(qa);
                 CheckPackages(qa);

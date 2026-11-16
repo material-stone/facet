@@ -6,7 +6,7 @@ using System.Windows.Markup;
 namespace Facet.ConditionPlugin;
 
 // Fills its grid slot: the whole tile is the button, and the icon takes the height the label leaves.
-public sealed class ConditionSelector : UserControl, IDisposable
+public sealed class ConditionSelector : UserControl, IDisposable, Facet.Plugins.IWidgetState
 {
     private const double MenuWidth = 264;
     private readonly Image icon = new() { Stretch = Stretch.Uniform };
@@ -18,6 +18,12 @@ public sealed class ConditionSelector : UserControl, IDisposable
     internal IReadOnlyList<Button> Options { get; }
     internal Func<string, DateTimeOffset, bool>? Record { get; set; }
     internal ConditionLive? Live { get; set; }
+
+    // A skin can draw this widget from its state (ADR 0109).
+    public string Type => ConditionState.CurrentType;
+    public string Json() => ConditionState.Current(Live?.Entries ?? [], DateTimeOffset.Now);
+    public event Action? Changed { add => Live?.Watch(value, true); remove => Live?.Watch(value, false); }
+    public Task<string?> Act(string name, string argsJson) => ConditionState.Record(name, argsJson, Select);
 
     public ConditionSelector()
     {

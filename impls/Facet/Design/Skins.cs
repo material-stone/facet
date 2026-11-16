@@ -41,7 +41,6 @@ internal static class Skins
         if(Visuals is { PanelMarkLength:>0 }) ThemePanels.Register();
         application.Resources[Facet.Plugins.WidgetTheme.HudKey]=Visuals is { HudWidgets:true };
         application.Resources[Facet.Plugins.WidgetTheme.SoftHudKey]=Visuals is { SoftHud:true };
-        application.Resources[Facet.Plugins.WidgetTheme.CatHudKey]=Visuals is { CatHud:true };
     }
     // Styles already built keep the brushes they resolved, so a running switch also needs fresh shared styles and fresh views.
     internal static void Switch(Application application,string? id)

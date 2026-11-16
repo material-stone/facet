@@ -108,6 +108,27 @@ internal sealed class OverlayWorkspaceView : UserControl
     // The tab bar widget's placement shared by every tab; its tile only marks the place, the strip itself lies under the board.
     internal Func<WidgetPlacement?>? TabBar;
     internal Func<int, int, int, int, bool>? CommitTabBar;
+    // Skin widget layer (ADR 0109): whether the world page draws a widget (given its view) or the tab bar instead of WPF,
+    // the tab bar's base size, and pointer input over such a tile in base-size coordinates (id, kind, point, delta, button).
+    internal Func<WidgetPlacement, FrameworkElement?, bool>? SkinDrawn;
+    internal Func<bool>? TabBarSkinDrawn;
+    internal Func<(int Width, int Height)>? TabBarBaseSize;
+    internal Action<string, string, Point, int, int>? SkinPointer;
+    // Fires whenever a tile moves on screen without the view changing, such as during a drag.
+    internal event Action? TilesMoved;
+    private readonly HashSet<string> skinTiles = [];
+    internal bool IsSkinTile(string id) => skinTiles.Contains(id);
+
+    // The skin-drawn tiles in this view's own pixels, following a drag, with the base size the page draws them at.
+    internal IEnumerable<(string Id, Rect Bounds, int BaseWidth, int BaseHeight)> SkinTiles() =>
+        Rects().Where(r => skinTiles.Contains(r.Id)).Select(r => {
+            var (baseWidth, baseHeight) = SkinBase(r.Id);
+            return (r.Id, Design.SkinWidgets.BoardToView(r.X, r.Y, r.Width, r.Height, ActualWidth, ActualHeight, viewX, viewY, Zoom), baseWidth, baseHeight);
+        }).ToArray();
+
+    private (int Width, int Height) SkinBase(string id) =>
+        id == WorkspaceLayouts.TabBarWidget ? TabBarBaseSize?.Invoke() ?? (tiles[id].Item.Width, tiles[id].Item.Height)
+        : BaseSize?.Invoke(tiles[id].Item) ?? (tiles[id].Item.Width, tiles[id].Item.Height);
 
     internal OverlayWorkspaceView(string tabId)
     {
@@ -312,7 +333,7 @@ internal sealed class OverlayWorkspaceView : UserControl
     {
         foreach (var (tile, _) in tiles.Values)
             if (tile.Children.OfType<WidgetStretch>().FirstOrDefault() is { } fit) fit.Child = null;
-        tiles.Clear(); surface.Children.Clear();
+        tiles.Clear(); surface.Children.Clear(); skinTiles.Clear();
     }
 
     internal void Render(WorkspaceTab next, bool edit)
@@ -337,6 +358,7 @@ internal sealed class OverlayWorkspaceView : UserControl
         UpdateView();
         InvalidateVisual();
         TabBarMoved?.Invoke();
+        TilesMoved?.Invoke();
     }
 
     // The tab bar's default place follows the strip's natural size until the user moves it.
@@ -353,10 +375,24 @@ internal sealed class OverlayWorkspaceView : UserControl
     {
         var tile = new Grid { Tag = item.Id };
         if (tabBar) {
-            if (!editing) { tile.IsHitTestVisible = false; return tile; }
+            if (TabBarSkinDrawn?.Invoke() == true) skinTiles.Add(item.Id);
+            if (!editing) {
+                if (skinTiles.Contains(item.Id)) tile.Children.Add(PointerCatcher(item.Id, tile));
+                else tile.IsHitTestVisible = false;
+                return tile;
+            }
         }
         else {
             var inset = new Thickness(0);
+            var view = CreateView?.Invoke(item);
+            // The page draws this widget: no panel, and the view stays alive for its state but is not shown (ADR 0109).
+            if (SkinDrawn?.Invoke(item, view) == true) {
+                skinTiles.Add(item.Id);
+                var (skinWidth, skinHeight) = BaseSize?.Invoke(item) ?? (item.Width, item.Height);
+                tile.Children.Add(new WidgetStretch { BaseWidth = skinWidth, BaseHeight = skinHeight, Child = view, Visibility = Visibility.Hidden });
+                if (!editing) { tile.Children.Add(PointerCatcher(item.Id, tile)); return tile; }
+                return EditFrame(item, false, tile);
+            }
             bool panel = HasPanel?.Invoke(item) == true;
             if (panel && Facet.Plugins.WidgetTheme.IsHud) {
                 inset = new(20, 14, 20, 14);
@@ -370,9 +406,32 @@ internal sealed class OverlayWorkspaceView : UserControl
             }
             // The panel stays at tile size; only the view inside it stretches from its base size.
             var (baseWidth, baseHeight) = BaseSize?.Invoke(item) ?? (item.Width, item.Height);
-            tile.Children.Add(new WidgetStretch { BaseWidth = baseWidth - inset.Left - inset.Right, BaseHeight = baseHeight - inset.Top - inset.Bottom, Margin = inset, Child = CreateView?.Invoke(item) });
+            tile.Children.Add(new WidgetStretch { BaseWidth = baseWidth - inset.Left - inset.Right, BaseHeight = baseHeight - inset.Top - inset.Bottom, Margin = inset, Child = view });
             if (!editing) return tile;
         }
+        return EditFrame(item, tabBar, tile);
+    }
+
+    // A transparent surface that keeps hit-testing on a skin-drawn tile and hands its pointer to the page.
+    private Border PointerCatcher(string id, Grid tile)
+    {
+        var catcher = new Border { Background = Brushes.Transparent };
+        System.Windows.Automation.AutomationProperties.SetName(catcher, "스킨 위젯");
+        Point At(MouseEventArgs e) => Design.SkinWidgets.ToBase(e.GetPosition(tile), new Size(tile.ActualWidth, tile.ActualHeight), SkinBase(id).Width, SkinBase(id).Height);
+        static int Button(MouseButton button) => button switch { MouseButton.Middle => 1, MouseButton.Right => 2, _ => 0 };
+        catcher.MouseMove += (_, e) => SkinPointer?.Invoke(id, "move", At(e), 0, 0);
+        catcher.MouseDown += (_, e) => { catcher.CaptureMouse(); SkinPointer?.Invoke(id, "down", At(e), 0, Button(e.ChangedButton)); };
+        catcher.MouseUp += (_, e) => {
+            if (catcher.IsMouseCaptured && Mouse.LeftButton == MouseButtonState.Released && Mouse.RightButton == MouseButtonState.Released && Mouse.MiddleButton == MouseButtonState.Released) catcher.ReleaseMouseCapture();
+            SkinPointer?.Invoke(id, "up", At(e), 0, Button(e.ChangedButton));
+        };
+        catcher.MouseWheel += (_, e) => { e.Handled = true; SkinPointer?.Invoke(id, "wheel", At(e), e.Delta, 0); };
+        catcher.MouseLeave += (_, e) => { if (!catcher.IsMouseCaptured) SkinPointer?.Invoke(id, "leave", At(e), 0, 0); };
+        return catcher;
+    }
+
+    private Grid EditFrame(WidgetPlacement item, bool tabBar, Grid tile)
+    {
         var cover = new Border { Background = (Brush)FindResource("Panel"), Opacity = .55, CornerRadius = new(8), BorderThickness = new(1), BorderBrush = (Brush)FindResource("Mint"), Cursor = Cursors.SizeAll };
         System.Windows.Automation.AutomationProperties.SetName(cover, tabBar ? "탭 막대 이동" : "위젯 이동");
         cover.MouseLeftButtonDown += (_, e) => BeginDrag(item, false, cover, e);
@@ -435,6 +494,7 @@ internal sealed class OverlayWorkspaceView : UserControl
         tile.Opacity = CanDrop(state.Id, x, y, width, height) ? 1 : .4;
         InvalidateVisual();
         if (state.Id == WorkspaceLayouts.TabBarWidget) TabBarMoved?.Invoke();
+        TilesMoved?.Invoke();
     }
 
     internal void FinishDrag()
@@ -449,6 +509,7 @@ internal sealed class OverlayWorkspaceView : UserControl
         Place(tile, state.X, state.Y, state.Width, state.Height);
         InvalidateVisual();
         if (bar) TabBarMoved?.Invoke();
+        TilesMoved?.Invoke();
     }
 
     internal bool CancelDrag()
@@ -459,6 +520,7 @@ internal sealed class OverlayWorkspaceView : UserControl
         Place(tile, state.X, state.Y, state.Width, state.Height);
         InvalidateVisual();
         if (state.Id == WorkspaceLayouts.TabBarWidget) TabBarMoved?.Invoke();
+        TilesMoved?.Invoke();
         return true;
     }
 

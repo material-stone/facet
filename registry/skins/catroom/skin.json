@@ -29,7 +29,7 @@
     },
     "world": { "page": "world.html", "scenes": ["room"] },
     "hudWidgets": true,
-    "hudStyle": "cat",
+    "hudStyle": "soft",
     "panelMarkLength": 0,
     "panelCornerRadius": 18,
     "tabCornerRadius": 14

@@ -9,7 +9,7 @@ namespace Facet.Design;
 // A choice a theme offers in settings. The theme only names it; the code behind the slot acts on it.
 internal sealed record ThemeOption(string Id,string Name,string? Description=null,bool Default=true);
 
-internal sealed record ThemeManifest(string? Background,double BackgroundOpacity,int Stars,string? Frame,int FrameSlice,double FramePadding,double NebulaSpeed=0,double NebulaBrightness=1,double PanelMarkLength=0,double PanelCornerRadius=0,double TabCornerRadius=ThemeVisuals.DefaultTabCornerRadius,bool Voyage=false,bool HudWidgets=false,ThemeOption[]? ThemeOptions=null,string[]? WorldScenes=null,bool SoftHud=false,string? WorldPage=null,ThemeFont? BodyFont=null,ThemeFont? HeadingFont=null,bool CatHud=false)
+internal sealed record ThemeManifest(string? Background,double BackgroundOpacity,int Stars,string? Frame,int FrameSlice,double FramePadding,double NebulaSpeed=0,double NebulaBrightness=1,double PanelMarkLength=0,double PanelCornerRadius=0,double TabCornerRadius=ThemeVisuals.DefaultTabCornerRadius,bool Voyage=false,bool HudWidgets=false,ThemeOption[]? ThemeOptions=null,string[]? WorldScenes=null,bool SoftHud=false,string? WorldPage=null,ThemeFont? BodyFont=null,ThemeFont? HeadingFont=null,string[]? Widgets=null)
 {
     private sealed class Raw
     {
@@ -30,10 +30,14 @@ internal sealed record ThemeManifest(string? Background,double BackgroundOpacity
         public RawWorld? World { get; set; }
         public string? HudStyle { get; set; }
         public RawFonts? Fonts { get; set; }
+        public string[]? Widgets { get; set; }
     }
     private sealed class RawWorld { public string? Page { get; set; } public string[]? Scenes { get; set; } }
     private sealed class RawFonts { public ThemeFont? Body { get; set; } public ThemeFont? Heading { get; set; } }
     private static bool ValidFont(ThemeFont? font)=>font==null || (font.File!=null && Regex.IsMatch(font.File,"^[A-Za-z0-9_-]{1,64}\\.(ttf|otf)$") && !string.IsNullOrWhiteSpace(font.Family) && Regex.IsMatch(font.Family,"^[\\p{L}\\p{N} ]{1,64}$"));
+    // Widget state types the world page draws (ADR 0109): "<pluginId>/<widget>@<version>".
+    internal const int MaxWidgetTypes=32;
+    internal static bool ValidWidgetType(string? type)=>type!=null && Regex.IsMatch(type,"^[a-z0-9][a-z0-9._-]{0,63}/[a-z0-9][a-z0-9._-]{0,31}@[1-9][0-9]{0,3}$");
     private static readonly JsonSerializerOptions Options=new() { PropertyNameCaseInsensitive=true };
     private static bool ValidAsset(string? name)=>name==null || Regex.IsMatch(name,"^[a-z0-9_-]{1,64}\\.png$");
 
@@ -56,8 +60,10 @@ internal sealed record ThemeManifest(string? Background,double BackgroundOpacity
         if(options.Any(option=>option==null || option.Id==null || !Regex.IsMatch(option.Id,"^[a-z0-9-]{1,32}$") || string.IsNullOrWhiteSpace(option.Name)) || options.Select(option=>option.Id).Distinct().Count()!=options.Length) return null;
         if(raw.World is { } world && (world.Page==null || !Regex.IsMatch(world.Page,"^[a-z0-9_-]{1,64}\\.html$") || world.Scenes is not { Length:>0 } scenes || scenes.Any(scene=>scene==null || !Regex.IsMatch(scene,"^[a-z0-9-]{1,32}$")) || scenes.Distinct().Count()!=scenes.Length)) return null;
         if(!ValidFont(raw.Fonts?.Body) || !ValidFont(raw.Fonts?.Heading)) return null;
-        if(raw.HudStyle is not (null or "tactical" or "soft" or "cat")) return null;
-        return new(raw.Background,opacity,stars,raw.Frame,slice,padding,nebulaSpeed,nebulaBrightness,markLength,cornerRadius,tabRadius,raw.Voyage ?? false,raw.HudWidgets ?? false,options,raw.World?.Scenes,raw.HudStyle is "soft" or "cat",raw.World?.Page,raw.Fonts?.Body,raw.Fonts?.Heading,raw.HudStyle=="cat");
+        if(raw.HudStyle is not (null or "tactical" or "soft")) return null;
+        // Only a world page can draw widgets, so the list needs one.
+        if(raw.Widgets is { } widgets && (raw.World==null || widgets.Length>MaxWidgetTypes || widgets.Any(type=>!ValidWidgetType(type)) || widgets.Distinct().Count()!=widgets.Length)) return null;
+        return new(raw.Background,opacity,stars,raw.Frame,slice,padding,nebulaSpeed,nebulaBrightness,markLength,cornerRadius,tabRadius,raw.Voyage ?? false,raw.HudWidgets ?? false,options,raw.World?.Scenes,raw.HudStyle=="soft",raw.World?.Page,raw.Fonts?.Body,raw.Fonts?.Heading,raw.Widgets is { Length:>0 } ? raw.Widgets : null);
     }
 }
 
@@ -83,8 +89,8 @@ internal sealed class ThemeVisuals
     // NavigateToString refuses anything larger.
     private const int MaxWorldPageBytes=1900000;
     internal bool SoftHud { get; private init; }
-    // The cat form is a soft form too, so widgets without a cat form fall back to soft (ADR 0107).
-    internal bool CatHud { get; private init; }
+    // Widget state types the world page draws instead of their WPF look (ADR 0109).
+    internal IReadOnlySet<string> WidgetTypes { get; private init; }=new HashSet<string>();
     internal ThemeOption[] Options { get; private init; }=[];
     internal const string ReticleOption="reticle";
     internal static string OptionKey(string skin,string option)=>skin+"."+option;
@@ -140,7 +146,7 @@ internal sealed class ThemeVisuals
                 WorldScenes=manifest.WorldScenes,
                 WorldPageHtml=worldPage,
                 SoftHud=manifest.SoftHud,
-                CatHud=manifest.CatHud,
+                WidgetTypes=new HashSet<string>(manifest.Widgets ?? [],StringComparer.Ordinal),
                 Options=manifest.ThemeOptions ?? [],
                 Frame=frameImage!=null ? new(frameImage,manifest.FrameSlice,manifest.FramePadding) : null
             };

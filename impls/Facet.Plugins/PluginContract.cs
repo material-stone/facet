@@ -10,9 +10,25 @@ public static class WidgetTheme
     public const string SoftHudKey = "Facet.SoftHudWidgets";
     // A HUD skin can ask for rounded plates and plain numbers instead of the tactical look (ADR 0090).
     public static bool IsSoftHud => IsHud && Application.Current?.TryFindResource(SoftHudKey) is true;
+    // Kept for binary compatibility with plugins built against ADR 0107; skins now draw widget looks (ADR 0109).
+    [Obsolete("Skins draw widget looks through IWidgetState (ADR 0109). Always false.")]
     public const string CatHudKey = "Facet.CatHudWidgets";
-    // The cat room skin asks for cat-shaped widgets; IsSoftHud stays true so a widget without a cat form shows its soft form (ADR 0107).
-    public static bool IsCatHud => IsSoftHud && Application.Current?.TryFindResource(CatHudKey) is true;
+    [Obsolete("Skins draw widget looks through IWidgetState (ADR 0109). Always false.")]
+    public static bool IsCatHud => false;
+}
+
+// Optional on a widget view (ADR 0109). A skin that lists Type in skin.json theme.widgets draws the widget from this state;
+// the view stays alive but hidden. Type is "<pluginId>/<widget>@<major>", for example "facet.clock/time@1": lowercase
+// letters, digits, dots, dashes and underscores, then a version that goes up whenever the JSON shape changes.
+// Json returns one JSON object. Changed is raised on the UI thread whenever Json would return something else.
+// Act runs a named action with JSON arguments on the UI thread and returns a JSON result or null. It must check its
+// arguments itself; ArgumentException or a false result reports a bad request. Actions may open modals through WidgetContext.Modal.
+public interface IWidgetState
+{
+    string Type { get; }
+    string Json();
+    event Action? Changed;
+    Task<string?> Act(string name, string argsJson);
 }
 
 // Entry point: a public class with a parameterless constructor in the plugin.json assembly.
@@ -114,7 +130,8 @@ public sealed record WidgetDescriptor(string Id, string Title, Func<WidgetContex
     public bool HasPanel { get; init; }
     // HUD themes replace HasPanel with this: only a widget with a HUD form sits on a HudPanel.
     public bool HasHudPanel { get; init; }
-    // The cat form (ADR 0107) keeps the HUD panel as a cream plate; false leaves a widget that draws its own prop without one.
+    // Kept for binary compatibility (ADR 0107); ignored since skins draw widget looks (ADR 0109).
+    [Obsolete("Ignored (ADR 0109).")]
     public bool HasCatPanel { get; init; } = true;
 }
 

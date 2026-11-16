@@ -54,6 +54,9 @@ internal sealed class WorldBackdrop : IDisposable
     private bool ready,requestedVisible,disposed;
     private string weather="partly";
     internal event Action? Failed;
+    // The page's { type:'action' } message; returns the actionResult to send back (ADR 0109).
+    internal Func<string,Task<string>>? ActionRequested;
+    private string? widgets;
 
     internal WorldBackdrop(string page,string[] scenes,Func<CancellationToken,Task<WeatherSnapshot>> fetchWeather)
     {
@@ -95,6 +98,13 @@ internal sealed class WorldBackdrop : IDisposable
     }
     // x and y are the click as fractions of the overlay, so a page can react where it was pressed (ADR 0106).
     internal void Next(double x,double y)=>Post(new { next=true,x=Math.Round(Math.Clamp(x,0,1),4),y=Math.Round(Math.Clamp(y,0,1),4) });
+    // The skin-drawn widgets of the shown tab; an unchanged list is not sent again, and a page that becomes ready gets the latest.
+    internal void Widgets(string message)
+    {
+        if(message==widgets) return;
+        widgets=message;PostJson(message);
+    }
+    internal void Pointer(string message)=>PostJson(message);
 
     private async Task StartAsync()
     {
@@ -125,12 +135,19 @@ internal sealed class WorldBackdrop : IDisposable
         }
         catch(Exception ex) when(ex is JsonException or KeyNotFoundException or InvalidOperationException) { return; }
         if(type=="loaded") view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { scenes }));
-        else if(type=="ready") { ready=true;Post(new { weather,visible=requestedVisible });ProbeForCheck?.Invoke("ready"); }
+        else if(type=="ready") { ready=true;Post(new { weather,visible=requestedVisible });if(widgets!=null) PostJson(widgets);ProbeForCheck?.Invoke("ready"); }
+        else if(type=="action" && ActionRequested is { } act) _=ReplyAsync(act,json);
         else if(type=="failed") Fail();
     }
-    private void Post(object message)
+    private void Post(object message)=>PostJson(JsonSerializer.Serialize(message));
+    private void PostJson(string json)
     {
-        if(ready && !disposed && view.CoreWebView2!=null) view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(message));
+        if(ready && !disposed && view.CoreWebView2!=null) view.CoreWebView2.PostWebMessageAsJson(json);
+    }
+    private async Task ReplyAsync(Func<string,Task<string>> act,string json)
+    {
+        try { PostJson(await act(json)); }
+        catch(Exception ex) when(ex is not OutOfMemoryException) { }
     }
     private async Task RefreshWeatherAsync()
     {

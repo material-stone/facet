@@ -45,6 +45,8 @@ public partial class OverlayTabs
         board.ViewChanged += UpdateWorkspaceZoom;
         board.ViewChanged += () => { if (ReferenceEquals(board, SelectedWorkspace)) PlaceTabStrip(); };
         board.TabBarMoved += () => { if (ReferenceEquals(board, SelectedWorkspace)) PlaceTabStrip(); };
+        board.TabBarMoved += RequestSkinFrame;
+        WireSkinLayer(board);
         return board;
     }
 
@@ -62,7 +64,7 @@ public partial class OverlayTabs
         BaseSize = item => catalog.TryGetValue(item.WidgetId, out var entry) ? (entry.Descriptor.BaseWidth, entry.Descriptor.BaseHeight) : (item.Width, item.Height),
         TabBar = () => TabBarPlacement(board!),
         CommitTabBar = (x, y, width, height) => ChangeWorkspace(data => WorkspaceLayouts.MoveTabBar(data, x, y, width, height)),
-        HasPanel = item => catalog.TryGetValue(item.WidgetId, out var entry) && (WidgetTheme.IsHud ? entry.Descriptor.HasHudPanel && (!WidgetTheme.IsCatHud || entry.Descriptor.HasCatPanel) : entry.Descriptor.HasPanel),
+        HasPanel = item => catalog.TryGetValue(item.WidgetId, out var entry) && (WidgetTheme.IsHud ? entry.Descriptor.HasHudPanel : entry.Descriptor.HasPanel),
         CommitMove = (id, x, y, width, height) => ChangeWorkspace(data => WorkspaceLayouts.MoveWidget(data, tabId, id, x, y, width, height)),
         RemoveRequested = id => RemovePlacement(tabId, id)
         };
@@ -168,6 +170,8 @@ public partial class OverlayTabs
         UpdateWorkspaceBar();
         RefreshSettingsPanels();
         PlaceTabStrip();
+        ShowTabStrip();
+        RequestSkinFrame();
     }
 
     private TabItem TabFor(WorkspaceTab tab)
@@ -275,6 +279,7 @@ public partial class OverlayTabs
     {
         modals.CloseOwned(id);
         if (!pluginViews.Remove(id, out var view)) return;
+        if (view is IWidgetState state && watchedStates.Contains(state)) Unwatch(state);
         try { (view as IDisposable)?.Dispose(); }
         catch (Exception ex) { Trace.TraceWarning("Plugin widget dispose failed: " + ex.Message); }
     }

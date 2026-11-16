@@ -43,7 +43,7 @@ internal static partial class Program
             void Tile(FrameworkElement view,double left,double top,double height,bool fill=false)
             {
                 var tile=new Grid { Width=368,Height=height };
-                if(!Facet.Plugins.WidgetTheme.IsCatHud)tile.Children.Add(new HudPanel());
+                tile.Children.Add(new HudPanel());
                 tile.Children.Add(new WidgetFit { FillHeight=fill,StretchChild=true,Margin=new(20,14,20,14),Child=view });
                 Canvas.SetLeft(tile,left);Canvas.SetTop(tile,top);board.Children.Add(tile);
             }
