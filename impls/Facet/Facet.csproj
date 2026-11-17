@@ -3,7 +3,7 @@
     <OutputType>WinExe</OutputType><TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms><Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings><ApplicationManifest>app.manifest</ApplicationManifest>
-    <AssemblyName>Facet</AssemblyName><Version>1.38.1</Version>
+    <AssemblyName>Facet</AssemblyName><Version>1.38.2</Version>
     <AssemblyTitle>Facet</AssemblyTitle><Product>Facet</Product><Description>Facet desktop overlay</Description>
     <ApplicationIcon>Design/AppIcon/Facet.ico</ApplicationIcon>
     <!-- This is a WPF app. WinForms is used only for the tray; DPI is owned by the WPF manifest. -->
