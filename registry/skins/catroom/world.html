@@ -212,8 +212,8 @@ const S={
   /* The pom's bell: a sine with an inharmonic partial, pitch varies a little each tap. */
   ding(soft){const f=rnd(1250,1650),k=soft?.5:1;tone('sine',f,0,.7,.14*k);tone('sine',f*2.76,0,.3,.04*k)},
   thud(s){s=Math.max(.2,Math.min(1,s||1));tone('sine',rnd(95,120),55,.14,.35*s);burst(400,1,'lowpass',.06,.12*s)},
-  // Laptop speakers drop everything under ~150 Hz, so the body sits near 190 Hz with a soft paw pat on top.
-  thump(){tone('sine',190,70,.16,.95);tone('triangle',340,150,.05,.35);burst(1100,.7,'lowpass',.07,.55);tone('sine',90,50,.2,.35)},
+  // Laptop speakers drop everything under ~150 Hz, so the body sits near 190 Hz and no noise, which reads as rustling grass.
+  thump(){tone('sine',190,70,.16,.95);tone('sine',260,120,.045,.3);tone('sine',90,50,.2,.35)},
   /* Rolling yarn: a quiet rustle whose level follows the speed (0..1). */
   roll(speed){if(!live()){roll=stopLoop(roll);return}
     if(speed<=.02){if(roll){roll.g.gain.setTargetAtTime(0,ac.currentTime,.08);if(roll.idle===undefined)roll.idle=ac.currentTime;else if(ac.currentTime-roll.idle>1)roll=stopLoop(roll)}return}
