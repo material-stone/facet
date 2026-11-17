@@ -27,7 +27,7 @@ jobs:
         run: dotnet run --project impls/Facet.Checks/Facet.Checks.csproj --no-launch-profile
       - name: Portable package
         shell: pwsh
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package.ps1 -SkipChecks
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package.ps1 -SkipChecks -Plain
       - name: Installer
         shell: pwsh
         run: |

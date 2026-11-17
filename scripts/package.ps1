@@ -1,6 +1,6 @@
 # Builds a portable zip: unzip anywhere and run Facet.Launcher.exe, with no .NET install and no installer (ADR 0087).
 # Publishes from a temporary copy so the app-relative apphost never leaks into the obj folders build.ps1 uses.
-param([switch]$SkipChecks)
+param([switch]$SkipChecks, [switch]$Plain)
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent $PSScriptRoot
@@ -46,10 +46,10 @@ try {
         $release = Join-Path $packageRoot 'releases/portable'
         Publish 'Facet' $release '../../runtime'
         foreach ($project in 'Facet.Launcher') { Publish $project $packageRoot 'runtime' }
-        # Plugins are optional: a checkout without plugin projects builds the plain app (ADR 0098).
+        # Plugins are optional: -Plain or a checkout without plugin projects builds the plain app (ADR 0098).
         $bundled = Join-Path $packageRoot 'bundled-plugins'
         foreach ($plugin in @(@('Facet.ConditionPlugin', 'condition'), @('Facet.SleepPlugin', 'sleep'), @('Facet.SchedulePlugin', 'schedule'), @('Facet.ClockPlugin', 'clock'), @('Facet.WeatherPlugin', 'weather'), @('Facet.SystemMonitorPlugin', 'sysmon'))) {
-            if (Test-Path "impls/$($plugin[0])") { Publish $plugin[0] (Join-Path $bundled $plugin[1]) '' }
+            if (-not $Plain -and (Test-Path "impls/$($plugin[0])")) { Publish $plugin[0] (Join-Path $bundled $plugin[1]) '' }
         }
     } finally { Pop-Location }
 
