@@ -41,6 +41,9 @@ internal sealed class WorldBackdrop : IDisposable
     private const string Lock="<!doctype html><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; worker-src blob:\">\n";
     // A dead proxy and no direct UDP also stop what the policy does not cover, such as WebRTC.
     private const string NoNetwork="--proxy-server=http://127.0.0.1:9 --proxy-bypass-list=<-loopback> --webrtc-ip-handling-policy=disable_non_proxied_udp --force-webrtc-ip-handling-policy";
+    // The window never takes input, so the page never gets a user gesture; without this Chromium keeps its AudioContext suspended.
+    internal const string Autoplay="--autoplay-policy=no-user-gesture-required";
+    internal const string BrowserArguments=NoNetwork+" "+Autoplay;
     private readonly string page;
     internal Action<string>? ProbeForCheck;
     internal string? DataFolderForCheck;
@@ -57,6 +60,8 @@ internal sealed class WorldBackdrop : IDisposable
     // The page's { type:'action' } message; returns the actionResult to send back (ADR 0110).
     internal Func<string,Task<string>>? ActionRequested;
     private string? widgets;
+    private string? options;
+    internal string? OptionsForCheck => options;
 
     internal WorldBackdrop(string page,string[] scenes,Func<CancellationToken,Task<WeatherSnapshot>> fetchWeather)
     {
@@ -104,13 +109,20 @@ internal sealed class WorldBackdrop : IDisposable
         if(message==widgets) return;
         widgets=message;PostJson(message);
     }
+    // The skin's own options as { options: { id: bool } }, resent when they change and when the page becomes ready.
+    internal void Options(IReadOnlyDictionary<string,bool> values)
+    {
+        string message=JsonSerializer.Serialize(new { options=values });
+        if(message==options) return;
+        options=message;PostJson(message);
+    }
     internal void Pointer(string message)=>PostJson(message);
 
     private async Task StartAsync()
     {
         try {
             string data=DataFolderForCheck ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Facet","world-webview");
-            var environment=await CoreWebView2Environment.CreateAsync(userDataFolder:data,options:new CoreWebView2EnvironmentOptions(additionalBrowserArguments:NoNetwork));
+            var environment=await CoreWebView2Environment.CreateAsync(userDataFolder:data,options:new CoreWebView2EnvironmentOptions(additionalBrowserArguments:BrowserArguments));
             if(disposed) return;
             await view.EnsureCoreWebView2Async(environment);
             if(disposed) return;
@@ -135,7 +147,7 @@ internal sealed class WorldBackdrop : IDisposable
         }
         catch(Exception ex) when(ex is JsonException or KeyNotFoundException or InvalidOperationException) { return; }
         if(type=="loaded") view.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new { scenes }));
-        else if(type=="ready") { ready=true;Post(new { weather,visible=requestedVisible });if(widgets!=null) PostJson(widgets);ProbeForCheck?.Invoke("ready"); }
+        else if(type=="ready") { ready=true;Post(new { weather,visible=requestedVisible });if(options!=null) PostJson(options);if(widgets!=null) PostJson(widgets);ProbeForCheck?.Invoke("ready"); }
         else if(type=="action" && ActionRequested is { } act) _=ReplyAsync(act,json);
         else if(type=="failed") Fail();
     }

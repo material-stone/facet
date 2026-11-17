@@ -58,6 +58,8 @@ internal static partial class Program
         Assert(ThemeManifest.Parse("{\"fonts\":{\"body\":{\"file\":\"a.ttf\",\"family\":\"A\"}}}") is { BodyFont:{ File:"a.ttf" } } && ThemeManifest.Parse("{\"fonts\":{\"body\":{\"file\":\"../a.ttf\",\"family\":\"A\"}}}")==null && ThemeManifest.Parse("{\"fonts\":{\"body\":{\"file\":\"a.exe\",\"family\":\"A\"}}}")==null,"skin fonts stay in the skin folder");
         Assert(Skins.LoadVisuals("voxel") is { WorldPageHtml:{ Length:>1000 } },"the voxel skin carries its own world page");
         Assert(Skins.LoadVisuals("catroom") is { HudWidgets:true,SoftHud:true,WorldScenes:["room"],WorldPageHtml:{ Length:>1000 } },"the cat room skin opens its own room page with soft widgets");
+        Assert(Skins.LoadVisuals("catroom") is { Options:[{ Id:"sound",Default:true }] },"the cat room skin offers its sound option, on by default");
+        Assert(WorldBackdrop.BrowserArguments.Contains("--autoplay-policy=no-user-gesture-required") && WorldBackdrop.BrowserArguments.Contains("--proxy-server=http://127.0.0.1:9") && WorldBackdrop.BrowserArguments.Contains("--force-webrtc-ip-handling-policy"),"the world browser plays sound without a gesture and keeps its network lockdown");
         Assert(Skins.LoadVisuals("voxel") is { SoftHud:true } && Skins.LoadVisuals("space") is { SoftHud:false } && ThemeManifest.Parse("{\"hudStyle\":\"nope\"}")==null,"only the voxel skin asks for the soft widget form and unknown styles are refused");
         Assert(typeof(Facet.Widgets.Hud).GetField("Mono") is { IsStatic:true },"Hud.Mono stays a field, or installed plugins fail with MissingFieldException");
         string worldFolder=Path.Combine(qa,"world-skin");Directory.CreateDirectory(worldFolder);
@@ -308,6 +310,12 @@ internal static partial class Program
             Save("voxel");
             if(!overlay.HasWorldForCheck)throw new Exception("the voxel skin did not create its world");
             if(overlay.TintOpacityForCheck!=0)throw new Exception("switching to a world skin kept the previous tint over the world");
+            Save("catroom");
+            if(overlay.WorldForCheck?.OptionsForCheck!="{\"options\":{\"sound\":true}}")throw new Exception("the cat room world was not given its options: "+overlay.WorldForCheck?.OptionsForCheck);
+            if(!controller.Commit(d=>d.Settings.SkinOptions["catroom.sound"]=false))throw new Exception("saving the sound option failed");
+            overlay.ApplyThemeOptions();
+            if(overlay.WorldForCheck?.OptionsForCheck!="{\"options\":{\"sound\":false}}")throw new Exception("turning the sound off did not reach the world page");
+            if(!controller.Commit(d=>d.Settings.SkinOptions.Remove("catroom.sound")))throw new Exception("clearing the sound option failed");
             Save(Skins.DefaultId);
             var standard=((SolidColorBrush)new ResourceDictionary { Source=new Uri("pack://application:,,,/Facet;component/Design/Tokens.xaml") }["Panel"]).Color;
             if(Panel()!=standard || Shared()!=standard)throw new Exception("returning to the default skin kept the previous colors");

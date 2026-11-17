@@ -155,9 +155,108 @@
 @media (prefers-reduced-motion:reduce){#wl *,#wl *::before,#wl *::after{animation:none!important;transition:none!important}}
 </style>
 </head><body><canvas id="cv" aria-hidden="true"></canvas><div id="wl" aria-hidden="true"></div><script>
+/* ---------- Sound: every effect is synthesized here with WebAudio (no files, no network) ----------
+   Soft, short and quiet through one master gain. The host posts { options:{ sound:bool } } and { visible:bool };
+   while hidden or muted the loops stop and the context is suspended. The rain loop is ambient, so it is skipped
+   under prefers-reduced-motion (the room does not animate then anyway). */
+(function(){
+'use strict';
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+let ac=null,master=null,noise=null,on=true,visible=true,rain=null,roll=null,purrBuf=null;
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const live=()=>on&&visible;
+function ctx(){
+  if(!live())return null;
+  try{
+    if(!ac){const A=window.AudioContext||window.webkitAudioContext;if(!A)return null;ac=new A();
+      master=ac.createGain();master.gain.value=.25;
+      const lp=ac.createBiquadFilter();lp.type='lowpass';lp.frequency.value=7000;master.connect(lp).connect(ac.destination)}
+    if(ac.state==='suspended')ac.resume().catch(()=>{});
+    return ac;
+  }catch(e){return null}
+}
+function noiseBuf(){if(!noise){const n=ac.sampleRate*2;noise=ac.createBuffer(1,n,ac.sampleRate);const d=noise.getChannelData(0);for(let i=0;i<n;i++)d[i]=Math.random()*2-1}return noise}
+/* An enveloped node chain ending at master: attack a, hold to peak, exponential-ish release over d. */
+function env(g,t,peak,a,d){g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(peak,t+a);g.gain.setTargetAtTime(0,t+a,d/4)}
+function tone(type,f0,f1,dur,peak,at){const a=ctx();if(!a)return;const t=a.currentTime+(at||0),o=a.createOscillator(),g=a.createGain();
+  o.type=type;o.frequency.setValueAtTime(f0,t);if(f1)o.frequency.exponentialRampToValueAtTime(f1,t+dur*.8);env(g,t,peak,.006,dur);
+  o.connect(g).connect(master);o.start(t);o.stop(t+dur*1.6+.05)}
+function burst(freq,q,type,dur,peak,at,rate){const a=ctx();if(!a)return;const t=a.currentTime+(at||0),s=a.createBufferSource(),f=a.createBiquadFilter(),g=a.createGain();
+  s.buffer=noiseBuf();s.playbackRate.value=rate||1;f.type=type||'bandpass';f.frequency.value=freq;f.Q.value=q;env(g,t,peak,.004,dur);
+  s.connect(f).connect(g).connect(master);s.start(t,Math.random()*1.5);s.stop(t+dur*1.6+.05)}
+/* A noise loop whose level follows a target; created on demand, torn down when silent or hidden. */
+function loop(freq,q,type){const a=ctx();if(!a)return null;const s=a.createBufferSource(),f=a.createBiquadFilter(),g=a.createGain();
+  s.buffer=noiseBuf();s.loop=true;f.type=type;f.frequency.value=freq;f.Q.value=q;g.gain.value=0;s.connect(f).connect(g).connect(master);s.start();return {s,f,g}}
+function stopLoop(l){if(!l)return null;try{l.g.gain.cancelScheduledValues(0);l.s.stop()}catch(e){}return null}
+function stopLoops(){rain=stopLoop(rain);roll=stopLoop(roll)}
+
+const S={
+  /* Petting: a low purr (amplitude-modulated, low-passed noise) and a tiny rising "mrrp". */
+  purr(d){const a=ctx();if(!a)return;d=d||2;
+    if(!purrBuf||purrBuf.duration<d){const sr=a.sampleRate,b=a.createBuffer(1,Math.ceil(sr*d),sr),ch=b.getChannelData(0);let lp=0,lp2=0;
+      for(let i=0;i<ch.length;i++){const t=i/sr,breath=.6+.4*Math.sin(t*Math.PI*1.1-1.2),am=Math.pow(.5+.5*Math.sin(t*Math.PI*2*25),2.4)*breath;
+        lp+=(Math.random()*2-1-lp)*.08;lp2+=(lp-lp2)*.3;ch[i]=lp2*am*4}purrBuf=b}
+    const t=a.currentTime,s=a.createBufferSource(),f=a.createBiquadFilter(),g=a.createGain();s.buffer=purrBuf;f.type='lowpass';f.frequency.value=320;
+    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.9,t+.2);g.gain.setValueAtTime(.9,t+d-.4);g.gain.linearRampToValueAtTime(0,t+d);
+    s.connect(f).connect(g).connect(master);s.start(t);s.stop(t+d+.05)},
+  chirp(){const f=rnd(620,720);tone('triangle',f,f*1.45,.13,.16);tone('sine',f*1.4,f*1.2,.1,.08,.1)},
+  /* A soft "mew": a buzzy source swept up and down through two moving formants, with a little vibrato. */
+  mew(){const a=ctx();if(!a)return;const t=a.currentTime,d=rnd(.42,.55),p=rnd(.9,1.12),o=a.createOscillator(),v=a.createOscillator(),vg=a.createGain(),
+      f1=a.createBiquadFilter(),f2=a.createBiquadFilter(),g=a.createGain(),mix=a.createGain();
+    o.type='sawtooth';o.frequency.setValueAtTime(480*p,t);o.frequency.linearRampToValueAtTime(760*p,t+d*.35);o.frequency.linearRampToValueAtTime(520*p,t+d);
+    v.frequency.value=6;vg.gain.value=9;v.connect(vg).connect(o.frequency);
+    f1.type='bandpass';f1.Q.value=6;f1.frequency.setValueAtTime(700,t);f1.frequency.linearRampToValueAtTime(1300,t+d*.3);f1.frequency.linearRampToValueAtTime(800,t+d);
+    f2.type='bandpass';f2.Q.value=8;f2.frequency.setValueAtTime(1800,t);f2.frequency.linearRampToValueAtTime(2500,t+d*.35);f2.frequency.linearRampToValueAtTime(1900,t+d);
+    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.22,t+.05);g.gain.setValueAtTime(.22,t+d*.6);g.gain.linearRampToValueAtTime(0,t+d);
+    o.connect(f1).connect(mix);o.connect(f2).connect(mix);mix.gain.value=.8;mix.connect(g).connect(master);o.start(t);v.start(t);o.stop(t+d+.05);v.stop(t+d+.05)},
+  /* The pom's bell: a sine with an inharmonic partial, pitch varies a little each tap. */
+  ding(soft){const f=rnd(1250,1650),k=soft?.5:1;tone('sine',f,0,.7,.14*k);tone('sine',f*2.76,0,.3,.04*k)},
+  thud(s){s=Math.max(.2,Math.min(1,s||1));tone('sine',rnd(95,120),55,.14,.35*s);burst(400,1,'lowpass',.06,.12*s)},
+  thump(){tone('sine',85,45,.18,.4);burst(300,.8,'lowpass',.09,.18)},
+  /* Rolling yarn: a quiet rustle whose level follows the speed (0..1). */
+  roll(speed){if(!live()){roll=stopLoop(roll);return}
+    if(speed<=.02){if(roll){roll.g.gain.setTargetAtTime(0,ac.currentTime,.08);if(roll.idle===undefined)roll.idle=ac.currentTime;else if(ac.currentTime-roll.idle>1)roll=stopLoop(roll)}return}
+    if(!roll){roll=loop(1800,.7,'bandpass');if(!roll)return}
+    roll.idle=undefined;roll.g.gain.setTargetAtTime(Math.min(1,speed)*.09,ac.currentTime,.06)},
+  crunch(){for(let i=0;i<2;i++)burst(rnd(2500,4000),3,'bandpass',.025,.14,i*rnd(.03,.06))},
+  lap(){tone('sine',rnd(380,460),rnd(700,850),.06,.12);burst(1500,2,'bandpass',.04,.05)},
+  scratch(){burst(rnd(2200,3400),1.4,'bandpass',rnd(.07,.12),.12,0,.7)},
+  glass(i){tone('sine',2600+((i||0)%3)*260,0,.12,.05);tone('sine',5200,0,.05,.015)},
+  drop(){tone('sine',rnd(1500,2200),rnd(900,1100),.05,.03)},
+  /* Rain on the window: low-passed noise whose level follows the weather blend (0..1). */
+  rain(level){if(reduce||!live()){rain=stopLoop(rain);return}
+    if(level<=.02){if(rain){rain.g.gain.setTargetAtTime(0,ac.currentTime,.4);if(level<=0)rain=stopLoop(rain)}return}
+    if(!rain){rain=loop(1100,.4,'lowpass');if(!rain)return}
+    rain.g.gain.setTargetAtTime(level*.16,ac.currentTime,.5)},
+  /* Widget layer */
+  flick(){burst(rnd(3500,4500),1.2,'highpass',.04,.1)},
+  pop(){tone('sine',rnd(500,560),rnd(900,1000),.06,.16)},
+  chime(){const f=rnd(1000,1150);tone('sine',f,0,.4,.07,.05);tone('sine',f*1.5,0,.4,.05,.12)},
+  knock(){tone('triangle',rnd(220,250),180,.08,.22);burst(900,3,'bandpass',.05,.1)},
+  creak(){const a=ctx();if(!a)return;const t=a.currentTime+.08,o=a.createOscillator(),f=a.createBiquadFilter(),g=a.createGain();
+    o.type='sawtooth';o.frequency.setValueAtTime(rnd(140,170),t);o.frequency.linearRampToValueAtTime(rnd(220,260),t+.25);
+    f.type='bandpass';f.frequency.value=900;f.Q.value=10;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(.05,t+.08);g.gain.linearRampToValueAtTime(0,t+.3);
+    o.connect(f).connect(g).connect(master);o.start(t);o.stop(t+.35)},
+  receive(m){
+    if(m.options&&typeof m.options.sound==='boolean'){on=m.options.sound;apply()}
+    if(m.visible!==undefined){visible=!!m.visible;apply()}
+  },
+  get enabled(){return live()},
+  get context(){return ac}
+};
+function apply(){
+  if(!ac)return;
+  try{if(live()){if(ac.state==='suspended')ac.resume().catch(()=>{})}else{stopLoops();if(ac.state==='running')ac.suspend().catch(()=>{})}}catch(e){}
+}
+/* Every effect is decoration: a failure is swallowed instead of reaching the page's error report. */
+for(const k of Object.keys(S)){const f=S[k];if(typeof f==='function'&&k!=='receive')S[k]=function(){try{return f.apply(S,arguments)}catch(e){}}}
+window.__catSound=S;
+})();
+</script><script>
 /* ---------- Widget layer (ADR 0110): the app sends widget state, this page draws it in the cat-room look ---------- */
 (function(){
 'use strict';
+const snd=(k,...a)=>{const s=window.__catSound;if(s&&s[k])s[k](...a)};
 const layer=document.getElementById('wl');
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const OL='#5a4238';
@@ -425,6 +524,10 @@ function pointer(p){
 }
 function activate(r,el,k){
   if(!el)return;
+  if(k==='sign'){snd('knock');snd('creak')}
+  else if(el.classList.contains('tok')){snd('pop');snd('chime')}
+  else if(el.classList.contains('tab')||k.startsWith('note'))snd('flick');
+  else snd('pop');
   if(k==='clock'){pop(r.parts&&r.parts.ears);return}
   if(k==='sign')kick(r,(r.sw&&r.sw.v>=0?1:-1)*60);
   if(el.classList.contains('tok')&&!reduce){
@@ -469,6 +572,7 @@ window.__catWidgets={
 </script><script>
 (function(){
 'use strict';
+const snd=(k,...a)=>{const s=window.__catSound;if(s&&s[k])s[k](...a)};
 const cv=document.getElementById('cv'),c=cv.getContext('2d');
 const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 const TAU=Math.PI*2;
@@ -491,7 +595,7 @@ function headPath(g,w){const t=-.78*w,m=.16*w,b=.78*w;g.moveTo(0,t);g.bezierCurv
   g.bezierCurveTo(-.58*w,b,-w,m+.66*(b-m),-w,m);g.bezierCurveTo(-w,m-.6*(m-t),-.6*w,t,0,t);g.closePath()}
 const mk=(w,h)=>{const k=document.createElement('canvas');k.width=Math.max(1,w);k.height=Math.max(1,h);return k};
 
-let W=1,H=1,u=1,dpr=1,room=null,fg=null,cb=null,cbx=null,CBB=0,T=0,nightOn=-1,shakeT=0,lastNV='';
+let W=1,H=1,u=1,dpr=1,room=null,fg=null,cb=null,cbx=null,CBB=0,T=0,nightOn=-1,bulbsLit=0,shakeT=0,lastNV='';
 const G={};
 const VP={x:0,y:0};
 const depthK=ny=>.86+(ny-.80)/.15*.28;
@@ -598,15 +702,15 @@ const BEH={
   sun(){Q(go(.33,.88,.05),hold('loaf',rnd(6,9)))},
   nap(){Q(go(.25,.915,.05),hop(11,.90,{land:true,x1:.17,arc:10,dur:.4}),
     hold('curl',rnd(10,14),{on:(t,dt)=>{if(Math.random()<dt*.8)spawnZ()},end:()=>{for(const p of pool)if(p.on&&p.type==='z')p.max=Math.min(p.max,p.life+.25)}}),
-    hold('stretch',1.8,{start:()=>{cat.yawn=1.4}}),hop(0,.925,{x1:.255,arc:10,dur:.4}),
+    hold('stretch',1.8,{start:()=>{cat.yawn=1.4;if(Math.random()<.4)snd('mew')}}),hop(0,.925,{x1:.255,arc:10,dur:.4}),
     doit(()=>{cat.napEnd=T;cat.q.unshift(go(rnd(.38,.62),rnd(.83,.92),.05),hold('stand',.5))}))},
   window(){Q(go(.50,.82,.05),hold('back',rnd(6,8),{watch:true}))},
   
   eat(){const wat=Math.random()<.3,ey=.802,ex=(wat?.292:.252)+(POSE.eat.hx+EAT_DX)*u*depthK(ey)*RIG/W;
-    Q(go(ex,ey,.05),doit(()=>setFace(-1)),hold('eat',wat?3:4,{bowl:wat?1:0,on:(t,dt)=>{if(!wat&&Math.random()<dt*1.4){const h=headWorld();spawn('nom',h.x+rnd(-12,12)*h.U,h.y-17*h.U,{vy:-14*h.U,vx:rnd(-6,6)*h.U,max:1,size:7*h.U})}}}),hold('sit',1.2));
+    Q(go(ex,ey,.05),doit(()=>setFace(-1)),hold('eat',wat?3:4,{bowl:wat?1:0,on:(t,dt)=>{if(wat?(t%.38<dt):Math.random()<dt*4)snd(wat?'lap':'crunch');if(!wat&&Math.random()<dt*1.4){const h=headWorld();spawn('nom',h.x+rnd(-12,12)*h.U,h.y-17*h.U,{vy:-14*h.U,vx:rnd(-6,6)*h.U,max:1,size:7*h.U})}}}),hold('sit',1.2));
     BEH.groom()},
   scratch(){Q(go(.549,.835,.05),doit(()=>setFace(1)),hold('scratch',2.5,{start:()=>{cat.scr=1},end:()=>{cat.scr=0;kick(pom,5)},
-    on:(t,dt)=>{if(Math.random()<dt*8){const k=depthK(.80);spawn('dust',.595*W+rnd(-3,3)*u*k,.80*H-rnd(10,26)*u*k,{vx:rnd(-12,4)*u*k,vy:rnd(-4,2)*u*k,g:30*u*k,max:.6,size:rnd(1,1.8)*u*k})}}}),hold('stand',.4))},
+    on:(t,dt)=>{if(Math.random()<dt*5)snd('scratch');if(Math.random()<dt*8){const k=depthK(.80);spawn('dust',.595*W+rnd(-3,3)*u*k,.80*H-rnd(10,26)*u*k,{vx:rnd(-12,4)*u*k,vy:rnd(-4,2)*u*k,g:30*u*k,max:.6,size:rnd(1,1.8)*u*k})}}}),hold('stand',.4))},
   stretch(){Q(hold('stretch',1.6,{start:()=>{cat.yawn=1.4}}),hold('stand',.5))},
   
   pomPlay(fast){const far=Math.hypot(cat.x-.529,(cat.y-.835)*H/W)>.12;
@@ -615,7 +719,7 @@ const BEH={
       const tp=pomTip(),U=u*depthK(cat.y)*RIG;
       if(cat.bat<.45){const rx=(G.pom.x-cat.x*W)/U*cat.faceT,sw=(tp.x-G.pom.x)/U*cat.faceT;cat.batX=rx-5.6+clamp(sw,-1,3.5);cat.batY=(tp.y-cat.y*H)/U+4.9}
       if(cat.bat>=0){const p0=cat.bat;cat.bat+=dt/.3;
-        if(p0<.45&&cat.bat>=.45){const soft=a.dbl===2;pom.v=Math.max(0,pom.v)+(soft?2.4:rnd(4.6,6));pom.t=T;cat.earTw=.12;
+        if(p0<.45&&cat.bat>=.45){const soft=a.dbl===2;pom.v=Math.max(0,pom.v)+(soft?2.4:rnd(4.6,6));pom.t=T;snd('ding',true);cat.earTw=.12;
           spawn('sparkle',tp.x,tp.y-3*u,{max:.4,size:(soft?2.2:3.2)*u,vy:-16*u})}
         if(cat.bat>=1){cat.bat=-1;
           if(a.dbl===2){a.dbl=1;a.w=0}
@@ -650,8 +754,7 @@ function startHunt(){
       end:()=>{cat.tapT=-1}}),
     hold('sit',2.2,{start:()=>{setSlow(1.6)}}));
 }
-let AC=null;function purrSound(d){try{AC=AC||new (window.AudioContext||window.webkitAudioContext)();if(AC.state==="suspended")AC.resume();const t0=AC.currentTime,sr=AC.sampleRate,buf=AC.createBuffer(1,sr*d,sr),ch=buf.getChannelData(0);let lp=0;for(let i=0;i<ch.length;i++){const t=i/sr,am=Math.pow(.5+.5*Math.sin(t*TAU*24),2.2)*(.65+.35*Math.sin(t*TAU*1.4));lp+=(Math.random()*2-1-lp)*.06;ch[i]=lp*am*3.2}
-  const src=AC.createBufferSource(),f=AC.createBiquadFilter(),g=AC.createGain();src.buffer=buf;f.type="lowpass";f.frequency.value=260;g.gain.setValueAtTime(0,t0);g.gain.linearRampToValueAtTime(.22,t0+.15);g.gain.setValueAtTime(.22,t0+d-.35);g.gain.linearRampToValueAtTime(0,t0+d);src.connect(f).connect(g).connect(AC.destination);src.start()}catch(e){}}
+function purrSound(d){snd('purr',d);snd('chirp')}
 function pet(){cat.sq=.16;cat.happy=2;cat.purr=2;cat.hs.a=1;cat.hs.v=0;spawnHearts(4);purrSound(2);const h=headWorld();spawn("purr",h.x+14*h.U,h.y-14*h.U,{vy:-12*h.U,vx:6*h.U,max:1.4,size:7*h.U})}
 function moodReact(i){
   interrupt();cat.last='mood';
@@ -686,7 +789,7 @@ function runAct(dt){
     const t=a.time;
     if(t<.1){cat.pose='crouch';cat.sq=.2*(t/.1);cat.z=0}
     else{const p=clamp((t-.1)/.28,0,1);cat.pose='air';cat.airRot=lerp(-.35,.25,p);cat.x=lerp(a.x0,a.x1,p);cat.y=lerp(a.y0,a.y1,p);cat.z=Math.sin(Math.PI*p)*16;cat.sq=-.12}
-    if(t>=a.dur){cat.z=0;cat.sq=.28;const k=depthK(cat.y);dust(cat.x*W+a.side*20*u*k,cat.y*H,6,u*k);shakeT=.12;
+    if(t>=a.dur){cat.z=0;cat.sq=.28;snd('thump');const k=depthK(cat.y);dust(cat.x*W+a.side*20*u*k,cat.y*H,6,u*k);shakeT=.12;
       for(let j=0;j<3;j++){const h=headWorld();spawn('sparkle',h.x+rnd(-10,10)*h.U,h.y-rnd(4,12)*h.U,{max:.6,size:4*h.U,vy:-16*h.U,vx:rnd(-10,10)*h.U})}
       if(Math.abs(yarn.x-cat.x)<.13){yarn.vx=a.side*.16;yarn.vz=70;yarn.vy=rnd(-.03,.03)}endAct()}}
 }
@@ -733,14 +836,15 @@ function updYarn(dt){
   yarn.vz-=520*dt;yarn.z+=yarn.vz*dt;
   if(yarn.z<=0){yarn.z=0;
     if(yarn.vz<-40){const k=depthK(yarn.y);
-      if(yarn.b<2){yarn.vz=-yarn.vz*.45;yarn.b++;yarn.sq=.3;dust(yarn.x*W,yarn.y*H,2,u*k)}else yarn.vz=0;
+      snd('thud',-yarn.vz/260);if(yarn.b<2){yarn.vz=-yarn.vz*.45;yarn.b++;yarn.sq=.3;dust(yarn.x*W,yarn.y*H,2,u*k)}else yarn.vz=0;
       if(!yarn.hunted){yarn.hunted=true;startHunt()}}
     else yarn.vz=0}
   const gr=yarn.z<=.01;
   yarn.x+=yarn.vx*dt;yarn.y+=yarn.vy*dt;
   if(gr){yarn.vx*=Math.exp(-1.3*dt);yarn.vy*=Math.exp(-2*dt);if(Math.abs(yarn.vx)>.01){yarn.r=Math.max(5.5,yarn.r-Math.abs(yarn.vx)*dt*6);yarn.rolled=T}}
+  snd('roll',gr?Math.abs(yarn.vx)*8:0);
   if(T-yarn.rolled>20)yarn.r=Math.min(7,yarn.r+dt*.5);
-  const hit=()=>{if(Math.abs(yarn.vx)>.02){yarn.sq=.35;const k=depthK(yarn.y);dust(yarn.x*W,yarn.y*H,3,u*k)}};
+  const hit=()=>{if(Math.abs(yarn.vx)>.02){snd('thud',.3);yarn.sq=.35;const k=depthK(yarn.y);dust(yarn.x*W,yarn.y*H,3,u*k)}};
   if(yarn.x<.06){yarn.x=.06;yarn.vx=Math.abs(yarn.vx)*.6;hit()}
   if(yarn.x>.74){yarn.x=.74;yarn.vx=-Math.abs(yarn.vx)*.6;hit()}
   if(yarn.y<.84){yarn.y=.84;yarn.vy=Math.abs(yarn.vy)*.5}
@@ -765,7 +869,8 @@ function updSky(dt){
   let oc=0;const chk=(arr,base)=>arr.forEach((cl,i)=>{const a=clamp(WP.cloud*4-i-base,0,1);if(a>.5&&Math.abs(cl.x-.74)<.13*cl.s&&Math.abs(cl.y-.26)<.13)oc=1});
   chk(sky.far,0);chk(sky.near,1);sky.occl+=(oc-sky.occl)*damp(2,dt);
   for(const r of sky.rain){r.y+=r.s*1.7*dt;r.x-=.3*dt;if(r.y>1.05){r.y=-.1;r.x=Math.random()*1.3}if(r.x<-.1)r.x+=1.3}
-  for(const d of sky.drops){if(d.v<=0&&Math.random()<dt*.15)d.v=rnd(.05,.15);d.y+=d.v*dt;d.v=Math.max(0,d.v-dt*.05);if(d.y>1.05){d.y=-.05;d.x=Math.random()}}
+  snd('rain',WP.rain);
+  for(const d of sky.drops){if(d.v<=0&&Math.random()<dt*.15){d.v=rnd(.05,.15);if(WP.rain>.3)snd('drop')}d.y+=d.v*dt;d.v=Math.max(0,d.v-dt*.05);if(d.y>1.05){d.y=-.05;d.x=Math.random()}}
   for(const s of sky.snow){s.y+=.07*s.s*dt;s.x+=Math.sin(T*1.2+s.ph)*.02*dt+gs*.05*dt;if(s.y>1.05){s.y=-.05;s.x=Math.random()}if(s.x>1.05)s.x=-.05}
   if(!bird.on&&T>bird.next&&WP.night<.5&&WP.rain<.5){bird.on=true;bird.p=0;bird.y=rnd(.14,.34)}
   if(bird.on){bird.p+=dt/4.5;if(bird.p>1){bird.on=false;bird.next=T+rnd(8,15)}}
@@ -778,7 +883,8 @@ function updSky(dt){
   if(T>sky.leafNext){sky.leafNext=T+rnd(6,10);if(WP.rain<.5&&WP.snow<.5&&WP.night<.5)spawn('leaf',G.sx+G.sw*rnd(.1,.3),G.sy+G.sh*rnd(.4,.55),{vx:rnd(14,26)*u,vy:rnd(2,8)*u,g:3*u,max:3,size:2.2*u,vr:rnd(-3,3),rot:rnd(0,TAU)})}
   if(WP.night>.5){if(T>sky.shootNext){sky.shoot={t:0,x:rnd(.3,.9),y:rnd(.05,.3)};sky.shootNext=T+rnd(20,40)}}else sky.shootNext=Math.max(sky.shootNext,T+5);
   if(sky.shoot){sky.shoot.t+=dt;if(sky.shoot.t>.7)sky.shoot=null}
-  if(WP.night>.5){if(nightOn<0)nightOn=T}else nightOn=-1;
+  if(WP.night>.5){if(nightOn<0){nightOn=T;bulbsLit=0}}else nightOn=-1;
+  if(nightOn>=0&&G.bulbs){const n=Math.min(G.bulbs.length,Math.floor((T-nightOn)/.8)+1);while(bulbsLit<n){const bl=G.bulbs[bulbsLit];if(bl.x>G.wx+11*u&&bl.x<G.wx+G.ww-11*u)snd('glass',bulbsLit);bulbsLit++}}
   if(shakeT>0)shakeT=Math.max(0,shakeT-dt);
 }
 function updParticles(dt){
@@ -1304,15 +1410,15 @@ function hitAt(p){
   if(Math.abs(p.x-cx)<34*U&&p.y>cy-62*U&&p.y<cy+5*U)return 'cat';
   return p.y>=.80*H&&p.y<=.97*H?'floor':null}
 function floorPt(p){const x=clamp(p.x/W,.10,.64);return {x,y:x<.30?clamp(p.y/H,.935,.95):clamp(p.y/H,.82,.94)}}
-function callCat(p){const f=floorPt(p);interrupt();cat.last='call';cat.earTw=.3;
+function callCat(p){const f=floorPt(p);interrupt();cat.last='call';cat.earTw=.3;if(Math.random()<.3)snd('mew');
   Q(go(f.x,f.y,.09),hold('sit',2.2,{start:()=>{setSlow(1.6)}}))}
 
 /* A host click at canvas pixel p (the window itself takes no pointer input). */
 function clickAt(p){
   if(reduce)return;
   const hk=hitAt(p);ripples.push({x:p.x,y:p.y,t:0});
-  if(hk==='pom'){const t=pomTip();kick(pom,(p.x<t.x?1:-1)*7);cat.earTw=.3;spawn('sparkle',t.x,t.y-4*u,{max:.5,size:3.5*u,vy:-18*u});
-    if(!(cat.act&&cat.act.pom)&&!cat.q.some(a=>a.pom)){interrupt();cat.last='pomPlay';BEH.pomPlay(true)}
+  if(hk==='pom'){const t=pomTip();kick(pom,(p.x<t.x?1:-1)*7);snd('ding');cat.earTw=.3;spawn('sparkle',t.x,t.y-4*u,{max:.5,size:3.5*u,vy:-18*u});
+    if(!(cat.act&&cat.act.pom)&&!cat.q.some(a=>a.pom)){interrupt();cat.last='pomPlay';BEH.pomPlay(true);if(Math.random()<.35)snd('mew')}
     return}
   if(hk==='yarn'&&yarn.z<1){yarn.vx=(p.x<yarn.x*W?1:-1)*rnd(.10,.16);yarn.vy=rnd(-.02,.02);yarn.vz=rnd(95,130);yarn.b=0;yarn.sq=.3;yarn.hunted=false;return}
   if(hk==='cat'){pet();return}
@@ -1339,6 +1445,7 @@ function start(){
 function receive(m){
   try{
     if(!m)return;
+    if(window.__catSound)window.__catSound.receive(m);
     if(window.__catWidgets)window.__catWidgets.receive(m);   // widget layer works independently of the room
     if(m.scenes&&!started)start();   // single scene ("room"); the list itself is not needed
     if(!started)return;

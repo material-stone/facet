@@ -122,6 +122,7 @@ public sealed class OverlayWindow : Window
         tabs.SkinFrames = json => { if (ReferenceEquals(world, current)) current.Widgets(json); };
         tabs.SkinPointerOut = json => { if (ReferenceEquals(world, current)) current.Pointer(json); };
         tabs.SetSkinWorld(true);
+        SendWorldOptions();
         // Nearly invisible, but it makes every pixel of this layered window take the click instead of the app behind.
         Background = new SolidColorBrush(Color.FromArgb(1, 0, 0, 0));
     }
@@ -132,8 +133,17 @@ public sealed class OverlayWindow : Window
     }
     private void UpdateWorld() => world?.SetVisible(IsVisible && requestedVisible && !IsQuickLaunch && requestedStrength > 0, this);
     internal void ApplyGrid() => tabs.ApplyWorkspace();
+    // A world page reads its skin's options itself (ADR 0110).
+    private void SendWorldOptions()
+    {
+        if (world == null || Design.Skins.Visuals is not { } visuals) return;
+        string skin = Design.Skins.Resolve(app.Data.Settings.Skin);
+        world.Options(visuals.Options.ToDictionary(option => option.Id, option => visuals.IsOptionOn(app.Data.Settings, skin, option.Id)));
+    }
+    internal Design.WorldBackdrop? WorldForCheck => world;
     internal void ApplyThemeOptions()
     {
+        SendWorldOptions();
         if ((themeBackdrop as Panel)?.Children.OfType<Design.FlightReticle>().FirstOrDefault() is not { } reticle || Design.Skins.Visuals is not { } visuals) return;
         bool on = visuals.IsOptionOn(app.Data.Settings, Design.Skins.Resolve(app.Data.Settings.Skin), Design.ThemeVisuals.ReticleOption);
         reticle.Visibility = on ? Visibility.Visible : Visibility.Collapsed;

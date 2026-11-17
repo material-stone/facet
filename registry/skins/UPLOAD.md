@@ -68,11 +68,11 @@ my-skin/
 | `tabCornerRadius` | 0–24 | 탭 막대 모서리 반경 |
 | `voyage` | true/false | 우주 항해 배경 |
 | `hudWidgets` | true/false | 위젯을 HUD 형태로 표시 |
-| `world` | `{ "page": "world.html", "scenes": [...] }` | 스킨에 포함한 HTML 페이지를 실시간 배경으로 띄웁니다. `scenes`는 페이지에 그대로 전달되며 배경을 누를 때마다 다음으로 넘어갑니다. 배경을 누르면 `{ next: true, x, y }`가 전달되고, `x`·`y`는 화면 기준 0~1 비율의 누른 위치입니다. |
+| `world` | `{ "page": "world.html", "scenes": [...] }` | 스킨에 포함한 HTML 페이지를 실시간 배경으로 띄웁니다. `scenes`는 페이지에 그대로 전달되며 배경을 누를 때마다 다음으로 넘어갑니다. 배경을 누르면 `{ next: true, x, y }`가 전달되고, `x`·`y`는 화면 기준 0~1 비율의 누른 위치입니다. 페이지는 사용자 제스처 없이 WebAudio를 쓸 수 있지만(소리 파일과 네트워크는 막혀 있으므로 코드로 합성), `{ visible: false }`를 받으면 소리를 멈춰야 합니다. |
 | `fonts` | `{ "body": { "file", "family" }, "heading": {...} }` | 스킨에 포함한 글꼴. `file`은 `.ttf`·`.otf` 이름, `family`는 글꼴 안의 이름입니다. |
 | `hudStyle` | `tactical`, `soft` | HUD 위젯 모양. `soft`는 둥근 패널 형태입니다. `hudWidgets`와 함께 씁니다. |
 | `widgets` | 형식 이름 목록, 32개까지 | 월드 페이지가 직접 그리는 위젯 상태 형식. `world`가 있어야 합니다. 아래 [위젯 레이어](#위젯-레이어)를 봅니다. |
-| `options` | 목록 | 설정에 나타날 선택 항목. `id`(소문자·숫자·`-`, 32자까지), `name`이 필수이고 `description`, `default`를 쓸 수 있습니다. |
+| `options` | 목록 | 설정에 나타날 선택 항목. `id`(소문자·숫자·`-`, 32자까지), `name`이 필수이고 `description`, `default`를 쓸 수 있습니다. `world`가 있는 스킨에서는 페이지가 준비될 때와 설정이 바뀔 때 `{ options: { id: true/false } }`가 페이지로 전달됩니다. |
 
 이미지는 스킨 폴더 바로 아래의 PNG만 씁니다. 이름은 영문 소문자·숫자·`_`·`-`이고, 한 변은 8192픽셀까지입니다.
 
