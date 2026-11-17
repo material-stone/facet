@@ -47,6 +47,21 @@
 6. **동작:** 페이지가 `{ type: 'action', id, name, args }`를 보내면, 앱이 마지막으로 보낸 목록의 위젯인지와 이름·인자 모양을 검사한 뒤 `Act`를 호출하고 `{ actionResult }`로 답한다. 편집 중이거나 모르는 id면 거부한다.
 7. **빈 곳 클릭:** 위젯이 아닌 곳의 왼쪽 클릭은 `{ next: true, x, y }`로 넘긴다([ADR 0107](../decisions/0107-world-click-position-and-cat-room.md)).
 
+### 위젯 밖의 메시지
+
+월드 페이지는 위젯 메시지 말고도 다음을 주고받는다(`Design/WorldBackdrop.cs`).
+
+| 방향 | 메시지 | 때 |
+|---|---|---|
+| 페이지 → 앱 | `loaded`, `ready`, `failed` 보고 | 스크립트 실행, 준비 완료, 오류 |
+| 앱 → 페이지 | `{ scenes }` | `loaded`를 받았을 때 |
+| 앱 → 페이지 | `{ weather, visible }`, 이어서 마지막 `{ options }`, `{ widgets }` | `ready`를 받았을 때 |
+| 앱 → 페이지 | `{ visible }` | 오버레이를 보이거나 숨길 때. 숨기면 날씨 갱신을 멈춘다 |
+| 앱 → 페이지 | `{ weather }` | 날씨를 다시 받아 키가 정해질 때 |
+| 앱 → 페이지 | `{ options: { id: bool } }` | 스킨 옵션(`theme.options`)이 바뀔 때. 내용이 같으면 보내지 않는다 |
+
+오버레이가 숨어 있는 동안에는 `{ widgets }`를 보내지 않고, 다시 보일 때와 크기가 바뀔 때 새로 보낸다.
+
 ## 배치
 
 - 위젯 위치와 크기는 보드 px로 저장한다. 위젯마다 기본 크기(`WidgetDescriptor.Width`/`Height`)가 있다.
@@ -71,12 +86,15 @@
 | 형식 | 외형 | 동작 |
 |---|---|---|
 | `facet.app/tabs@1` | 나무 레일 위 종이 탭 | `select` |
-| `facet.clock/time@1`, `weekday@1`, `date-time@1` | 고양이 얼굴 시계 | 없음 |
-| `facet.weather/now@1` | 매달린 나무 팻말 | `refresh` |
+| `facet.clock/time@1`, `weekday@1`, `date-time@1` | 고양이 얼굴 시계 | 없음(누르면 귀만 움찔한다. 플러그인의 `select`는 쓰지 않는다) |
+| `facet.weather/now@1` | 매달린 나무 팻말 | `refresh`(누르면 팻말이 흔들린다) |
 | `facet.schedule/agenda@1` | 코르크 보드 포스트잇 | 없음 |
 | `facet.condition/current@1` | 선반 위 고양이 얼굴 토큰 | `record` |
 | `facet.condition/history@1` | 츄르 튜브 | `edit` |
 | `facet.sleep/week@1` | 벤치 위 자는 고양이 | `edit` |
+
+- 동작이 거부되면(`actionResult`의 `ok: false`) 위젯이 짧게 흔들린다.
+- **효과음:** 페이지가 Web Audio로 직접 합성한다(파일 없음). 위젯을 누를 때(팻말 노크, 토큰 딸깍, 탭·포스트잇 넘김), 고양이 행동(착지, 골골, 방울, 털실, 밥)과 비 올 때 소리를 낸다. `skin.json`의 옵션 `sound`(기본 켬)로 끄고, 페이지는 `{ options: { sound } }`를 받아 따른다. 앱은 소리를 내려고 `--autoplay-policy=no-user-gesture-required`로 WebView2를 띄운다.
 
 ## 검사
 
