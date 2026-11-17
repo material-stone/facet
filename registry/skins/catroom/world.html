@@ -707,7 +707,7 @@ const BEH={
     doit(()=>{cat.napEnd=T;cat.q.unshift(go(rnd(.38,.62),rnd(.83,.92),.05),hold('stand',.5))}))},
   window(){Q(go(.50,.82,.05),hold('back',rnd(6,8),{watch:true}))},
   
-  eat(){const wat=Math.random()<.3,ey=.802,ex=(wat?.292:.252)+(POSE.eat.hx+EAT_DX)*u*depthK(ey)*RIG/W;
+  eat(){const wat=Math.random()<.3,ey=.787,ex=(wat?.292:.252)+(POSE.eat.hx+EAT_DX)*u*depthK(ey)*RIG/W;
     Q(go(ex,ey,.05),doit(()=>setFace(-1)),hold('eat',wat?3:4,{bowl:wat?1:0,on:(t,dt)=>{if(wat?(t%.38<dt):Math.random()<dt*4)snd(wat?'lap':'crunch');if(!wat&&Math.random()<dt*1.4){const h=headWorld();spawn('nom',h.x+rnd(-12,12)*h.U,h.y-17*h.U,{vy:-14*h.U,vx:rnd(-6,6)*h.U,max:1,size:7*h.U})}}}),hold('sit',1.2));
     BEH.groom()},
   scratch(){Q(go(.549,.835,.05),doit(()=>setFace(1)),hold('scratch',2.5,{start:()=>{cat.scr=1},end:()=>{cat.scr=0;kick(pom,5)},
@@ -1386,7 +1386,6 @@ function render(){
   if(litAmt>.01)for(const e of [-.012,0,.012])panes('rgba(255,240,190,'+(.5/3*litAmt)+')',e);
   const items=[{y:.80,d:drawPom},{y:.8998,d:drawBedBack},{y:.9002,d:drawBedFront},{y:.8399,d:drawBoxBack},{y:.8401,d:drawBoxFront},{y:cat.inBox?.84:(Math.abs(cat.x-.17)<.2?.9003:cat.y),d:drawCatObj}];
   if(yarn.on)items.push({y:yarn.y,d:drawYarn});
-  if(cat.act&&cat.act.bowl!==undefined&&cat.pose==='eat'&&G.bowlF){const f=G.bowlF,hw=f.c.width/2,sx=cat.act.bowl?hw:0;items.push({y:.9004,d:()=>c.drawImage(f.c,sx,0,hw,f.c.height,f.x+sx,f.y,hw,f.c.height)})}
   items.sort((a,b)=>a.y-b.y).forEach(it=>it.d());
   drawRays(litAmt);
   drawParticles();
