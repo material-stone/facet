@@ -82,6 +82,19 @@ internal static partial class Program
         }
         if (added) tabs.RemoveWorkspaceTab(tabs.WorkspaceTabs.Last().Id);
 
+        // A frame built while the overlay is hidden must not wipe the page's widgets, and showing the overlay must resend them.
+        var sent = new List<string>();
+        bool wasShown = controller.Overlay.IsVisible;
+        if (wasShown) { controller.ToggleOverlay(); Pump(350); }
+        tabs.SkinFrames = sent.Add; tabs.SetSkinWorld(true);
+        tabs.SendSkinFrame(); Pump(100);
+        Assert(sent.Count == 0, "a hidden overlay sends no widget frame that would clear the page");
+        controller.ToggleOverlay(); PumpUntil(() => sent.Count > 0, 3000);
+        Assert(sent.Count > 0 && sent[^1].StartsWith("{\"widgets\":"), "showing the overlay sends the skin widgets frame again");
+        controller.ToggleOverlay(); Pump(350);
+        tabs.SetSkinWorld(false); tabs.SkinFrames = null;
+        if (wasShown) { controller.ToggleOverlay(); Pump(350); }
+
         var info = new ProcessStartInfo(Environment.ProcessPath!) { UseShellExecute = false, CreateNoWindow = true, RedirectStandardOutput = true };
         info.ArgumentList.Add("--world-widgets-check");
         using var process = Process.Start(info)!; string output = process.StandardOutput.ReadToEnd();

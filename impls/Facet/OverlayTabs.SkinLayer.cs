@@ -54,6 +54,7 @@ public partial class OverlayTabs
         };
         board.ViewChanged += RequestSkinFrame;
         board.TilesMoved += RequestSkinFrame;
+        board.SizeChanged += (_, _) => RequestSkinFrame();
     }
 
     // Coalesces bursts (pan, zoom, drags, ticking clocks) into at most one message per frame interval.
@@ -70,6 +71,9 @@ public partial class OverlayTabs
     // Builds and sends { widgets: [...] } for the shown tab, in overlay window pixels, and watches exactly those states.
     internal void SendSkinFrame()
     {
+        // While the overlay is hidden its boards have no layout, so a frame now would tell the page there are no widgets and
+        // nothing would correct it on show. Keep the page's last frame; showing the overlay sends a fresh one.
+        if (skinWorld && !IsVisible) return;
         var frames = new List<SkinWidgetFrame>();
         var states = new Dictionary<string, IWidgetState>();
         if (skinWorld && SelectedWorkspace is { } board && Window.GetWindow(this) is { } window && board.IsVisible) {

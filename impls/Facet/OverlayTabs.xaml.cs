@@ -38,7 +38,7 @@ public partial class OverlayTabs : UserControl, IWidgetLayer
         };
         PreviewMouseUp+=(_,e)=>{if(dismissingModalClick && e.ChangedButton==MouseButton.Left){e.Handled=true;dismissingModalClick=false;ReleaseMouseCapture();}};
         LostMouseCapture+=(_,e)=>{if(ReferenceEquals(e.OriginalSource,this))dismissingModalClick=false;};
-        IsVisibleChanged+=(_,_)=>{if(!IsVisible){modals.TryClose();SetWorkspaceEditing(false);}};
+        IsVisibleChanged+=(_,_)=>{if(!IsVisible){modals.TryClose();SetWorkspaceEditing(false);}else RequestSkinFrame();};
         SizeChanged += (_, _) => { foreach (var view in workspaces.Values) view.RefreshTabBar(); };
         Tabs.ItemContainerGenerator.ItemsChanged += (_, _) => UpdateTabCorners();
         Tabs.ItemContainerGenerator.StatusChanged += (_, _) => UpdateTabCorners();
