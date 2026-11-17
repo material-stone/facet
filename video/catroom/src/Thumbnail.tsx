@@ -22,13 +22,13 @@ export const Thumbnail: React.FC = () => (
     <Backdrop />
     <Room left={40} top={30} width={1840} height={1020} />
     <div style={{ position: "absolute", left: u(6), top: u(5) }}>
-      <Title text="고양이 방" size={9} />
+      <Title text="고양이 방" size={9} delay={-30} />
     </div>
     <div style={{ position: "absolute", left: u(7), top: u(16.5) }}>
-      <PaperTag size={3} rotate={-3}>쓰다듬으면 골골골</PaperTag>
+      <PaperTag delay={-30} size={3} rotate={-3}>쓰다듬으면 골골골</PaperTag>
     </div>
     <div style={{ position: "absolute", right: u(5), top: u(5) }}>
-      <PaperTag size={2.2} rotate={2}>Facet 배경 스킨</PaperTag>
+      <PaperTag delay={-30} size={2.2} rotate={2}>Facet 배경 스킨</PaperTag>
     </div>
   </AbsoluteFill>
 );
@@ -38,11 +38,11 @@ export const VerticalCover: React.FC = () => (
   <AbsoluteFill>
     <Backdrop />
     <div style={{ position: "absolute", left: 0, right: 0, top: u(14), display: "flex", justifyContent: "center" }}>
-      <Title text="고양이 방" size={9} />
+      <Title text="고양이 방" size={9} delay={-30} />
     </div>
     <Room left={40} top={u(29)} width={1000} height={1000} focusX={870} />
     <div style={{ position: "absolute", left: 0, right: 0, top: u(83), display: "flex", justifyContent: "center" }}>
-      <PaperTag size={2.6}>Facet 배경 스킨</PaperTag>
+      <PaperTag delay={-30} size={2.6}>Facet 배경 스킨</PaperTag>
     </div>
   </AbsoluteFill>
 );
