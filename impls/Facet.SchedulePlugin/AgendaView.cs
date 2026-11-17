@@ -46,7 +46,7 @@ internal sealed class AgendaView : StackPanel, IDisposable, IWidgetState
 
     private void OnChanged() { Refresh(DateTimeOffset.Now); Publish(); }
 
-    // A skin can draw the agenda from this state (ADR 0109). Ids are the slot's start, unique enough to key a drawing; the widget has no actions.
+    // A skin can draw the agenda from this state (ADR 0110). Ids are the slot's start, unique enough to key a drawing; the widget has no actions.
     public string Type => "facet.schedule/agenda@1";
     public string Json() => StateJson(DateTime.Now);
     internal string StateJson(DateTime now)

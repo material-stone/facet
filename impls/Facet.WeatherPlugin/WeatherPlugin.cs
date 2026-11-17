@@ -58,7 +58,7 @@ public sealed record WeatherReading(double? Temperature, int? Humidity, int? Cod
         _ => "날씨 미확인"
     };
 
-    // The skin's weather keys (ADR 0109): clear, partly, cloud, fog, rain, snow, or night for a clear night.
+    // The skin's weather keys (ADR 0110): clear, partly, cloud, fog, rain, snow, or night for a clear night.
     public string SkinKey => Code switch {
         0 or 1 => IsDay ? "clear" : "night",
         2 => "partly", 3 => "cloud", 45 or 48 => "fog",
@@ -223,7 +223,7 @@ public sealed class WeatherView : Grid, IDisposable, IWidgetState
         };
     }
 
-    // A skin can draw the weather from this state (ADR 0109); while one listens the reading keeps refreshing even when hidden.
+    // A skin can draw the weather from this state (ADR 0110); while one listens the reading keeps refreshing even when hidden.
     public string Type => "facet.weather/now@1";
     public string Json() => JsonSerializer.Serialize(new {
         condition = reading?.SkinKey, label = condition.Text, temperature = reading?.Temperature is double t ? Math.Round(t, 1) : (double?)null,

@@ -3,7 +3,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Facet.Plugins;
 
-// Each first-party widget's skin state (ADR 0109): its type name and JSON shape, and that actions run the widget's own code.
+// Each first-party widget's skin state (ADR 0110): its type name and JSON shape, and that actions run the widget's own code.
 internal static partial class Program
 {
     private sealed class MemoryStore : IPluginStore

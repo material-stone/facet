@@ -1,8 +1,8 @@
-# ADR 0107: 고양이 위젯 형태 (`hudStyle: cat`)
+# ADR 0108: 고양이 위젯 형태 (`hudStyle: cat`)
 
-> **대체됨:** [0109](0109-skin-widget-layer.md)가 대체한다. 위젯 외형은 스킨의 월드 페이지가 그린다. `hudStyle: cat`, 고양이 그리기 도구(`CatParts`)와 플러그인의 고양이 분기는 지웠고, `WidgetTheme.IsCatHud`·`CatHudKey`·`WidgetDescriptor.HasCatPanel`은 예전 플러그인 호환을 위해 `[Obsolete]`로 남아 아무 효과가 없다.
+> **대체됨:** [0110](0110-skin-widget-layer.md)가 대체한다. 위젯 외형은 스킨의 월드 페이지가 그린다. `hudStyle: cat`, 고양이 그리기 도구(`CatParts`)와 플러그인의 고양이 분기는 지웠고, `WidgetTheme.IsCatHud`·`CatHudKey`·`WidgetDescriptor.HasCatPanel`은 예전 플러그인 호환을 위해 `[Obsolete]`로 남아 아무 효과가 없다.
 
-2026-11-16: 고양이 방 스킨([0106](0106-world-click-position-and-cat-room.md))의 위젯을 방과 어울리는 소품 모양으로 그린다.
+2026-11-16: 고양이 방 스킨([0107](0107-world-click-position-and-cat-room.md))의 위젯을 방과 어울리는 소품 모양으로 그린다.
 
 ## 결정
 

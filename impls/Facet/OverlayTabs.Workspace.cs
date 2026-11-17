@@ -64,7 +64,9 @@ public partial class OverlayTabs
         BaseSize = item => catalog.TryGetValue(item.WidgetId, out var entry) ? (entry.Descriptor.BaseWidth, entry.Descriptor.BaseHeight) : (item.Width, item.Height),
         TabBar = () => TabBarPlacement(board!),
         CommitTabBar = (x, y, width, height) => ChangeWorkspace(data => WorkspaceLayouts.MoveTabBar(data, x, y, width, height)),
-        HasPanel = item => catalog.TryGetValue(item.WidgetId, out var entry) && (WidgetTheme.IsHud ? entry.Descriptor.HasHudPanel : entry.Descriptor.HasPanel),
+        HasPanel = item => item.Panel ?? DefaultPanel(item),
+        DefaultPanel = DefaultPanel,
+        PanelChanged = (id, panel) => ChangeWorkspace(data => WorkspaceLayouts.SetPanel(data, tabId, id, panel)),
         CommitMove = (id, x, y, width, height) => ChangeWorkspace(data => WorkspaceLayouts.MoveWidget(data, tabId, id, x, y, width, height)),
         RemoveRequested = id => RemovePlacement(tabId, id)
         };
@@ -96,6 +98,9 @@ public partial class OverlayTabs
             if (Tabs.Template.FindName(name, Tabs) is UIElement part) part.RenderTransform = transform;
     }
     internal Rect TabStripBoundsForCheck => TabStripElement is { } strip ? strip.RenderTransform.TransformBounds(new Rect(0, 0, strip.ActualWidth, strip.ActualHeight)) : Rect.Empty;
+
+    private bool DefaultPanel(WidgetPlacement item) =>
+        catalog.TryGetValue(item.WidgetId, out var entry) && (WidgetTheme.IsHud ? entry.Descriptor.HasHudPanel : entry.Descriptor.HasPanel);
 
     private FrameworkElement CreateWidgetView(string tabId, WidgetPlacement item)
     {
@@ -262,7 +267,7 @@ public partial class OverlayTabs
     internal bool AddWidget(string widgetId)
     {
         if (SelectedWorkspace is not { } view || !catalog.TryGetValue(widgetId, out var entry)) return false;
-        // At its base size, centered on what the user is looking at, or the nearest free spot (ADR 0108).
+        // At its base size, centered on what the user is looking at, or the nearest free spot (ADR 0109).
         var (centerX, centerY) = view.ViewedCenter();
         int step = WorkspaceLayouts.Current(Workspace).Snap ? (int)OverlayWorkspaceView.Pitch : 1;
         return ChangeWorkspace(data => {

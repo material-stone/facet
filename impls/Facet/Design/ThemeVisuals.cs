@@ -35,7 +35,7 @@ internal sealed record ThemeManifest(string? Background,double BackgroundOpacity
     private sealed class RawWorld { public string? Page { get; set; } public string[]? Scenes { get; set; } }
     private sealed class RawFonts { public ThemeFont? Body { get; set; } public ThemeFont? Heading { get; set; } }
     private static bool ValidFont(ThemeFont? font)=>font==null || (font.File!=null && Regex.IsMatch(font.File,"^[A-Za-z0-9_-]{1,64}\\.(ttf|otf)$") && !string.IsNullOrWhiteSpace(font.Family) && Regex.IsMatch(font.Family,"^[\\p{L}\\p{N} ]{1,64}$"));
-    // Widget state types the world page draws (ADR 0109): "<pluginId>/<widget>@<version>".
+    // Widget state types the world page draws (ADR 0110): "<pluginId>/<widget>@<version>".
     internal const int MaxWidgetTypes=32;
     internal static bool ValidWidgetType(string? type)=>type!=null && Regex.IsMatch(type,"^[a-z0-9][a-z0-9._-]{0,63}/[a-z0-9][a-z0-9._-]{0,31}@[1-9][0-9]{0,3}$");
     private static readonly JsonSerializerOptions Options=new() { PropertyNameCaseInsensitive=true };
@@ -89,7 +89,7 @@ internal sealed class ThemeVisuals
     // NavigateToString refuses anything larger.
     private const int MaxWorldPageBytes=1900000;
     internal bool SoftHud { get; private init; }
-    // Widget state types the world page draws instead of their WPF look (ADR 0109).
+    // Widget state types the world page draws instead of their WPF look (ADR 0110).
     internal IReadOnlySet<string> WidgetTypes { get; private init; }=new HashSet<string>();
     internal ThemeOption[] Options { get; private init; }=[];
     internal const string ReticleOption="reticle";

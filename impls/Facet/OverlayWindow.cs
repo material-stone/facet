@@ -116,7 +116,7 @@ public sealed class OverlayWindow : Window
         var weather = new WeatherClient(locate: token => WeatherRegions.ResolveAsync(PluginData.WeatherRegion(app.Data), token));
         world = new Design.WorldBackdrop(page, scenes, weather.FetchAsync);
         world.Failed += () => { world = null; tabs.SetSkinWorld(false); Background = Brushes.Transparent; ApplyProgress((double)GetValue(TransitionProgressProperty)); };
-        // The widget layer (ADR 0109): the tabs say where skin-drawn widgets are and the page asks for their actions.
+        // The widget layer (ADR 0110): the tabs say where skin-drawn widgets are and the page asks for their actions.
         var current = world;
         world.ActionRequested = json => tabs.RunSkinAction(json);
         tabs.SkinFrames = json => { if (ReferenceEquals(world, current)) current.Widgets(json); };

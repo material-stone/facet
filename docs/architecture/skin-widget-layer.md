@@ -1,6 +1,6 @@
 # 스킨 위젯 레이어
 
-플러그인은 데이터·동작·기본 외형을, 스킨은 배경과 위젯 외형·상호작용을 가진다. 결정과 이유는 [ADR 0108](../decisions/0108-widget-pixel-size-and-icon-menu.md), [ADR 0109](../decisions/0109-skin-widget-layer.md)에 있다. 메시지 JSON과 상태 형식의 정확한 모양은 [스킨 업로드 안내의 위젯 레이어 절](../../registry/skins/UPLOAD.md#위젯-레이어)이 기준이다.
+플러그인은 데이터·동작·기본 외형을, 스킨은 배경과 위젯 외형·상호작용을 가진다. 결정과 이유는 [ADR 0109](../decisions/0109-widget-pixel-size-and-icon-menu.md), [ADR 0110](../decisions/0110-skin-widget-layer.md)에 있다. 메시지 JSON과 상태 형식의 정확한 모양은 [스킨 업로드 안내의 위젯 레이어 절](../../registry/skins/UPLOAD.md#위젯-레이어)이 기준이다.
 
 ## 레이어
 
@@ -45,7 +45,7 @@
 4. **그리기:** 페이지가 위젯을 기본 크기로 그린 뒤 타일 크기로 가로·세로를 따로 늘인다. 목록에서 빠진 위젯은 지운다.
 5. **입력:** 편집 모드가 아닐 때 투명 타일 위의 포인터(이동, 누르기, 떼기, 휠, 나감)를 위젯 기본 크기 좌표로 `{ pointer }`에 담아 보낸다. 호버, 누름 효과는 페이지가 그린다.
 6. **동작:** 페이지가 `{ type: 'action', id, name, args }`를 보내면, 앱이 마지막으로 보낸 목록의 위젯인지와 이름·인자 모양을 검사한 뒤 `Act`를 호출하고 `{ actionResult }`로 답한다. 편집 중이거나 모르는 id면 거부한다.
-7. **빈 곳 클릭:** 위젯이 아닌 곳의 왼쪽 클릭은 `{ next: true, x, y }`로 넘긴다([ADR 0106](../decisions/0106-world-click-position-and-cat-room.md)).
+7. **빈 곳 클릭:** 위젯이 아닌 곳의 왼쪽 클릭은 `{ next: true, x, y }`로 넘긴다([ADR 0107](../decisions/0107-world-click-position-and-cat-room.md)).
 
 ## 배치
 

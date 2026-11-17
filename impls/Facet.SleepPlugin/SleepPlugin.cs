@@ -95,7 +95,7 @@ internal sealed class SleepLive : IDisposable
         if (view.IsVisible || watchers != null) { Update(); timer.Start(); } else timer.Stop();
     }
 
-    // A skin listening to the widget's state (ADR 0109) keeps it updating while the view is hidden; Changed fires only on a new state.
+    // A skin listening to the widget's state (ADR 0110) keeps it updating while the view is hidden; Changed fires only on a new state.
     private Action? watchers;
     private string published = "";
     internal Func<string>? State { get; init; }
@@ -150,7 +150,7 @@ internal class SleepFit : Decorator, IDisposable
     public void Dispose() => (Child as IDisposable)?.Dispose();
 }
 
-// The duration chart's fit, which also publishes the week to a skin (ADR 0109).
+// The duration chart's fit, which also publishes the week to a skin (ADR 0110).
 internal sealed class SleepDurationFit(SleepLive live, SleepEditing editing) : SleepFit, IWidgetState
 {
     public string Type => SleepState.WeekType;

@@ -63,7 +63,7 @@ public sealed class ClockView : Decorator, IDisposable, IWidgetState
         IsVisibleChanged += (_, _) => { if (IsVisible || changed != null) Tick(); else timer.Stop(); };
     }
 
-    // A skin can draw this clock from its state (ADR 0109); while one listens the clock keeps ticking even when hidden.
+    // A skin can draw this clock from its state (ADR 0110); while one listens the clock keeps ticking even when hidden.
     public string Type => "facet.clock/date-time@1";
     public string Json() => ClockState.Json(DateTime.Now, null, null);
     private Action? changed;

@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace Facet.ConditionPlugin;
 
-// The state the condition widgets publish to a skin (ADR 0109). Pure, so the shapes can be checked without a window.
+// The state the condition widgets publish to a skin (ADR 0110). Pure, so the shapes can be checked without a window.
 internal static class ConditionState
 {
     internal const string CurrentType = "facet.condition/current@1", HistoryType = "facet.condition/history@1";

@@ -25,7 +25,7 @@ public sealed class ConditionHistory : UserControl, IDisposable, IWidgetState
     internal event Action? Changed;
     internal ConditionLive? Live { get; set; }
 
-    // A skin can draw this widget from its state (ADR 0109).
+    // A skin can draw this widget from its state (ADR 0110).
     public string Type => ConditionState.HistoryType;
     public string Json() => ConditionState.History(Live?.Entries ?? [], DateTimeOffset.Now);
     event Action? IWidgetState.Changed { add => Live?.Watch(value, true); remove => Live?.Watch(value, false); }

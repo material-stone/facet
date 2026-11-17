@@ -37,7 +37,7 @@ internal static partial class Program
         Assert(hud.SetWorkspaceTabHidden(WorkspaceLayouts.SleepTab,false),"hidden tabs can be restored");
         Assert(hud.HandleEscape() && !hud.IsEditingWorkspace,"Escape leaves edit mode");
 
-        // Settings open as a modal from the icon menu instead of a tab (ADR 0108).
+        // Settings open as a modal from the icon menu instead of a tab (ADR 0109).
         Assert(hud.FindName("SettingsTab")==null && tabs.Items.OfType<TabItem>().All(t=>AutomationName(t)!="설정"),"settings is not a tab");
         Assert(hud.FindName("SettingsOpen") is Button && hud.FindName("WorkspaceEdit") is Button && ((FrameworkElement)hud.FindName("WorkspaceBar")).Visibility==Visibility.Visible,"the icon menu shows the edit and settings buttons");
         hud.SetWorkspaceEditing(true);hud.OpenSettings();
@@ -107,6 +107,7 @@ internal static partial class Program
         Assert(clockView.DateLine=="2026년 10월 24일 토요일" && clockView.TimeLine=="오전 09:08:07","the clock plugin shows the dashboard clock's date and time");
         clockView.Dispose();
         ClockFaceChecks();
+        SystemMonitorChecks();
 #endif
         const string widget="plugin.sample.greeting";
         tabs.SelectedItem=tabs.Items.OfType<TabItem>().First(t=>AutomationName(t)=="작업");

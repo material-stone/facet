@@ -35,7 +35,7 @@
   <TabControl.Template>
    <ControlTemplate TargetType="TabControl">
     <Grid KeyboardNavigation.TabNavigation="Local">
-     <!-- The tab strip is the tab bar widget (ADR 0108): OverlayTabs moves and stretches it onto its board placement.
+     <!-- The tab strip is the tab bar widget (ADR 0109): OverlayTabs moves and stretches it onto its board placement.
           It lies under the boards, whose tab bar tile is empty outside edit mode and carries the edit handles in it. -->
      <!-- Keep effects on empty siblings so text never enters an effect bitmap. -->
      <widgets:CachedShadow x:Name="TabShadow" HorizontalAlignment="Left" VerticalAlignment="Top"
@@ -118,7 +118,7 @@
    <Grid x:Name="ChatPage"/>
   </TabItem>
  </TabControl>
- <!-- Icon menu: fixed at the top right, never on a board (ADR 0108). Edit tools show to its left while editing. -->
+ <!-- Icon menu: fixed at the top right, never on a board (ADR 0109). Edit tools show to its left while editing. -->
  <StackPanel x:Name="WorkspaceBar" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,24,24,0" Panel.ZIndex="3">
   <StackPanel x:Name="WorkspaceRow" Orientation="Horizontal" HorizontalAlignment="Right">
   <StackPanel x:Name="WorkspaceTools" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed" Margin="0,0,8,0">
@@ -140,7 +140,7 @@
    </Border>
   </Popup>
  </StackPanel>
- <!-- Settings open as a modal from the icon menu; Escape saves and closes it (ADR 0108). -->
+ <!-- Settings open as a modal from the icon menu; Escape saves and closes it (ADR 0109). -->
  <Grid x:Name="SettingsModal" Background="{StaticResource ModalBackdrop}" Visibility="Collapsed" Panel.ZIndex="20" MouseDown="SettingsModal_MouseDown">
   <!-- The settings view draws its own card, so the frame only places it. -->
   <Border x:Name="SettingsFrame" Margin="48,72,48,48" MaxWidth="1280"

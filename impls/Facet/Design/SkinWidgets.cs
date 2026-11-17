@@ -7,7 +7,7 @@ using Facet.Plugins;
 
 namespace Facet.Design;
 
-// One skin-drawn widget as the world page sees it: overlay window pixels, the widget's base size and its state (ADR 0109).
+// One skin-drawn widget as the world page sees it: overlay window pixels, the widget's base size and its state (ADR 0110).
 internal sealed record SkinWidgetFrame(string Id,string Type,Rect Bounds,int BaseWidth,int BaseHeight,string StateJson);
 
 // The widget layer protocol between the app and a skin's world page. Pure, so it can be checked without a window.

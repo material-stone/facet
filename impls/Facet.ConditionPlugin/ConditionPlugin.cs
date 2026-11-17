@@ -84,7 +84,7 @@ internal sealed class ConditionLive : IDisposable
     }
 
     internal IReadOnlyList<ConditionEntry> Entries => records.Entries;
-    // A skin listening to the widget's state (ADR 0109) keeps it updating while the view is hidden; Changed fires only on a new state.
+    // A skin listening to the widget's state (ADR 0110) keeps it updating while the view is hidden; Changed fires only on a new state.
     private Action? watchers;
     private string published = "";
     internal Func<string>? State { get; init; }

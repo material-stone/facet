@@ -10,14 +10,14 @@ public static class WidgetTheme
     public const string SoftHudKey = "Facet.SoftHudWidgets";
     // A HUD skin can ask for rounded plates and plain numbers instead of the tactical look (ADR 0090).
     public static bool IsSoftHud => IsHud && Application.Current?.TryFindResource(SoftHudKey) is true;
-    // Kept for binary compatibility with plugins built against ADR 0107; skins now draw widget looks (ADR 0109).
-    [Obsolete("Skins draw widget looks through IWidgetState (ADR 0109). Always false.")]
+    // Kept for binary compatibility with plugins built against ADR 0108; skins now draw widget looks (ADR 0110).
+    [Obsolete("Skins draw widget looks through IWidgetState (ADR 0110). Always false.")]
     public const string CatHudKey = "Facet.CatHudWidgets";
-    [Obsolete("Skins draw widget looks through IWidgetState (ADR 0109). Always false.")]
+    [Obsolete("Skins draw widget looks through IWidgetState (ADR 0110). Always false.")]
     public static bool IsCatHud => false;
 }
 
-// Optional on a widget view (ADR 0109). A skin that lists Type in skin.json theme.widgets draws the widget from this state;
+// Optional on a widget view (ADR 0110). A skin that lists Type in skin.json theme.widgets draws the widget from this state;
 // the view stays alive but hidden. Type is "<pluginId>/<widget>@<major>", for example "facet.clock/time@1": lowercase
 // letters, digits, dots, dashes and underscores, then a version that goes up whenever the JSON shape changes.
 // Json returns one JSON object. Changed is raised on the UI thread whenever Json would return something else.
@@ -106,7 +106,7 @@ public interface ILauncherSession : IDisposable
     Task SubmitAsync(string input);
 }
 
-// Width and Height are the base size in pixels the view is laid out at; the tile stretches it to any size (ADR 0108).
+// Width and Height are the base size in pixels the view is laid out at; the tile stretches it to any size (ADR 0109).
 // Zero falls back to DefaultColumns and DefaultRows times 96 px. MinColumns and MinRows are kept for older plugins and unused.
 // A view that implements IDisposable is disposed when its tile goes away.
 // AllowMultiple is several on one tab; AllowMultipleTabs is placing on more than one tab.
@@ -130,8 +130,8 @@ public sealed record WidgetDescriptor(string Id, string Title, Func<WidgetContex
     public bool HasPanel { get; init; }
     // HUD themes replace HasPanel with this: only a widget with a HUD form sits on a HudPanel.
     public bool HasHudPanel { get; init; }
-    // Kept for binary compatibility (ADR 0107); ignored since skins draw widget looks (ADR 0109).
-    [Obsolete("Ignored (ADR 0109).")]
+    // Kept for binary compatibility (ADR 0108); ignored since skins draw widget looks (ADR 0110).
+    [Obsolete("Ignored (ADR 0110).")]
     public bool HasCatPanel { get; init; } = true;
 }
 

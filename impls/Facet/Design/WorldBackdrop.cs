@@ -54,7 +54,7 @@ internal sealed class WorldBackdrop : IDisposable
     private bool ready,requestedVisible,disposed;
     private string weather="partly";
     internal event Action? Failed;
-    // The page's { type:'action' } message; returns the actionResult to send back (ADR 0109).
+    // The page's { type:'action' } message; returns the actionResult to send back (ADR 0110).
     internal Func<string,Task<string>>? ActionRequested;
     private string? widgets;
 
@@ -96,7 +96,7 @@ internal sealed class WorldBackdrop : IDisposable
         if(!GetWindowRect(handle,out var rect)) return;
         SetWindowPos(new WindowInteropHelper(window).Handle,handle,rect.Left,rect.Top,rect.Right-rect.Left,rect.Bottom-rect.Top,SwpNoActivate|SwpNoOwnerZOrder);
     }
-    // x and y are the click as fractions of the overlay, so a page can react where it was pressed (ADR 0106).
+    // x and y are the click as fractions of the overlay, so a page can react where it was pressed (ADR 0107).
     internal void Next(double x,double y)=>Post(new { next=true,x=Math.Round(Math.Clamp(x,0,1),4),y=Math.Round(Math.Clamp(y,0,1),4) });
     // The skin-drawn widgets of the shown tab; an unchanged list is not sent again, and a page that becomes ready gets the latest.
     internal void Widgets(string message)

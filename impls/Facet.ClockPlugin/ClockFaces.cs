@@ -59,7 +59,7 @@ public sealed class ClockFaceView : Decorator, IDisposable, IWidgetState
         IsVisibleChanged += (_, _) => { if (IsVisible || changed != null) Tick(); else timer.Stop(); };
     }
 
-    // A skin can draw this face from its state (ADR 0109); while one listens the clock keeps ticking even when hidden.
+    // A skin can draw this face from its state (ADR 0110); while one listens the clock keeps ticking even when hidden.
     public string Type { get; }
     public string Json() => ClockState.Json(DateTime.Now, Choice.Mode, Choice.Style);
     private Action? changed;
@@ -115,7 +115,7 @@ public sealed class ClockFaceView : Decorator, IDisposable, IWidgetState
             foreach (var choice in choices.Where(c => c.Mode == mode)) {
                 var text = new TextBlock { Text = choice.Name, FontSize = 13 };
                 text.SetResourceReference(TextBlock.ForegroundProperty, "Ink");
-                var b = new Button { Tag = choice, Content = text, Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(12, 6, 12, 6), BorderThickness = new Thickness(2), Background = Brushes.Transparent, Template = ClockFitButton.Chrome(new CornerRadius(8)), Cursor = System.Windows.Input.Cursors.Hand };
+                var b = new Button { Tag = choice, Content = text, Margin = new Thickness(0, 0, 6, 0), Padding = new Thickness(12, 6, 12, 6), BorderThickness = new Thickness(2), Background = Brushes.Transparent, Template = ClockFitButton.Chrome(new CornerRadius(8)), ContentTemplate = null, Cursor = System.Windows.Input.Cursors.Hand };
                 AutomationProperties.SetName(b, FaceChoices.ModeName(mode) + " " + choice.Name);
                 b.Click += (_, _) => { bool saved = Select(choice); error.Visibility = saved ? Visibility.Collapsed : Visibility.Visible; Mark(); };
                 buttons.Add(b); line.Children.Add(b);

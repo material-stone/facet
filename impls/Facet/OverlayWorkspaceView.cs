@@ -3,7 +3,7 @@ using System.Windows.Input;
 namespace Facet;
 
 // Scales a view to fit: fixed or content-height views shrink uniformly and fill views get the exact size.
-// Boards no longer use it (they stretch with WidgetStretch, ADR 0108); previews of single widgets still do.
+// Boards no longer use it (they stretch with WidgetStretch, ADR 0109); previews of single widgets still do.
 internal sealed class WidgetFit : Decorator
 {
     internal bool FillHeight { get; init; }
@@ -36,7 +36,7 @@ internal sealed class WidgetFit : Decorator
     }
 }
 
-// Lays a widget's view out at its base size and stretches it to the tile, width and height apart (ADR 0108).
+// Lays a widget's view out at its base size and stretches it to the tile, width and height apart (ADR 0109).
 internal sealed class WidgetStretch : Decorator
 {
     internal double BaseWidth { get; init; }
@@ -60,7 +60,7 @@ internal sealed class WidgetStretch : Decorator
     }
 }
 
-// One tab's board, three screens wide and tall around its origin plus the view offset. Placements are board pixels (ADR 0108).
+// One tab's board, three screens wide and tall around its origin plus the view offset. Placements are board pixels (ADR 0109).
 internal sealed class OverlayWorkspaceView : UserControl
 {
     // Shared by every board; Controller sets it from Settings and the boards render again.
@@ -103,12 +103,15 @@ internal sealed class OverlayWorkspaceView : UserControl
     internal Func<WidgetPlacement, FrameworkElement>? CreateView;
     internal Func<WidgetPlacement, (int Width, int Height)>? BaseSize;
     internal Func<WidgetPlacement, bool>? HasPanel;
+    internal Func<WidgetPlacement, bool>? DefaultPanel;
+    // null clears the placement's choice so it follows the widget's default again.
+    internal Action<string, bool?>? PanelChanged;
     internal Func<string, int, int, int, int, bool>? CommitMove;
     internal Action<string>? RemoveRequested;
     // The tab bar widget's placement shared by every tab; its tile only marks the place, the strip itself lies under the board.
     internal Func<WidgetPlacement?>? TabBar;
     internal Func<int, int, int, int, bool>? CommitTabBar;
-    // Skin widget layer (ADR 0109): whether the world page draws a widget (given its view) or the tab bar instead of WPF,
+    // Skin widget layer (ADR 0110): whether the world page draws a widget (given its view) or the tab bar instead of WPF,
     // the tab bar's base size, and pointer input over such a tile in base-size coordinates (id, kind, point, delta, button).
     internal Func<WidgetPlacement, FrameworkElement?, bool>? SkinDrawn;
     internal Func<bool>? TabBarSkinDrawn;
@@ -385,13 +388,13 @@ internal sealed class OverlayWorkspaceView : UserControl
         else {
             var inset = new Thickness(0);
             var view = CreateView?.Invoke(item);
-            // The page draws this widget: no panel, and the view stays alive for its state but is not shown (ADR 0109).
+            // The page draws this widget: no panel, and the view stays alive for its state but is not shown (ADR 0110).
             if (SkinDrawn?.Invoke(item, view) == true) {
                 skinTiles.Add(item.Id);
                 var (skinWidth, skinHeight) = BaseSize?.Invoke(item) ?? (item.Width, item.Height);
                 tile.Children.Add(new WidgetStretch { BaseWidth = skinWidth, BaseHeight = skinHeight, Child = view, Visibility = Visibility.Hidden });
                 if (!editing) { tile.Children.Add(PointerCatcher(item.Id, tile)); return tile; }
-                return EditFrame(item, false, tile);
+                return EditFrame(item, false, tile, false);
             }
             bool panel = HasPanel?.Invoke(item) == true;
             if (panel && Facet.Plugins.WidgetTheme.IsHud) {
@@ -409,7 +412,7 @@ internal sealed class OverlayWorkspaceView : UserControl
             tile.Children.Add(new WidgetStretch { BaseWidth = baseWidth - inset.Left - inset.Right, BaseHeight = baseHeight - inset.Top - inset.Bottom, Margin = inset, Child = view });
             if (!editing) return tile;
         }
-        return EditFrame(item, tabBar, tile);
+        return EditFrame(item, tabBar, tile, !tabBar);
     }
 
     // A transparent surface that keeps hit-testing on a skin-drawn tile and hands its pointer to the page.
@@ -430,7 +433,7 @@ internal sealed class OverlayWorkspaceView : UserControl
         return catcher;
     }
 
-    private Grid EditFrame(WidgetPlacement item, bool tabBar, Grid tile)
+    private Grid EditFrame(WidgetPlacement item, bool tabBar, Grid tile, bool panelToggle)
     {
         var cover = new Border { Background = (Brush)FindResource("Panel"), Opacity = .55, CornerRadius = new(8), BorderThickness = new(1), BorderBrush = (Brush)FindResource("Mint"), Cursor = Cursors.SizeAll };
         System.Windows.Automation.AutomationProperties.SetName(cover, tabBar ? "탭 막대 이동" : "위젯 이동");
@@ -442,6 +445,15 @@ internal sealed class OverlayWorkspaceView : UserControl
             System.Windows.Automation.AutomationProperties.SetName(remove, "위젯 제거");
             remove.Click += (_, _) => RemoveRequested?.Invoke(item.Id);
             tile.Children.Add(remove);
+            if (panelToggle && PanelChanged != null) {
+                var toggle = new System.Windows.Controls.Primitives.ToggleButton { Content = "▣", IsChecked = HasPanel?.Invoke(item) == true, Width = 28, Height = 28, Padding = new(0), Margin = new(4, 4, 36, 4), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, ToolTip = "배경 패널 켜기/끄기" };
+                System.Windows.Automation.AutomationProperties.SetName(toggle, "배경 패널");
+                toggle.Click += (_, _) => {
+                    bool next = toggle.IsChecked == true;
+                    PanelChanged(item.Id, next == (DefaultPanel?.Invoke(item) == true) ? null : next);
+                };
+                tile.Children.Add(toggle);
+            }
         }
         var handle = new Border { Width = 20, Height = 20, Margin = new(2), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = new(4), Background = (Brush)FindResource("Mint"), Cursor = Cursors.SizeNWSE,
             ToolTip = "끌어서 크기 조절 · Shift: 비율 유지 · Alt: 스냅 반대로" };

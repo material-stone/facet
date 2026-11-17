@@ -177,7 +177,7 @@ Check("workspace layout rejects overlaps, places in pixels and keeps tab rules",
     void That(bool ok,string _="")=>Assert(ok);
     bool Rejects(Action action){try{action();return false;}catch(ArgumentException){return true;}}
     const int C=WorkspaceGrid.DefaultCellSize;
-    That(new AppData().Workspace==null && WorkspaceLayouts.Current(new AppData()).Tabs.Select(t=>t.Id).SequenceEqual(new[]{"dashboard"}) && WorkspaceLayouts.Default().Tabs.All(t=>t.Widgets.Count==0),"a fresh install has an empty dashboard and no settings tab (ADR 0108)");
+    That(new AppData().Workspace==null && WorkspaceLayouts.Current(new AppData()).Tabs.Select(t=>t.Id).SequenceEqual(new[]{"dashboard"}) && WorkspaceLayouts.Default().Tabs.All(t=>t.Widgets.Count==0),"a fresh install has an empty dashboard and no settings tab (ADR 0109)");
     // The rules below run on the layout a never-edited install had before its widgets became plugins.
     var data=new AppData{Workspace=WorkspaceLayouts.LegacyDefault()};
     That(WorkspaceLayouts.Current(data).Tabs.Select(t=>t.Id).SequenceEqual(new[]{"dashboard","schedule","sleep","chat"}),"the former settings tab leaves the layout");

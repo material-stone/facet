@@ -7,7 +7,7 @@ using Facet.Plugins;
 
 namespace Facet;
 
-// The skin widget layer (ADR 0109): widgets whose state type the skin lists are drawn by the world page under the overlay.
+// The skin widget layer (ADR 0110): widgets whose state type the skin lists are drawn by the world page under the overlay.
 // The app keeps their views alive for state, sends where they are and what they show, and forwards pointer input and actions.
 public partial class OverlayTabs
 {

@@ -8,7 +8,7 @@ using Facet.Core;
 using Facet.Design;
 using Facet.Plugins;
 
-// The skin widget layer (ADR 0109): manifest slot, coordinates, messages and action routing.
+// The skin widget layer (ADR 0110): manifest slot, coordinates, messages and action routing.
 internal static partial class Program
 {
     private sealed class FakeState(string type = "test.plugin/thing@1") : IWidgetState

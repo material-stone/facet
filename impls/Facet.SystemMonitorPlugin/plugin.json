@@ -1,0 +1,1 @@
+{ "id": "facet.sysmon", "name": "시스템 모니터", "version": "1.0.0", "assembly": "Facet.SystemMonitorPlugin.dll" }

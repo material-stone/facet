@@ -51,20 +51,16 @@ internal sealed class PackagesPanel : StackPanel
         return button;
     }
 
-    // Install buttons and the installed mark share one width and end at the row's right edge.
-    private const double StateWidth = 108;
-
     private static FrameworkElement StateContent(Design.IconKind icon, string text, string brush)
     {
         var mark = new Design.Icon { Kind = icon, Width = 16, Height = 16, VerticalAlignment = VerticalAlignment.Center };
         mark.SetResourceReference(Design.Icon.ForegroundProperty, brush);
         var caption = new TextBlock { Text = text, Margin = new(6, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         caption.SetResourceReference(TextBlock.ForegroundProperty, brush);
-        var content = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        var content = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         content.Children.Add(mark);
         content.Children.Add(caption);
-        // A fixed inner width with right-aligned content: the button template centres its content otherwise.
-        return new Grid { Width = StateWidth - 26, HorizontalAlignment = HorizontalAlignment.Right, Children = { content } };
+        return content;
     }
 
     private void Show(string text, bool error = false)
@@ -114,16 +110,15 @@ internal sealed class PackagesPanel : StackPanel
         bool update = installed != null && PackageRegistry.IsNewer(entry.Version, installed);
         bool download = installed == null || update, active = !download && IsActive(entry);
         if (active) {
-            // Not a button: the caption ends at the row's right edge, where the install buttons end.
-            var done = new Border { Width = StateWidth, Height = 34, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Child = StateContent(Design.IconKind.Check, kind == PackageKind.Plugin ? "설치됨" : "사용 중", "Mint") };
-            ((FrameworkElement)done.Child).VerticalAlignment = VerticalAlignment.Center;
+            // Not a button: the mark sits at the row's right edge, like the install buttons.
+            var done = new Border { Height = 34, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Child = StateContent(Design.IconKind.Check, kind == PackageKind.Plugin ? "설치됨" : "사용 중", "Mint") };
             System.Windows.Automation.AutomationProperties.SetName(done, entry.Name + (kind == PackageKind.Plugin ? " 설치됨" : " 사용 중"));
             Grid.SetColumn(done, 1);
             row.Children.Add(done);
             return row;
         }
         string caption = update ? "업데이트" : installed == null ? "설치" : (kind == PackageKind.Plugin ? "켜기" : "적용");
-        var install = new Button { Content = StateContent(download ? Design.IconKind.Download : Design.IconKind.Check, caption, "Ink"), ContentTemplate = null, HorizontalContentAlignment = HorizontalAlignment.Left, Width = StateWidth, Height = 34, Margin = new(0), VerticalAlignment = VerticalAlignment.Center, Padding = new(12, 0, 12, 0) };
+        var install = new Button { Content = StateContent(download ? Design.IconKind.Download : Design.IconKind.Check, caption, "Ink"), ContentTemplate = null, HorizontalContentAlignment = HorizontalAlignment.Center, Height = 34, MinWidth = 72, Margin = new(0), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Padding = new(14, 0, 14, 0) };
         System.Windows.Automation.AutomationProperties.SetName(install, entry.Name + " " + caption);
         install.Click += async (_, _) => {
             if (busy) return;

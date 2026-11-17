@@ -17,7 +17,7 @@ public sealed class ConditionHudView : UserControl, IDisposable, Facet.Plugins.I
     internal Func<string, DateTimeOffset, bool>? Record { get; set; }
     internal ConditionLive? Live { get; set; }
 
-    // A skin can draw this widget from its state (ADR 0109).
+    // A skin can draw this widget from its state (ADR 0110).
     public string Type => ConditionState.CurrentType;
     public string Json() => ConditionState.Current(Live?.Entries ?? [], DateTimeOffset.Now);
     public event Action? Changed { add => Live?.Watch(value, true); remove => Live?.Watch(value, false); }

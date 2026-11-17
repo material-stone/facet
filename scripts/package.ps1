@@ -48,7 +48,7 @@ try {
         foreach ($project in 'Facet.Launcher') { Publish $project $packageRoot 'runtime' }
         # Plugins are optional: a checkout without plugin projects builds the plain app (ADR 0098).
         $bundled = Join-Path $packageRoot 'bundled-plugins'
-        foreach ($plugin in @(@('Facet.ConditionPlugin', 'condition'), @('Facet.SleepPlugin', 'sleep'), @('Facet.SchedulePlugin', 'schedule'), @('Facet.ClockPlugin', 'clock'), @('Facet.WeatherPlugin', 'weather'))) {
+        foreach ($plugin in @(@('Facet.ConditionPlugin', 'condition'), @('Facet.SleepPlugin', 'sleep'), @('Facet.SchedulePlugin', 'schedule'), @('Facet.ClockPlugin', 'clock'), @('Facet.WeatherPlugin', 'weather'), @('Facet.SystemMonitorPlugin', 'sysmon'))) {
             if (Test-Path "impls/$($plugin[0])") { Publish $plugin[0] (Join-Path $bundled $plugin[1]) '' }
         }
     } finally { Pop-Location }

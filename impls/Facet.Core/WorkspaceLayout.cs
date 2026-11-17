@@ -5,7 +5,7 @@ public sealed class WorkspaceLayout
     // Below 2, placements are the old 12x8 grid's top-left based cells; below 7 they are cells around the origin; from 7 board pixels.
     public int GridVersion { get; set; }
     public List<WorkspaceTab> Tabs { get; set; } = [];
-    // The tab bar widget's one placement, shared by every tab; null keeps it at the top center of the first view (ADR 0108).
+    // The tab bar widget's one placement, shared by every tab; null keeps it at the top center of the first view (ADR 0109).
     public WidgetPlacement? TabBar { get; set; }
     // Edit mode snaps positions and sizes to the grid; off moves them by single pixels.
     public bool Snap { get; set; } = true;
@@ -30,7 +30,7 @@ public sealed class WorkspaceTab
     public List<WidgetPlacement> Widgets { get; set; } = [];
 }
 
-// Board pixels at 100% zoom, measured from the board's origin (ADR 0108).
+// Board pixels at 100% zoom, measured from the board's origin (ADR 0109).
 public sealed class WidgetPlacement
 {
     public string Id { get; set; } = "";
@@ -39,6 +39,8 @@ public sealed class WidgetPlacement
     public int Y { get; set; }
     public int Width { get; set; }
     public int Height { get; set; }
+    // null follows the widget's own default; true or false is the user's choice for this placement.
+    public bool? Panel { get; set; }
 }
 
 public sealed class PluginGrant
@@ -71,7 +73,7 @@ public static class WorkspaceLayouts
     private const int MinSearchStep = 8;
     // The board is three screens across, so the smallest zoom shows all of it.
     public const double MinZoom = 1d / 3, MaxZoom = 3, MaxOffset = 10000000;
-    // SettingsTab is the id of the former settings tab, which saved layouts may still hold; settings now open from the icon menu (ADR 0108).
+    // SettingsTab is the id of the former settings tab, which saved layouts may still hold; settings now open from the icon menu (ADR 0109).
     public const string DashboardTab = "dashboard", ScheduleTab = "schedule", SleepTab = "sleep", ChatTab = "chat", SettingsTab = "settings";
     // The app's own tab bar widget; its placement is WorkspaceLayout.TabBar.
     public const string TabBarWidget = "builtin.tabs";
@@ -105,7 +107,7 @@ public static class WorkspaceLayouts
     private static WorkspaceLayout Editable(AppData data) => data.Workspace ??= Default();
 
     // Drops malformed entries and the former settings tab, and keeps at least one visible tab.
-    // A layout from before GridVersion 7 first runs the cell-era rules, then its cells become pixels of cellSize (ADR 0108).
+    // A layout from before GridVersion 7 first runs the cell-era rules, then its cells become pixels of cellSize (ADR 0109).
     public static WorkspaceLayout Normalize(WorkspaceLayout? layout, int cellSize = WorkspaceGrid.DefaultCellSize)
     {
         if (layout == null || layout.GridVersion < GridVersion) layout = Scale(NormalizeCells(layout), Math.Clamp(cellSize, WorkspaceGrid.LegacyMinCellSize, WorkspaceGrid.MaxCellSize));
@@ -148,7 +150,7 @@ public static class WorkspaceLayouts
                     int x = item.X - (centerOldGrid ? Columns / 2 : 0), y = item.Y - (centerOldGrid ? Rows / 2 : 0);
                     if (!string.IsNullOrWhiteSpace(item.Id) && !string.IsNullOrWhiteSpace(item.WidgetId) && InBounds(x, y, item.Width, item.Height) && IsFree(kept, x, y, item.Width, item.Height, null)
                         && !result.Tabs.Concat([kept]).SelectMany(t => t.Widgets).Any(w => w.Id == item.Id))
-                        kept.Widgets.Add(new() { Id = item.Id, WidgetId = item.WidgetId, X = x, Y = y, Width = item.Width, Height = item.Height });
+                        kept.Widgets.Add(new() { Id = item.Id, WidgetId = item.WidgetId, X = x, Y = y, Width = item.Width, Height = item.Height, Panel = item.Panel });
                 }
             }
             result.Tabs.Add(kept);
@@ -229,6 +231,13 @@ public static class WorkspaceLayouts
         var item = tab.Widgets.FirstOrDefault(w => w.Id == placementId) ?? throw new ArgumentException("위젯을 찾을 수 없습니다.");
         if (!CanPlace(tab, placementId, x, y, width, height)) throw new ArgumentException("다른 위젯과 겹칩니다.");
         item.X = x; item.Y = y; item.Width = width; item.Height = height;
+    }
+
+    // panel null returns the placement to its widget's default background panel.
+    public static void SetPanel(AppData data, string tabId, string placementId, bool? panel)
+    {
+        var item = Tab(Editable(data), tabId).Widgets.FirstOrDefault(w => w.Id == placementId) ?? throw new ArgumentException("위젯을 찾을 수 없습니다.");
+        item.Panel = panel;
     }
 
     // The tab bar floats over every tab, so it is not held to the widgets' overlap rule.

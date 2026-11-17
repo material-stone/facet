@@ -4,11 +4,11 @@
       "kind": "plugin",
       "id": "facet.clock",
       "name": "시계",
-      "version": "1.1.0",
+      "version": "1.1.1",
       "author": "material-stone",
       "description": "날짜와 시계, 요일, 시계 위젯입니다. 위젯마다 아날로그·디지털과 스타일을 고를 수 있습니다.",
-      "url": "https://github.com/material-stone/facet/releases/download/plugin-facet.clock-1.1.0/facet.clock-1.1.0.zip",
-      "sha256": "e370926f34ad0374b9d6650b97cec192a97f9b72d8052876550eb6462de5c356"
+      "url": "https://github.com/material-stone/facet/releases/download/plugin-facet.clock-1.1.1/facet.clock-1.1.1.zip",
+      "sha256": "90dbb4886a0081bfd20364a3ddb5d77c7ee53524c1b32feaf91cce4ab43658f9"
     },
     {
       "kind": "plugin",
@@ -29,6 +29,16 @@
       "description": "현재 날씨와 습도를 보여 주는 위젯입니다. 지역은 플러그인 설정에서 고릅니다.",
       "url": "https://github.com/material-stone/facet/releases/download/plugin-facet.weather-1.0.0/facet.weather-1.0.0.zip",
       "sha256": "e01f159cb31fa0873348b3612864f9203a448486b6dec7a0e849529d1bd10de5"
+    },
+    {
+      "kind": "plugin",
+      "id": "facet.sysmon",
+      "name": "시스템 모니터",
+      "version": "1.0.0",
+      "author": "material-stone",
+      "description": "CPU·GPU·메모리 게이지와 네트워크 그래프를 보여 주는 위젯입니다. 90%를 넘으면 경고 연출이 나옵니다.",
+      "url": "https://github.com/material-stone/facet/releases/download/plugin-facet.sysmon-1.0.0/facet.sysmon-1.0.0.zip",
+      "sha256": "c20fc9f2dbcfe0ff990ee88ba916963680f1919a733fa56db71ae9c8877a43b5"
     },
     {
       "kind": "skin",
