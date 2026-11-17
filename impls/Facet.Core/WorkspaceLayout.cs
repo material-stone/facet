@@ -72,7 +72,8 @@ public static class WorkspaceLayouts
     public const int MinWidgetSize = 24;
     private const int MinSearchStep = 8;
     // The board is three screens across, so the smallest zoom shows all of it.
-    public const double MinZoom = 1d / 3, MaxZoom = 3, MaxOffset = 10000000;
+    // The wheel works between MinZoom and MaxZoom; only the whole-board fit may go further out, down to MinFitZoom.
+    public const double MinZoom = 1d / 3, MaxZoom = 3, MinFitZoom = .02, MaxOffset = 10000000;
     // SettingsTab is the id of the former settings tab, which saved layouts may still hold; settings now open from the icon menu (ADR 0109).
     public const string DashboardTab = "dashboard", ScheduleTab = "schedule", SleepTab = "sleep", ChatTab = "chat", SettingsTab = "settings";
     // The app's own tab bar widget; its placement is WorkspaceLayout.TabBar.
@@ -203,7 +204,7 @@ public static class WorkspaceLayouts
 
     private static BoardView? NormalizeView(BoardView? view) =>
         view == null || !double.IsFinite(view.X) || !double.IsFinite(view.Y) || !double.IsFinite(view.Zoom) ? null
-        : new() { X = Math.Clamp(view.X, -MaxOffset, MaxOffset), Y = Math.Clamp(view.Y, -MaxOffset, MaxOffset), Zoom = Math.Clamp(view.Zoom, MinZoom, MaxZoom) };
+        : new() { X = Math.Clamp(view.X, -MaxOffset, MaxOffset), Y = Math.Clamp(view.Y, -MaxOffset, MaxOffset), Zoom = Math.Clamp(view.Zoom, MinFitZoom, MaxZoom) };
 
     public static void SetView(AppData data, string tabId, double x, double y, double zoom)
     {
@@ -248,6 +249,17 @@ public static class WorkspaceLayouts
     }
 
     // Rounds a board coordinate to the grid; a step of 1 keeps every pixel.
+    // The zoom and offset that show every rectangle with a margin of the screen, centred; null when there is nothing.
+    public static (double Zoom, double X, double Y)? Fit(IEnumerable<(int X, int Y, int Width, int Height)> rects, double screenWidth, double screenHeight, double margin = .08)
+    {
+        var all = rects.ToArray();
+        if (all.Length == 0 || screenWidth <= 0 || screenHeight <= 0) return null;
+        double left = all.Min(r => r.X), top = all.Min(r => r.Y), right = all.Max(r => r.X + r.Width), bottom = all.Max(r => r.Y + r.Height);
+        double usable = 1 - 2 * margin;
+        double zoom = Math.Clamp(Math.Min(screenWidth * usable / Math.Max(1, right - left), screenHeight * usable / Math.Max(1, bottom - top)), MinFitZoom, MaxZoom);
+        return (zoom, -(left + right) / 2 * zoom, -(top + bottom) / 2 * zoom);
+    }
+
     public static int Snap(double value, int step) => step <= 1 ? (int)Math.Round(value) : (int)Math.Round(value / step) * step;
 
     // A corner drag: free by default, or keeping the start's aspect ratio. Snapping moves the right edge to the grid,

@@ -173,7 +173,8 @@ internal sealed class OverlayWorkspaceView : UserControl
     internal void ZoomAt(Point point, double factor)
     {
         TakeView();
-        double next = Math.Clamp(zoom * factor, WorkspaceLayouts.MinZoom, WorkspaceLayouts.MaxZoom);
+        // Below 33% (after a fit) the wheel can only come back in, never go further out.
+        double next = Math.Clamp(zoom * factor, Math.Min(zoom, WorkspaceLayouts.MinZoom), WorkspaceLayouts.MaxZoom);
         if (Math.Abs(next - 1) < .005 || (zoom - 1) * (next - 1) < 0) next = 1;
         double ratio = next / zoom;
         double fromOriginX = point.X - ActualWidth / 2 - viewX, fromOriginY = point.Y - ActualHeight / 2 - viewY;
@@ -182,6 +183,17 @@ internal sealed class OverlayWorkspaceView : UserControl
     }
 
     internal void ReturnToOrigin() => PanTo(0, 0);
+
+    // Shows every widget and the tab bar at once, going under the wheel's 33% when they do not fit.
+    internal void FitAll()
+    {
+        var rects = Rects().Select(r => (r.X, r.Y, r.Width, r.Height)).ToList();
+        if (TabBar?.Invoke() is { } bar && !tiles.ContainsKey(bar.Id)) rects.Add((bar.X, bar.Y, bar.Width, bar.Height));
+        if (WorkspaceLayouts.Fit(rects, ActualWidth, ActualHeight) is not { } fit) { ReturnToOrigin(); return; }
+        TakeView();
+        zoom = fit.Zoom;
+        PanTo(fit.X, fit.Y);
+    }
     internal void MarkViewSaved() => ViewDirty = false;
 
     // The board point at the middle of the screen.

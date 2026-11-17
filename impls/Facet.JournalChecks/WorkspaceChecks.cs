@@ -188,6 +188,11 @@ internal static partial class Program
         editor.ZoomAt(new Point(720,450),9);Assert(editor.Zoom==1,"zooming in from below stops at 100%");
         editor.ZoomAt(new Point(720,450),9);Assert(editor.Zoom==WorkspaceLayouts.MaxZoom,"the next step leaves 100%");
         editor.ZoomAt(new Point(720,450),.0001);Assert(editor.Zoom==1,"zooming out from above stops at 100%");
+        var far=WorkspaceLayouts.Fit([(-6000,-3000,200,100),(6000,3000,200,100)],1440,900)!.Value;
+        Assert(far.Zoom<WorkspaceLayouts.MinZoom && far.Zoom>=WorkspaceLayouts.MinFitZoom && Math.Abs(far.X+100*far.Zoom)<1e-6,"a whole-board fit may go under 33% and centres the widgets");
+        Assert(WorkspaceLayouts.Fit([],1440,900)==null && WorkspaceLayouts.Fit([(0,0,100,100)],1440,900)!.Value.Zoom==WorkspaceLayouts.MaxZoom,"nothing to fit gives no view and a tiny board stops at 300%");
+        editor.FitAll();Assert(editor.Zoom>=WorkspaceLayouts.MinFitZoom && editor.Zoom<=WorkspaceLayouts.MaxZoom,"the fit button sets a zoom inside the fit range");
+        var fitted=editor.Zoom;editor.ZoomAt(new Point(720,450),.0001);Assert(editor.Zoom==Math.Min(fitted,WorkspaceLayouts.MinZoom),"the wheel never zooms out past 33% or past a closer fit");editor.ZoomAt(new Point(720,450),9);editor.ZoomAt(new Point(720,450),9);if(editor.Zoom>1)editor.ZoomAt(new Point(720,450),.0001);editor.ReturnToOrigin();
         var coveredItem=WorkspaceLayouts.Current(runtime.Data).Tabs.Single(t=>t.Id==added).Widgets[0];
         Assert(editor.IsCovered(coveredItem.X+1,coveredItem.Y+1) && !editor.IsCovered(coveredItem.X,coveredItem.Y) && !editor.IsCovered(coveredItem.X+1,coveredItem.Y+coveredItem.Height+1),"marks inside a widget are skipped and its edges keep theirs");
 

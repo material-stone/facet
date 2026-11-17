@@ -248,6 +248,7 @@ public partial class OverlayTabs
     internal bool SetWorkspaceSnap(bool snap) => ChangeWorkspace(data => WorkspaceLayouts.SetSnap(data, snap));
     private void WorkspaceDone_Click(object sender, RoutedEventArgs e) => SetWorkspaceEditing(false);
     private void WorkspaceHome_Click(object sender, RoutedEventArgs e) => SelectedWorkspace?.ReturnToOrigin();
+    private void WorkspaceFit_Click(object sender, RoutedEventArgs e) { SelectedWorkspace?.FitAll(); UpdateWorkspaceBar(); }
 
     private void WorkspaceAddWidget_Click(object sender, RoutedEventArgs e)
     {

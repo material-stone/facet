@@ -127,6 +127,7 @@
    </Border>
    <Button x:Name="WorkspaceAddWidget" ContentTemplate="{x:Null}" Width="36" Height="36" Padding="0" ToolTip="위젯 추가" AutomationProperties.Name="위젯 추가" Margin="0,0,8,0" Click="WorkspaceAddWidget_Click"><design:Icon Kind="Add" Width="18" Height="18"/></Button>
    <Button x:Name="WorkspaceHome" ContentTemplate="{x:Null}" Width="36" Height="36" Padding="0" ToolTip="원점으로 돌아가기" AutomationProperties.Name="원점으로 돌아가기" Margin="0,0,8,0" Click="WorkspaceHome_Click"><design:Icon Kind="Target" Width="18" Height="18"/></Button>
+   <Button x:Name="WorkspaceFit" ContentTemplate="{x:Null}" Height="36" Padding="12,0" ToolTip="모든 위젯이 보이게 맞추기" AutomationProperties.Name="전체 보기" Margin="0,0,8,0" Click="WorkspaceFit_Click" Content="전체 보기"/>
    <CheckBox x:Name="WorkspaceSnap" Content="격자 스냅" VerticalAlignment="Center" Margin="0,0,12,0" ToolTip="켜면 위치와 크기가 격자 칸에 붙고, 끄면 1px 단위로 움직입니다. Alt를 누른 채 끌면 그 순간만 반대로 동작합니다." AutomationProperties.Name="격자 스냅" Click="WorkspaceSnap_Click"/>
    <Button x:Name="WorkspaceDone" Content="완료" Height="36" Click="WorkspaceDone_Click"/>
   </StackPanel>
