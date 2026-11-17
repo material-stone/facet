@@ -1,5 +1,7 @@
 # Architecture Contract
 
+- [스킨 위젯 레이어 구조](skin-widget-layer.md)
+
 - [0092 — 캡처 도구가 전경일 때만 오버레이가 양보](../decisions/0092-capture-tool-foreground-yield.md)
 - [0091 — 3D 월드 페이지와 글꼴을 스킨에 포함](../decisions/0091-world-page-in-skin.md)
 - [0090 — 복셀 월드 스킨과 WebView2 배경](../decisions/0090-voxel-world-webview.md)
