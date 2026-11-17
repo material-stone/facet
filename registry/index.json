@@ -94,11 +94,11 @@
       "kind": "skin",
       "id": "catroom",
       "name": "고양이 방",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "author": "material-stone",
-      "description": "햇살 드는 방에서 치즈 고양이가 산책하고 낮잠 자고 노는 배경과, 방 소품 모양으로 그린 위젯. Facet 1.38.0 이상.",
-      "url": "https://github.com/material-stone/facet/releases/download/skin-catroom-1.0.0/catroom-1.0.0.zip",
-      "sha256": "a105f621d3883970a62e2bf105ecddbebe6f0721798083b9451b83d440ae75f0"
+      "description": "햇살 드는 방에서 치즈 고양이가 산책하고 낮잠 자고 노는 배경과, 방 소품 모양으로 그린 위젯. 코드로 만든 효과음(끌 수 있음). Facet 1.38.2 이상.",
+      "url": "https://github.com/material-stone/facet/releases/download/skin-catroom-1.1.0/catroom-1.1.0.zip",
+      "sha256": "9a7169ceca7af82a126065bfded392bca011e28533c98380b0a6a44bf8bc4e2d"
     }
   ]
 }
