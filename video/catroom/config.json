@@ -1,0 +1,14 @@
+{
+  "slug": "catroom",
+  "title": "고양이 방",
+  "skinPage": "../../registry/skins/catroom/world.html",
+  "skinFonts": ["../../registry/skins/catroom/Jua-Regular.ttf", "../../registry/skins/catroom/GowunDodum-Regular.ttf"],
+  "creditSeconds": 4,
+  "music": { "src": "music/bed.wav", "credit": "이 영상을 위해 코드로 만든 곡" },
+  "credits": [
+    { "head": "스킨", "body": ["고양이 방 · Facet 배경 스킨"] },
+    { "head": "화면", "body": ["실제 스킨 페이지를 그대로 녹화"] },
+    { "head": "글꼴", "body": ["Jua · Gowun Dodum (SIL OFL)"] },
+    { "head": "도구", "body": ["Remotion · Playwright"] }
+  ]
+}

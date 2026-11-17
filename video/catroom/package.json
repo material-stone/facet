@@ -1,0 +1,32 @@
+{
+  "name": "catroom-video",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "timeline": "node scripts/make-timeline.mjs",
+    "fonts": "node scripts/copy-fonts.mjs",
+    "capture": "node capture/capture.mjs",
+    "sfx": "node scripts/make-sfx.mjs",
+    "music": "node scripts/make-music.mjs",
+    "prepare-all": "npm run timeline && npm run fonts && npm run sfx && npm run music && npm run capture",
+    "studio": "remotion studio src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "render": "remotion render src/index.ts Main out/video.mp4",
+    "render:vertical": "remotion render src/index.ts Vertical out/vertical.mp4",
+    "thumbnail": "remotion still src/index.ts Thumbnail out/thumbnail.jpg --image-format=jpeg --jpeg-quality=90 --scale=0.6667",
+    "vertical-cover": "remotion still src/index.ts VerticalCover out/vertical-cover.jpg --image-format=jpeg --jpeg-quality=90"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.536",
+    "@remotion/google-fonts": "4.0.536",
+    "@remotion/media": "4.0.536",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "remotion": "4.0.536"
+  },
+  "devDependencies": {
+    "@types/react": "19.1.8",
+    "playwright-core": "^1.49.1",
+    "typescript": "5.8.3"
+  }
+}

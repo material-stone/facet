@@ -1,0 +1,8 @@
+node_modules/
+out/
+public/data/
+public/sfx/
+public/music/
+public/clips/
+public/fonts/
+capture/frames/
